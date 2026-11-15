@@ -7,7 +7,9 @@
     "dev": "wrangler dev",
     "deploy": "wrangler deploy",
     "test": "node tests/smoke.mjs",
-    "db:apply": "wrangler d1 execute tnec-placement-test --remote --file=./schema.sql"
+    "db:migrate:local": "wrangler d1 migrations apply tnec-placement-test --local",
+    "db:migrate": "wrangler d1 migrations apply tnec-placement-test --remote",
+    "admin:sql": "node scripts/create-admin.mjs"
   },
   "devDependencies": {
     "wrangler": "^4"

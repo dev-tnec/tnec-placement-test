@@ -1,0 +1,328 @@
+<!doctype html>
+<html lang="id">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex, nofollow">
+  <title>Dasbor Titik Nol</title>
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/admin/assets/admin.css?v=1">
+  <script src="/admin/assets/admin.js?v=1" defer></script>
+</head>
+<body>
+<svg width="0" height="0" class="sr-only" aria-hidden="true" focusable="false">
+  <symbol id="i-dashboard" viewBox="0 0 24 24"><rect width="7" height="9" x="3" y="3" rx="1"/><rect width="7" height="5" x="14" y="3" rx="1"/><rect width="7" height="9" x="14" y="12" rx="1"/><rect width="7" height="5" x="3" y="16" rx="1"/></symbol>
+  <symbol id="i-users" viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></symbol>
+  <symbol id="i-clipboard" viewBox="0 0 24 24"><rect width="8" height="4" x="8" y="2" rx="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><path d="m9 14 2 2 4-4"/></symbol>
+  <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></symbol>
+  <symbol id="i-plus" viewBox="0 0 24 24"><path d="M5 12h14"/><path d="M12 5v14"/></symbol>
+  <symbol id="i-download" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m7 10 5 5 5-5"/><path d="M12 15V3"/></symbol>
+  <symbol id="i-chevron-right" viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></symbol>
+  <symbol id="i-chevron-up" viewBox="0 0 24 24"><path d="m18 15-6-6-6 6"/></symbol>
+  <symbol id="i-chevron-down" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></symbol>
+  <symbol id="i-sort" viewBox="0 0 24 24"><path d="m7 15 5 5 5-5"/><path d="m7 9 5-5 5 5"/></symbol>
+  <symbol id="i-more" viewBox="0 0 24 24"><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/></symbol>
+  <symbol id="i-message" viewBox="0 0 24 24"><path d="M7.9 20A9 9 0 1 0 4 16.1L2 22Z"/></symbol>
+  <symbol id="i-mail" viewBox="0 0 24 24"><rect width="20" height="16" x="2" y="4" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></symbol>
+  <symbol id="i-pencil" viewBox="0 0 24 24"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/></symbol>
+  <symbol id="i-trash" viewBox="0 0 24 24"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/><path d="M10 11v6"/><path d="M14 11v6"/></symbol>
+  <symbol id="i-copy" viewBox="0 0 24 24"><rect width="14" height="14" x="8" y="8" rx="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></symbol>
+  <symbol id="i-arrow-up" viewBox="0 0 24 24"><path d="m5 12 7-7 7 7"/><path d="M12 19V5"/></symbol>
+  <symbol id="i-arrow-down" viewBox="0 0 24 24"><path d="M12 5v14"/><path d="m19 12-7 7-7-7"/></symbol>
+  <symbol id="i-check" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></symbol>
+  <symbol id="i-check-circle" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="m8.5 12 2.5 2.5 4.5-5"/></symbol>
+  <symbol id="i-x" viewBox="0 0 24 24"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></symbol>
+  <symbol id="i-alert" viewBox="0 0 24 24"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4"/><path d="M12 17h.01"/></symbol>
+  <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></symbol>
+  <symbol id="i-book" viewBox="0 0 24 24"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></symbol>
+  <symbol id="i-send" viewBox="0 0 24 24"><path d="m22 2-7 20-4-9-9-4Z"/><path d="M22 2 11 13"/></symbol>
+  <symbol id="i-undo" viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></symbol>
+  <symbol id="i-ban" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="m4.9 4.9 14.2 14.2"/></symbol>
+  <symbol id="i-eye" viewBox="0 0 24 24"><path d="M2.06 12.35a1 1 0 0 1 0-.7 10.75 10.75 0 0 1 19.88 0 1 1 0 0 1 0 .7 10.75 10.75 0 0 1-19.88 0"/><circle cx="12" cy="12" r="3"/></symbol>
+  <symbol id="i-eye-off" viewBox="0 0 24 24"><path d="M10.73 5.08a10.74 10.74 0 0 1 11.2 6.57 1 1 0 0 1 0 .7 10.75 10.75 0 0 1-1.44 2.49"/><path d="M14.08 14.16a3 3 0 0 1-4.24-4.24"/><path d="M17.48 17.5a10.75 10.75 0 0 1-15.42-5.15 1 1 0 0 1 0-.7 10.75 10.75 0 0 1 4.45-5.14"/><path d="m2 2 20 20"/></symbol>
+  <symbol id="i-user" viewBox="0 0 24 24"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></symbol>
+  <symbol id="i-note" viewBox="0 0 24 24"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M16 13H8"/><path d="M16 17H8"/><path d="M10 9H8"/></symbol>
+  <symbol id="i-flag" viewBox="0 0 24 24"><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><path d="M4 22v-7"/></symbol>
+  <symbol id="i-panel-close" viewBox="0 0 24 24"><rect width="18" height="18" x="3" y="3" rx="2"/><path d="M9 3v18"/><path d="m16 15-3-3 3-3"/></symbol>
+  <symbol id="i-panel-open" viewBox="0 0 24 24"><rect width="18" height="18" x="3" y="3" rx="2"/><path d="M9 3v18"/><path d="m14 9 3 3-3 3"/></symbol>
+  <symbol id="i-cap" viewBox="0 0 24 24"><path d="M21.42 10.92a1 1 0 0 0-.02-1.84L12.83 5.18a2 2 0 0 0-1.66 0L2.6 9.08a1 1 0 0 0 0 1.83l8.57 3.91a2 2 0 0 0 1.66 0z"/><path d="M22 10v6"/><path d="M6 12.5V16a6 3 0 0 0 12 0v-3.5"/></symbol>
+  <symbol id="i-layers" viewBox="0 0 24 24"><path d="M12.83 2.18a2 2 0 0 0-1.66 0L2.6 6.08a1 1 0 0 0 0 1.83l8.58 3.91a2 2 0 0 0 1.66 0l8.58-3.9a1 1 0 0 0 0-1.83Z"/><path d="m22 17.65-9.17 4.16a2 2 0 0 1-1.66 0L2 17.65"/><path d="m22 12.65-9.17 4.16a2 2 0 0 1-1.66 0L2 12.65"/></symbol>
+  <symbol id="i-calendar" viewBox="0 0 24 24"><rect width="18" height="18" x="3" y="4" rx="2"/><path d="M16 2v4"/><path d="M8 2v4"/><path d="M3 10h18"/></symbol>
+  <symbol id="i-trend" viewBox="0 0 24 24"><path d="m22 7-8.5 8.5-5-5L2 17"/><path d="M16 7h6v6"/></symbol>
+  <symbol id="i-logout" viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="m16 17 5-5-5-5"/><path d="M21 12H9"/></symbol>
+  <symbol id="i-shuffle" viewBox="0 0 24 24"><path d="m16 3 4 4-4 4"/><path d="M20 7H4"/><path d="m8 21-4-4 4-4"/><path d="M4 17h16"/></symbol>
+</svg>
+
+<a class="skip" href="#main">Langsung ke konten</a>
+
+<div class="app">
+  <aside class="sidebar" aria-label="Navigasi dasbor">
+    <div class="brand">
+      <div class="brand__row">
+        <img class="brand__logo" src="/assets/logo-titik-nol-white.png" alt="Titik Nol English Course" width="501" height="84">
+        <svg class="brand__mark" viewBox="0 0 36 36" role="img" aria-label="Titik Nol English Course"><rect width="36" height="36" rx="10" fill="#16325C"/><text x="18" y="23" text-anchor="middle" font-family="Inter, 'Segoe UI', Arial, sans-serif" font-size="13" font-weight="700" fill="#FFFFFF">TN</text></svg>
+        <button class="icon-btn icon-btn--dark nav-toggle" type="button" data-action="toggle-nav" aria-controls="main-nav" aria-expanded="true" aria-label="Ciutkan menu" title="Ciutkan menu"><svg class="icon" aria-hidden="true"><use href="#i-panel-close"></use></svg></button>
+      </div>
+      <span class="brand__name">Dasbor internal</span>
+    </div>
+    <nav class="nav" id="main-nav" aria-label="Menu utama">
+      <a class="nav__link" href="#/ringkasan" data-nav="ringkasan" title="Ringkasan"><svg class="icon" aria-hidden="true"><use href="#i-dashboard"></use></svg><span class="nav__label">Ringkasan</span></a>
+      <a class="nav__link" href="#/siswa" data-nav="siswa" title="Database Siswa"><svg class="icon" aria-hidden="true"><use href="#i-users"></use></svg><span class="nav__label">Database Siswa</span><span class="nav__count" id="nav-new" title="Calon siswa baru yang belum dihubungi"></span></a>
+      <p class="nav__group">Tes</p><span class="nav__sep" aria-hidden="true"></span>
+      <a class="nav__link" href="#/tes/placement/soal" data-nav="tes-placement" title="Placement Test"><svg class="icon" aria-hidden="true"><use href="#i-clipboard"></use></svg><span class="nav__label">Placement Test</span></a>
+      <a class="nav__link" href="#/tes/pre/soal" data-nav="tes-pre" title="Pre-test"><svg class="icon" aria-hidden="true"><use href="#i-note"></use></svg><span class="nav__label">Pre-test</span></a>
+      <a class="nav__link" href="#/tes/post/soal" data-nav="tes-post" title="Post-test"><svg class="icon" aria-hidden="true"><use href="#i-cap"></use></svg><span class="nav__label">Post-test</span></a>
+      <p class="nav__group">Pengaturan</p><span class="nav__sep" aria-hidden="true"></span>
+      <a class="nav__link" href="#/program/program" data-nav="program" title="Program &amp; Kelas"><svg class="icon" aria-hidden="true"><use href="#i-layers"></use></svg><span class="nav__label">Program &amp; Kelas</span></a>
+    </nav>
+    <div class="sidebar__foot">
+      <div class="account">
+        <span class="avatar" id="account-avatar" aria-hidden="true"></span>
+        <span class="account__text"><span class="account__name" id="account-name">Memuat...</span><span class="account__role" id="account-role"></span></span>
+        <button class="icon-btn icon-btn--dark account__out" type="button" data-action="logout" aria-label="Keluar dari dasbor" title="Keluar"><svg class="icon" aria-hidden="true"><use href="#i-logout"></use></svg></button>
+      </div>
+    </div>
+  </aside>
+
+  <main class="main" id="main" tabindex="-1"></main>
+</div>
+
+<div class="menu" id="menu" role="menu" hidden></div>
+<div class="bulk" id="bulk" role="region" aria-label="Aksi untuk data terpilih" hidden></div>
+<div class="toasts" id="toasts" role="status" aria-live="polite"></div>
+
+<dialog class="dialog" id="dlg-question" aria-labelledby="qe-title">
+  <form class="dialog__form" data-form="question" novalidate>
+    <header class="dialog__head">
+      <div><h2 class="dialog__title" id="qe-title">Ubah soal</h2><p class="dialog__sub" id="qe-sub"></p></div>
+      <button class="icon-btn" type="button" data-action="close-dialog" aria-label="Tutup"><svg class="icon" aria-hidden="true"><use href="#i-x"></use></svg></button>
+    </header>
+    <div class="dialog__body">
+      <div class="field">
+        <label class="label" for="qe-prompt">Teks soal</label>
+        <textarea class="textarea" id="qe-prompt" rows="3" placeholder="Contoh: Yesterday she ___ to the market."></textarea>
+        <p class="error" id="qe-prompt-err" hidden></p>
+      </div>
+      <label class="check"><input type="checkbox" id="qe-has-passage" data-change="qe-passage-toggle"><span>Soal ini memakai bacaan</span></label>
+      <div class="field" id="qe-passage-field" hidden>
+        <label class="label" for="qe-passage">Bacaan</label>
+        <textarea class="textarea" id="qe-passage" rows="5"></textarea>
+        <p class="hint">Bacaan tampil di atas soal, seperti pada soal tentang kata presence.</p>
+        <p class="error" id="qe-passage-err" hidden></p>
+      </div>
+      <fieldset class="field">
+        <legend class="label">Pilihan jawaban</legend>
+        <p class="hint">Klik huruf di sebelah kiri untuk menandai jawaban yang benar. Setiap soal memakai empat pilihan, A sampai D, sesuai tampilan tes.</p>
+        <div class="opt-edit" id="qe-options"></div>
+        <p class="error" id="qe-options-err" hidden></p>
+      </fieldset>
+      <div class="form-grid form-grid--3" id="qe-meta">
+        <div class="field">
+          <label class="label" for="qe-skill">Skill</label>
+          <select class="select" id="qe-skill"><option>Grammar</option><option>Vocabulary</option><option>Reading</option></select>
+        </div>
+        <div class="field" id="qe-seconds-field">
+          <label class="label" for="qe-seconds">Waktu soal</label>
+          <div class="unit-row"><span class="unit"><input class="input" id="qe-seconds" type="number" min="5" max="180" step="1" inputmode="numeric"><span>detik</span></span></div>
+          <p class="error" id="qe-seconds-err" hidden></p>
+        </div>
+        <div class="field">
+          <label class="label" for="qe-status">Status</label>
+          <select class="select" id="qe-status"><option value="aktif">Aktif, tampil di tes</option><option value="draf">Draf, belum tampil</option></select>
+        </div>
+      </div>
+      <p class="hint" id="qe-time-hint"></p>
+      <p class="note" id="qe-note">Perubahan kunci jawaban berlaku untuk submission berikutnya. Skor submission yang sudah masuk tidak dihitung ulang.</p>
+    </div>
+    <footer class="dialog__foot">
+      <button class="link-btn link-btn--danger" type="button" id="qe-delete" data-action="question-delete-from-editor">Hapus soal</button>
+      <div class="dialog__foot-end">
+        <button class="btn btn--quiet" type="button" data-action="close-dialog">Batal</button>
+        <button class="btn btn--primary" type="submit">Simpan soal</button>
+      </div>
+    </footer>
+  </form>
+</dialog>
+
+<dialog class="dialog" id="dlg-student" aria-labelledby="sf-title">
+  <form class="dialog__form" data-form="student" novalidate>
+    <header class="dialog__head">
+      <div><h2 class="dialog__title" id="sf-title">Tambah siswa</h2><p class="dialog__sub" id="sf-sub"></p></div>
+      <button class="icon-btn" type="button" data-action="close-dialog" aria-label="Tutup"><svg class="icon" aria-hidden="true"><use href="#i-x"></use></svg></button>
+    </header>
+    <div class="dialog__body">
+      <div class="form-grid">
+        <div class="field span-all">
+          <label class="label" for="sf-name">Nama lengkap</label>
+          <input class="input" id="sf-name" type="text" autocomplete="off" placeholder="Contoh: Nadia Fitriani">
+          <p class="error" id="sf-name-err" hidden></p>
+        </div>
+        <div class="field">
+          <label class="label" for="sf-wa">WhatsApp</label>
+          <input class="input" id="sf-wa" type="tel" inputmode="tel" autocomplete="off" placeholder="0812 3456 7890">
+          <p class="hint">Awalan 0 atau 62 sama-sama bisa dipakai.</p>
+          <p class="error" id="sf-wa-err" hidden></p>
+        </div>
+        <div class="field">
+          <label class="label" for="sf-email">Email</label>
+          <input class="input" id="sf-email" type="email" autocomplete="off" placeholder="nama@email.com">
+          <p class="error" id="sf-email-err" hidden></p>
+        </div>
+        <div class="field">
+          <label class="label" for="sf-city">Domisili</label>
+          <input class="input" id="sf-city" type="text" autocomplete="off" placeholder="Contoh: Malang">
+        </div>
+        <div class="field">
+          <label class="label" for="sf-source">Sumber</label>
+          <select class="select" id="sf-source"></select>
+        </div>
+        <div class="field span-all">
+          <label class="label" for="sf-stage">Status</label>
+          <select class="select" id="sf-stage"></select>
+        </div>
+        <p class="form-section span-all">Program dan kelas</p>
+        <div class="field">
+          <label class="label" for="sf-program">Program</label>
+          <select class="select" id="sf-program" data-change="sf-program"></select>
+        </div>
+        <div class="field">
+          <label class="label" for="sf-duration">Durasi</label>
+          <select class="select" id="sf-duration"></select>
+        </div>
+        <div class="field">
+          <label class="label" for="sf-period">Periode</label>
+          <select class="select" id="sf-period" data-change="sf-period"></select>
+        </div>
+        <div class="field">
+          <label class="label" for="sf-class">Tutor / Kelas</label>
+          <select class="select" id="sf-class"></select>
+        </div>
+        <p class="hint span-all" id="sf-class-hint">Pilihan kelas mengikuti program dan periode. Kelas baru dibuat di menu Program &amp; Kelas.</p>
+        <div class="field span-all" id="sf-note-field">
+          <label class="label" for="sf-note">Catatan awal</label>
+          <textarea class="textarea" id="sf-note" rows="3" placeholder="Contoh: datang ke kantor bersama orang tua, ingin kelas offline mulai Desember."></textarea>
+        </div>
+      </div>
+    </div>
+    <footer class="dialog__foot">
+      <div class="dialog__foot-end">
+        <button class="btn btn--quiet" type="button" data-action="close-dialog">Batal</button>
+        <button class="btn btn--primary" type="submit" id="sf-save">Simpan siswa</button>
+      </div>
+    </footer>
+  </form>
+</dialog>
+
+<dialog class="dialog" id="dlg-program" aria-labelledby="pg-title">
+  <form class="dialog__form" data-form="program" novalidate>
+    <header class="dialog__head">
+      <div><h2 class="dialog__title" id="pg-title">Tambah program</h2><p class="dialog__sub" id="pg-sub"></p></div>
+      <button class="icon-btn" type="button" data-action="close-dialog" aria-label="Tutup"><svg class="icon" aria-hidden="true"><use href="#i-x"></use></svg></button>
+    </header>
+    <div class="dialog__body">
+      <div class="form-grid">
+        <div class="field span-all">
+          <label class="label" for="pg-name">Nama program</label>
+          <input class="input" id="pg-name" type="text" autocomplete="off" placeholder="Contoh: IELTS Online">
+          <p class="error" id="pg-name-err" hidden></p>
+        </div>
+        <div class="field">
+          <label class="label" for="pg-mode">Mode belajar</label>
+          <select class="select" id="pg-mode"></select>
+        </div>
+        <div class="field">
+          <label class="label" for="pg-status">Status</label>
+          <select class="select" id="pg-status"><option value="aktif">Aktif, bisa dipilih saat mendaftar</option><option value="nonaktif">Nonaktif, tidak muncul di formulir</option></select>
+        </div>
+      </div>
+      <fieldset class="field">
+        <legend class="label">Durasi dan harga</legend>
+        <p class="hint">Setiap durasi muncul sebagai pilihan saat mendaftarkan siswa. Jumlah hari dipakai untuk menghitung tanggal selesai dan jadwal post-test. Harga boleh dikosongkan.</p>
+        <div class="dur-list" id="pg-durations"></div>
+        <div><button class="btn btn--quiet btn--sm" type="button" data-action="pg-add-duration"><svg class="icon icon--sm" aria-hidden="true"><use href="#i-plus"></use></svg>Tambah durasi</button></div>
+        <p class="error" id="pg-dur-err" hidden></p>
+      </fieldset>
+      <fieldset class="field">
+        <legend class="label">Tutor yang mengajar</legend>
+        <p class="hint">Hanya tutor yang dicentang yang bisa dipilih saat membuat kelas untuk program ini.</p>
+        <div class="check-grid" id="pg-tutors"></div>
+        <p class="error" id="pg-tutor-err" hidden></p>
+      </fieldset>
+    </div>
+    <footer class="dialog__foot">
+      <div class="dialog__foot-end">
+        <button class="btn btn--quiet" type="button" data-action="close-dialog">Batal</button>
+        <button class="btn btn--primary" type="submit" id="pg-save">Simpan program</button>
+      </div>
+    </footer>
+  </form>
+</dialog>
+
+<dialog class="dialog dialog--sm" id="dlg-form" aria-labelledby="gf-title">
+  <form class="dialog__form" data-form="generic" novalidate>
+    <header class="dialog__head">
+      <div><h2 class="dialog__title" id="gf-title"></h2><p class="dialog__sub" id="gf-sub"></p></div>
+      <button class="icon-btn" type="button" data-action="close-dialog" aria-label="Tutup"><svg class="icon" aria-hidden="true"><use href="#i-x"></use></svg></button>
+    </header>
+    <div class="dialog__body" id="gf-body"></div>
+    <footer class="dialog__foot">
+      <div class="dialog__foot-end">
+        <button class="btn btn--quiet" type="button" data-action="close-dialog">Batal</button>
+        <button class="btn btn--primary" type="submit" id="gf-save"></button>
+      </div>
+    </footer>
+  </form>
+</dialog>
+
+<dialog class="dialog dialog--sm" id="dlg-confirm" aria-labelledby="cf-title" aria-describedby="cf-message">
+  <form class="dialog__form" method="dialog">
+    <header class="dialog__head"><h2 class="dialog__title" id="cf-title"></h2></header>
+    <div class="dialog__body">
+      <p class="dialog__text" id="cf-message"></p>
+      <div class="field" id="cf-reason-field" hidden>
+        <label class="label" for="cf-reason" id="cf-reason-label"></label>
+        <textarea class="textarea" id="cf-reason" rows="3"></textarea>
+      </div>
+    </div>
+    <footer class="dialog__foot">
+      <div class="dialog__foot-end">
+        <button class="btn btn--quiet" value="cancel" id="cf-cancel">Batal</button>
+        <button class="btn btn--danger" value="ok" id="cf-ok"></button>
+      </div>
+    </footer>
+  </form>
+</dialog>
+<dialog class="dialog" id="dlg-wa" aria-labelledby="wa-title">
+  <form class="dialog__form" data-form="wa" novalidate>
+    <header class="dialog__head">
+      <div><h2 class="dialog__title" id="wa-title">Kirim WhatsApp</h2><p class="dialog__sub" id="wa-sub"></p></div>
+      <button class="icon-btn" type="button" data-action="close-dialog" aria-label="Tutup"><svg class="icon" aria-hidden="true"><use href="#i-x"></use></svg></button>
+    </header>
+    <div class="dialog__body">
+      <div class="notice notice--neutral" id="wa-off" role="note" hidden><svg class="icon" aria-hidden="true"><use href="#i-alert"></use></svg><div class="notice__body">Pengiriman lewat AttCos belum aktif karena API key belum dipasang di Worker. Untuk sementara, pakai tombol Buka di WhatsApp dan kirim pesannya dari aplikasi.</div></div>
+      <div class="field" id="wa-link-field" hidden>
+        <label class="label" for="wa-link">Tautan tes</label>
+        <div class="copy-row">
+          <input class="input" id="wa-link" type="text" readonly>
+          <button class="btn btn--quiet btn--sm" type="button" data-action="wa-copy" id="wa-copy">Salin</button>
+        </div>
+        <p class="hint" id="wa-link-hint"></p>
+      </div>
+      <div class="field">
+        <div class="wa-meta"><label class="label" for="wa-text">Pesan</label><span class="hint" id="wa-count"></span></div>
+        <textarea class="textarea" id="wa-text" rows="8" maxlength="4000" data-input="wa-text"></textarea>
+        <p class="error" id="wa-err" hidden></p>
+      </div>
+      <p class="note">Pesan dikirim dari nomor WhatsApp Titik Nol lewat AttCos dan tercatat di aktivitas siswa. WhatsApp hanya meneruskan pesan biasa kalau siswa mengirim pesan ke nomor Titik Nol dalam 24 jam terakhir. Untuk kontak pertama, pakai tombol Buka di WhatsApp supaya pesannya terkirim dari aplikasi di perangkat ini.</p>
+    </div>
+    <footer class="dialog__foot">
+      <a class="link-btn" id="wa-open" href="#" target="_blank" rel="noopener noreferrer"><svg class="icon icon--sm" aria-hidden="true"><use href="#i-message"></use></svg>Buka di WhatsApp</a>
+      <div class="dialog__foot-end">
+        <button class="btn btn--quiet" type="button" data-action="close-dialog">Batal</button>
+        <button class="btn btn--primary" type="submit" id="wa-send">Kirim pesan</button>
+      </div>
+    </footer>
+  </form>
+</dialog>
+</body>
+</html>

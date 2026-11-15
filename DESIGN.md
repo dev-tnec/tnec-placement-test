@@ -4,7 +4,7 @@ This file is the design source of truth for the placement test app. It inherits 
 
 ## 1. Product character
 
-The app is a test, not a marketing page. It should feel calm, precise, and a little serious. Deep navy carries the structure, white carries the reading surface, red marks the one action that moves the test forward, and yellow marks attention without alarm.
+The app is a test, not a marketing page. It should feel calm, precise, and a little serious. Deep navy carries the structure and the action that moves the test forward, white carries the reading surface, red marks urgent state and errors, and yellow marks attention without alarm. Buttons are never red; the user rejected red buttons on 16 November 2026.
 
 The visual direction is editorial and Swiss: a strong grid, oversized type, thin rules, numbered elements, and generous whitespace. It is not playful, not glassy, and not a generic SaaS card stack. The reference for density and components is `assets/code.html`; the reference for voice and color is the TNEC brand.
 
@@ -16,11 +16,11 @@ All values come from `../design.md`.
 
 | Token | Hex | Use in this app |
 |---|---|---|
-| `--navy-900` | `#0A1B38` | Hero band, primary text, selected option border, answered navigator cells, result card, stepper active bar |
+| `--navy-900` | `#0A1B38` | Hero band, primary text, primary buttons, selected option border, answered navigator cells, result card, stepper active bar |
 | `--navy-800` | `#10264A` | Hover on navy buttons |
 | `--navy-700` | `#16325C` | Preview card back sheet, icons on pale surfaces |
-| `--red-500` | `#E3201F` | Primary CTA, current level dot, timer under one minute |
-| `--red-600` | `#C41615` | Primary CTA hover, input focus border, field error text |
+| `--red-500` | `#E3201F` | Current level dot, timer under one minute, level pill in the result email |
+| `--red-600` | `#C41615` | Field error text and invalid input border |
 | `--red-50` | `#FDECEC` | Violation icon background only |
 | `--yellow-400` | `#F7B500` | One hero word, flagged marker, done step bar, reached level dot, score number |
 | `--yellow-50` | `#FFF6DC` | Flagged button, benefit icon background |
@@ -37,7 +37,7 @@ All values come from `../design.md`.
 
 Rules:
 
-1. Red is action and current state only. It is never a decorative fill.
+1. Red is urgent state and errors only. It is never a button fill and never a decorative fill. Buttons use navy.
 2. Yellow is one emphasis word per view, plus the flag marker, the done step bar, and the score. Do not add a second yellow headline.
 3. Navy on white or white on navy carries all body copy. Never red or yellow body text.
 4. Pale tints (`--yellow-50`, `--surface-50`, `--red-50`) are for notes, passages, and icon backgrounds. Never use them as a card fill.
@@ -96,7 +96,7 @@ Half steps (6px, 10px, 14px, 20px, 26px) are allowed inside a component when the
 |---|---|
 | `--shadow-card` | Panels, question card, navigator, stepper, keyboard hint |
 | `--shadow-card-hover` | How-card hover |
-| `--shadow-cta` | Primary red button only |
+| `--shadow-cta` | Primary navy button only, a navy shadow at 22 percent |
 | `--shadow-float` | Dialog |
 | `0 24px 60px rgba(0,0,0,.32)` | Preview card on the navy hero |
 
@@ -139,13 +139,13 @@ A slim sticky status bar with progress on the left and the timer on the right. T
 
 The prompt canvas is a white rounded rectangle with a 1px border, a small uppercase instruction label in the top left, and the prompt at 23px. It gives the question a stage and keeps short questions from looking empty.
 
-The navigator is a 5 by 5 grid of 25 cells. Answered cells are solid navy, the current cell has a navy outline, flagged cells have a yellow dot in the top right. The finish button is red and full width.
+The navigator is a 5 by 5 grid of 25 cells. Answered cells are solid navy, the current cell has a navy outline, flagged cells have a yellow dot in the top right. The finish button is navy and full width. When a test uses time per question, the back button and the flag button are hidden, navigator cells cannot be clicked, the timer label reads "untuk soal ini", and the next question opens by itself when the time runs out.
 
 A keyboard hint sits below the grid on desktop only. It is removed on mobile because there is no keyboard.
 
 ### Details
 
-A 1000px column with the stepper at the top, step 2 active. Below it a two-column layout: the left column carries the step eyebrow, a large headline, a short lead, and three benefit rows with small yellow check circles. The right column carries the white form panel with three fields and the red primary button.
+A 1000px column with the stepper at the top, step 2 active. Below it a two-column layout: the left column carries the step eyebrow, a large headline, a short lead, and three benefit rows with small yellow check circles. The right column carries the white form panel with three fields and the navy primary button.
 
 The details screen never shows the score. The score is withheld until the contact form is saved, so the result is only revealed after the user gives their name, email, and WhatsApp.
 
@@ -163,14 +163,14 @@ The recommendation panel carries the program name, the level description, the Wh
 
 | Variant | Fill | Text | Border | Use |
 |---|---|---|---|---|
-| Primary | `--red-500` | white | same | Start, submit, finish, WhatsApp |
+| Primary | `--navy-900`, hover `--navy-700` | white | same | Start, submit, finish, WhatsApp |
 | Secondary | transparent | navy | 1.5px navy | Previous, retry, dialog cancel |
 | Navy | `--navy-900` | white | same | Next question |
 | Ghost | white | navy | `--gray-200` | Flag question |
 | Link | none | `--text-secondary` | none | Skip question |
 | Flagged | `--yellow-50` | navy | `--yellow-400` | Flag question when active |
 
-All buttons are pills. Label is 14px/600, large buttons 15px/600. Primary uses `--shadow-cta`. Hover darkens the fill. Active moves down 1px. Disabled is neutral gray with secondary text, not a faded red.
+All buttons are pills. Label is 14px/600, large buttons 15px/600. Primary uses `--shadow-cta`. Hover darkens the fill. Active moves down 1px. Disabled is neutral gray with secondary text, not a faded navy.
 
 ### Stepper
 
@@ -188,11 +188,11 @@ A white card with a 1px border, 16px radius, 24px padding, and a 64px ghost numb
 
 A label with a 34px keycap, the option text, and a 20px selection mark. Border is 1px `--gray-200`, radius 12px, padding 13px 16px. Hover raises the border to navy at 35 percent. Selected swaps the keycap to navy, bolds the text, adds an inset navy ring, and fills the mark with a white check.
 
-The native radio input is visually hidden. Focus is shown with a 3px red ring on the whole row through `:focus-within`, so keyboard users always see where they are.
+The native radio input is visually hidden. Focus is shown with a 3px navy ring on the whole row through `:focus-within`, so keyboard users always see where they are.
 
 ### Checkbox
 
-A label row with a 22px custom box. The native input is visually hidden. The box has a 1.5px border at 28 percent navy and a 6px radius. Checked fills the box navy and draws a white check. Focus uses a 3px red ring on the box. The row border turns navy and the background picks up a 2 percent navy tint when checked. The terms and privacy rows are consent gates: clicking the row opens the legal dialog, and the Setuju action at the bottom of the document checks the box. The honesty row toggles on click.
+A label row with a 22px custom box. The native input is visually hidden. The box has a 1.5px border at 28 percent navy and a 6px radius. Checked fills the box navy and draws a white check. Focus uses a 3px navy ring on the box. The row border turns navy and the background picks up a 2 percent navy tint when checked. The terms and privacy rows are consent gates: clicking the row opens the legal dialog, and the Setuju action at the bottom of the document checks the box. The honesty row toggles on click.
 
 ### Navigator cell
 
@@ -212,7 +212,7 @@ Native `<dialog>` with a 16px radius, 24px padding, and a navy backdrop at 72 pe
 
 ### Form fields
 
-A 48px input with a 1px gray border, 8px radius, 14px text, and a red focus border with a 3px red ring at 12 percent. The label is 13px/600. The error line is 12px red and sits below the field. Invalid inputs keep the red border after submission.
+A 48px input with a 1px gray border, 8px radius, 14px text, and a `--navy-700` focus border with a 3px navy ring at 14 percent. The label is 13px/600. The error line is 12px red and sits below the field. Invalid inputs keep the red border after submission.
 
 ### Notices
 
@@ -223,7 +223,7 @@ A pale yellow block with a 3px yellow left edge, a navy icon, and 13px text. It 
 | State | Treatment |
 |---|---|
 | Hover | Border darkens or fill darkens by one step. Never move the layout. |
-| Focus | 3px red ring at 35 percent on buttons and rows, red border on inputs. |
+| Focus | 3px navy ring at 45 percent on buttons and rows, navy border on inputs. Red is kept for errors, so focus never looks like an error. |
 | Selected | Navy border, navy keycap, bold text, check mark. |
 | Disabled | Neutral gray fill, secondary text, `not-allowed` cursor. |
 | Warning | Timer turns red, warning banner turns yellow, flag turns yellow. |
@@ -270,7 +270,7 @@ The details screen must not reveal the score or level. Its job is to collect the
 
 ## 14. Email template
 
-The result email is a 600px single column with inline styles only, because email clients drop external CSS. The header is navy with the brand eyebrow in yellow, the body is white with a 16px radius, the level sits in a pale surface block with a red score pill, the recommendation uses a yellow left edge, and the CTA is a red pill to WhatsApp. The footer carries the campus address and the domain.
+The result email is a 600px single column with inline styles only, because email clients drop external CSS. The header is navy with the brand eyebrow in yellow, the body is white with a 16px radius, the level sits in a pale surface block with a red score pill, the recommendation uses a yellow left edge, and the CTA is a navy pill to WhatsApp. The footer carries the campus address and the domain.
 
 The email uses the same hex values as this file. It cannot use CSS variables, so the values are repeated in `src/email.js`. That is the only allowed duplication.
 
@@ -284,10 +284,20 @@ The brand logo is `public/assets/logo-titik-nol.png` (black lockup, 502 by 85 pi
 
 The content security policy is declared in `public/_headers`: `default-src 'self'`, no inline scripts, no inline styles, no third-party fonts, no external images. Any new dependency must fit that policy or the policy must be changed deliberately.
 
-## 16. Do not
+Counts, durations, and the violation limit in the copy are not hardcoded. Elements with `data-fill` (`total`, `duration`, `strikes`, `time-num`, `time-unit`) are filled from `/api/config`, so the page always matches the dashboard settings.
+
+## 16. Pre-test and post-test screens
+
+A pre-test or post-test opens from a personal link, `/?undangan=<token>`, that the team sends from the dashboard. The intro keeps the same layout, greets the student by first name, hides the contact step and the six level fact, and rewrites the data rules for an enrolled student. There is no details screen. After submit, the score screen reuses the result card and panel: the card shows "Nilai kamu" with the number out of 100 and the correct answers, and the panel says what happens next. A used, expired, or closed link shows a yellow notice in the hero, with a 1px border and no colored edge, and the start button stays disabled.
+
+## 17. Dashboard
+
+The internal dashboard at `/admin` follows the approved `dashboard-prototype.html`. Its CSS is `public/admin/assets/admin.css`. It uses the same tokens with the same color rule: primary and destructive buttons are navy, red is only for status dots, error text, and low accuracy bars, and focus rings are navy. Status is a dot plus a text label. There are no colored edge stripes.
+
+## 18. Do not
 
 1. Do not add a gradient, glassmorphism, or a shadow outside the listed set.
-2. Do not use red for decoration, headings, or backgrounds behind long text.
+2. Do not use red for buttons, decoration, headings, or backgrounds behind long text.
 3. Do not use more than two accent colors in one section.
 4. Do not center a full-width grid or card row. Only the intro and result panels are centered because they are the whole screen content.
 5. Do not add a second font family.

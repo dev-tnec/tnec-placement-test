@@ -62,7 +62,7 @@ export function buildResultEmail({ name, email, score, total, level }) {
         <div style="font-size:18px;font-weight:700;color:${NAVY};margin-top:4px;">${escapeHtml(level.program)}</div>
       </div>
 
-      <a href="${waLink}" style="display:block;background:${RED};color:#FFFFFF;text-decoration:none;text-align:center;font-size:15px;font-weight:700;padding:15px 24px;border-radius:999px;">
+      <a href="${waLink}" style="display:block;background:${NAVY};color:#FFFFFF;text-decoration:none;text-align:center;font-size:15px;font-weight:700;padding:15px 24px;border-radius:999px;">
         Konsultasi Program via WhatsApp
       </a>
 

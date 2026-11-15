@@ -1,6 +1,7 @@
-// TNEC Placement Test client.
-// Flow: consent -> fullscreen test -> submit -> contact -> result.
-// The answer key lives on the server; this file only holds the attempt.
+// TNEC test client.
+// Placement flow: consent -> fullscreen test -> submit -> contact -> result.
+// Invite flow (?undangan=token, pre-test and post-test): consent -> test -> submit -> score.
+// Questions, timing, and limits come from the server; the answer key never reaches this file.
 
 const $ = (selector, root = document) => root.querySelector(selector);
 const $$ = (selector, root = document) => [...root.querySelectorAll(selector)];
@@ -23,8 +24,9 @@ const LEVEL_LABELS = {
 };
 const CHOICES = ["A", "B", "C", "D"];
 const FOCUS_TYPES = new Set(["fullscreen_exit", "tab_hidden", "window_blur"]);
-const MAX_STRIKES = 3;
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
+// The server keeps a per-question attempt open a little longer than the sum of the question times.
+const PER_MODE_CLIENT_GRACE = 100;
 
 const els = {
   testbar: $("#testbar"),
@@ -33,6 +35,7 @@ const els = {
   progressPercent: $("#progress-percent"),
   timer: $("#timer"),
   timerValue: $("#timer-value"),
+  timerLabel: $("#timer-label"),
   legalDialog: $("#legal-dialog"),
   legalTitle: $("#legal-title"),
   legalBody: $("#legal-dialog-body"),
@@ -41,6 +44,7 @@ const els = {
   consentForm: $("#consent-form"),
   consentBoxes: $$(".consent-box"),
   startBtn: $("#start-btn"),
+  introNotice: $("#intro-notice"),
   fsWarning: $("#fs-warning"),
   flagBtn: $("#flag-btn"),
   flagText: $("#flag-text"),
@@ -54,9 +58,11 @@ const els = {
   nextBtn: $("#next-btn"),
   nextLabel: $("#next-label"),
   navGrid: $("#nav-grid"),
+  navCount: $("#nav-count"),
   navAnswered: $("#nav-answered"),
   navFlagged: $("#nav-flagged"),
   finishBtn: $("#finish-btn"),
+  finishNote: $("#finish-note"),
   contactForm: $("#contact-form"),
   name: $("#name"),
   email: $("#email"),
@@ -84,6 +90,7 @@ const els = {
   endBack: $("#end-back"),
   submitDialog: $("#submit-dialog"),
   submitAnswered: $("#submit-answered"),
+  submitTotal: $("#submit-total"),
   submitCancel: $("#submit-cancel"),
   submitConfirm: $("#submit-confirm"),
   timeupDialog: $("#timeup-dialog"),
@@ -95,12 +102,18 @@ const els = {
 
 const state = {
   config: null,
+  invite: null,
+  inviteInfo: null,
   attempt: null,
+  perMode: false,
+  maxStrikes: 3,
   index: 0,
   answers: {},
   flagged: new Set(),
   strikes: 0,
   deadline: 0,
+  questionDeadline: 0,
+  autoSubmitted: false,
   timerId: null,
   warned60: false,
   timeUp: false,
@@ -119,9 +132,19 @@ let pendingConsent = null;
 init();
 
 async function init() {
+  const token = new URLSearchParams(window.location.search).get("undangan");
+  if (token) state.invite = token.trim();
+
   try {
-    state.config = await api("/api/config");
-  } catch {
+    state.config = state.invite
+      ? await api(`/api/invites/${encodeURIComponent(state.invite)}`)
+      : await api("/api/config");
+  } catch (error) {
+    if (state.invite && error.status) {
+      showIntroNotice(error.message);
+      els.startBtn.disabled = true;
+      return;
+    }
     toast("Tes tidak dapat dimuat. Periksa koneksi internet kamu, lalu muat ulang halaman ini.", 0);
     els.startBtn.textContent = "Muat ulang halaman";
     els.startBtn.disabled = false;
@@ -129,6 +152,17 @@ async function init() {
       once: true,
     });
     return;
+  }
+
+  state.inviteInfo = state.config.invite || null;
+  applySettings(state.config);
+  if (state.inviteInfo) applyInviteCopy(state.inviteInfo, state.config);
+  if (!state.config.open) {
+    showIntroNotice(
+      state.inviteInfo
+        ? `${state.inviteInfo.testName} sedang ditutup sementara. Hubungi admin atau tutor kamu di Titik Nol untuk menanyakan jadwalnya.`
+        : "Tes penempatan sedang ditutup sementara. Silakan coba lagi nanti, atau hubungi admin Titik Nol lewat WhatsApp.",
+    );
   }
 
   els.consentBoxes.forEach((box) =>
@@ -205,6 +239,81 @@ async function init() {
   syncConsent();
 }
 
+/* ---------- Settings from the server ---------- */
+
+function spanText(seconds) {
+  const m = Math.floor(seconds / 60);
+  const s = seconds % 60;
+  if (!m) return `${s} detik`;
+  return s ? `${m} menit ${s} detik` : `${m} menit`;
+}
+
+function setCopy(key, text) {
+  for (const el of $$(`[data-copy="${key}"]`)) el.textContent = text;
+}
+
+function applySettings(config) {
+  const total = config.totalQuestions;
+  const seconds = config.durationSeconds;
+  const wholeMinutes = seconds % 60 === 0;
+  const values = {
+    total: String(total),
+    duration: spanText(seconds),
+    strikes: String(config.maxViolations),
+    "time-num": String(wholeMinutes ? seconds / 60 : seconds),
+    "time-unit": wholeMinutes ? "menit" : "detik",
+  };
+  for (const el of $$("[data-fill]")) {
+    if (values[el.dataset.fill] !== undefined) el.textContent = values[el.dataset.fill];
+  }
+  state.maxStrikes = config.maxViolations || 3;
+
+  if (config.timeMode === "per") {
+    setCopy("rule-time", `Tes terdiri dari ${total} soal pilihan ganda, dan setiap soal punya batas waktunya sendiri. Saat waktu satu soal habis, soal berikutnya langsung muncul, dan soal sebelumnya tidak bisa dibuka lagi.`);
+    setCopy("how2-body", `Tes berlangsung paling lama ${spanText(seconds)} tanpa jeda, dengan batas waktu di setiap soal. Selama tes, layar akan otomatis masuk ke mode penuh agar kamu bisa fokus.`);
+    setCopy("start-note", `Tes berlangsung paling lama ${spanText(seconds)}, dan jawaban hanya bisa dikirim satu kali.`);
+  }
+}
+
+function applyInviteCopy(info, config) {
+  const total = config.totalQuestions;
+  const pre = info.test === "pre";
+  const name = info.testName.toLowerCase();
+  setCopy("eyebrow", info.testName);
+
+  const accent = document.createElement("span");
+  accent.className = "hero__accent";
+  accent.textContent = spanText(config.durationSeconds);
+  $("#intro-title").replaceChildren(
+    `Halo ${info.firstName}, selesaikan ${name} kamu dalam `,
+    accent,
+    ".",
+  );
+  setCopy("intro-lead", pre
+    ? `Tes ini berisi ${total} soal pilihan ganda. Nilainya kami pakai sebagai titik awal untuk melihat perkembangan kamu selama program.`
+    : `Tes ini berisi ${total} soal pilihan ganda. Hasilnya kami pakai untuk menentukan apakah kamu sudah siap lanjut ke level berikutnya.`);
+
+  for (const el of $$('[data-only="placement"]')) el.hidden = true;
+  setCopy("step3-index", "02");
+  setCopy("step3-meta", pre ? "Nilai langsung muncul" : "Nilai dan kelulusan");
+  setCopy("how3-title", "Melihat nilai kamu");
+  setCopy("how3-body", "Setelah jawaban terkirim, nilai kamu langsung muncul di layar dan tercatat di data kelas, jadi tutor bisa membahasnya bersama kamu.");
+  setCopy("data-1", "Kami menyimpan jawaban, nilai, waktu pengerjaan, dan catatan pelanggaran selama tes, lalu mencatatnya di data kamu sebagai siswa Titik Nol.");
+  setCopy("data-2", "Data itu kami pakai untuk menghitung nilai dan memantau perkembangan belajar kamu bersama tutor. Data tidak dijual dan tidak dipakai untuk iklan.");
+  setCopy("data-3", pre
+    ? "Setelah jawaban terkirim, nilai kamu langsung muncul di layar. Kamu tidak perlu mengisi data kontak lagi."
+    : "Setelah jawaban terkirim, nilai dan hasil kelulusan kamu langsung muncul di layar. Kamu tidak perlu mengisi data kontak lagi.");
+  setCopy("data-4", "Kalau waktu habis sebelum kamu selesai, percobaan ini gagal dan jawaban kamu tidak dikirim. Selama tautan ini masih berlaku, kamu bisa mengulang tes dari awal dengan waktu yang baru.");
+  document.title = `${info.testName} - Titik Nol English Course`;
+}
+
+function showIntroNotice(message) {
+  els.introNotice.textContent = message;
+  els.introNotice.hidden = false;
+}
+
+/* ---------- Consent ---------- */
+
 function renderDoc(container, doc) {
   const fragment = document.createDocumentFragment();
   const updated = document.createElement("p");
@@ -226,6 +335,7 @@ function renderDoc(container, doc) {
 }
 
 function openLegal(kind, consentBox = null) {
+  if (!state.config) return;
   const doc = kind === "terms" ? state.config.terms : state.config.privacy;
   if (!doc) return;
   pendingConsent = consentBox;
@@ -250,7 +360,14 @@ function confirmLegal() {
 
 function syncConsent() {
   const allChecked = els.consentBoxes.every((box) => box.checked);
-  els.startBtn.disabled = !allChecked;
+  els.startBtn.disabled = !allChecked || !state.config?.open;
+}
+
+function attemptBody() {
+  return {
+    consent: { accepted: true, version: state.config.consentVersion },
+    ...(state.invite ? { invite: state.invite } : {}),
+  };
 }
 
 async function startTest(event) {
@@ -258,22 +375,24 @@ async function startTest(event) {
   if (!state.config || els.startBtn.disabled) return;
 
   els.startBtn.disabled = true;
-  els.startBtn.textContent = "Menyiapkan tes...";
+  const label = els.startBtn.firstChild;
+  const original = label.textContent;
+  label.textContent = "Menyiapkan tes... ";
   await requestFullscreen();
 
   try {
-    const data = await api("/api/attempts", {
-      method: "POST",
-      body: {
-        consent: { accepted: true, version: state.config.consentVersion },
-      },
-    });
+    const data = await api("/api/attempts", { method: "POST", body: attemptBody() });
     beginAttempt(data);
   } catch (error) {
     await exitFullscreen();
     toast(error.message || "Tes gagal dimulai. Silakan coba lagi.");
-    els.startBtn.disabled = false;
-    els.startBtn.textContent = "Mulai tes sekarang";
+    if (error.status === 423 || error.status === 410 || error.status === 404) {
+      showIntroNotice(error.message);
+    } else {
+      els.startBtn.disabled = false;
+    }
+  } finally {
+    label.textContent = original;
   }
 }
 
@@ -283,11 +402,15 @@ function beginAttempt(data) {
     questions: data.questions,
     total: data.total,
   };
+  state.perMode = data.timeMode === "per";
+  state.maxStrikes = data.maxViolations || state.maxStrikes;
   state.index = 0;
   state.answers = {};
   state.flagged = new Set();
   state.strikes = 0;
-  state.deadline = Date.now() + data.secondsLeft * 1000;
+  state.deadline = Date.now() + (data.secondsLeft + (state.perMode ? PER_MODE_CLIENT_GRACE : 0)) * 1000;
+  state.questionDeadline = 0;
+  state.autoSubmitted = false;
   state.warned60 = false;
   state.timeUp = false;
   state.submitting = false;
@@ -301,6 +424,16 @@ function beginAttempt(data) {
   clearErrors();
   els.fsWarning.hidden = Boolean(document.fullscreenElement);
 
+  // Per-question time moves forward only, so there is nothing to go back to or flag.
+  els.prevBtn.hidden = state.perMode;
+  els.flagBtn.hidden = state.perMode;
+  els.timerLabel.textContent = state.perMode ? "untuk soal ini" : "tersisa";
+  els.navCount.textContent = `${data.total} soal`;
+  els.submitTotal.textContent = String(data.total);
+  els.finishNote.textContent = state.perMode
+    ? "Setiap soal punya waktunya sendiri. Soal berikutnya muncul otomatis saat waktu habis, dan jawaban terkirim setelah soal terakhir."
+    : "Periksa kembali jawaban kamu sebelum mengirim, karena jawaban tidak bisa diubah setelah terkirim.";
+
   showScreen("test");
   buildNavigator();
   renderQuestion();
@@ -308,7 +441,7 @@ function beginAttempt(data) {
 }
 
 function showScreen(name, { focus = true } = {}) {
-  for (const key of ["intro", "test", "details", "result"]) {
+  for (const key of ["intro", "test", "details", "result", "score"]) {
     $(`#screen-${key}`).hidden = key !== name;
   }
   document.body.dataset.screen = name;
@@ -320,6 +453,7 @@ function showScreen(name, { focus = true } = {}) {
     intro: "#intro-title",
     details: "#details-title",
     result: "#result-level",
+    score: "#score-title",
   }[name];
   if (target) $(target).focus({ preventScroll: true });
 }
@@ -333,6 +467,7 @@ function buildNavigator() {
     button.type = "button";
     button.className = "nav-btn";
     button.textContent = String(i + 1);
+    button.disabled = state.perMode;
     button.addEventListener("click", () => goTo(i));
     els.navGrid.append(button);
   }
@@ -341,7 +476,7 @@ function buildNavigator() {
 
 function renderQuestion() {
   const question = state.attempt.questions[state.index];
-  els.questionBadge.textContent = `Soal ${state.index + 1} \u00b7 Grammar & Structure`;
+  els.questionBadge.textContent = `Soal ${state.index + 1} \u00b7 ${question.skill || "Grammar"}`;
   els.prompt.textContent = question.prompt;
 
   if (question.passage) {
@@ -382,8 +517,10 @@ function renderQuestion() {
     els.optionsList.append(label);
   }
 
+  if (state.perMode) state.questionDeadline = Date.now() + (question.seconds || 30) * 1000;
   syncQuestionChrome();
   syncNavigator();
+  if (state.perMode) tick();
 }
 
 function choose(questionId, letter) {
@@ -449,8 +586,9 @@ function syncNavigator() {
 }
 
 function goTo(index) {
-  if (!state.attempt) return;
+  if (!state.attempt || state.ending) return;
   if (index < 0 || index >= state.attempt.total) return;
+  if (state.perMode && index <= state.index) return;
   state.index = index;
   renderQuestion();
 }
@@ -469,7 +607,7 @@ function next() {
 }
 
 function toggleFlag() {
-  if (!state.attempt) return;
+  if (!state.attempt || state.perMode) return;
   const question = state.attempt.questions[state.index];
   if (state.flagged.has(question.id)) state.flagged.delete(question.id);
   else state.flagged.add(question.id);
@@ -493,6 +631,10 @@ function startTimer() {
 
 function tick() {
   if (!state.attempt) return;
+  if (state.perMode) {
+    tickQuestion();
+    return;
+  }
   const remaining = Math.max(
     0,
     Math.ceil((state.deadline - Date.now()) / 1000),
@@ -515,6 +657,27 @@ function tick() {
   }
 }
 
+// Per-question mode: when a question runs out of time the next one opens.
+// After the last question the answers are sent automatically, once.
+function tickQuestion() {
+  if (state.ending || state.submitted) return;
+  const remaining = Math.max(0, Math.ceil((state.questionDeadline - Date.now()) / 1000));
+  els.timerValue.textContent = formatTime(remaining);
+  els.timer.classList.toggle("is-warning", remaining > 0 && remaining <= 5);
+  if (remaining > 0) return;
+
+  if (state.index < state.attempt.total - 1) {
+    announce("Waktu soal ini habis. Soal berikutnya sudah muncul.");
+    state.index += 1;
+    renderQuestion();
+    return;
+  }
+  if (!state.autoSubmitted) {
+    state.autoSubmitted = true;
+    submitAnswers();
+  }
+}
+
 function formatTime(seconds) {
   const mins = String(Math.floor(seconds / 60)).padStart(2, "0");
   const secs = String(seconds % 60).padStart(2, "0");
@@ -531,12 +694,17 @@ async function submitAnswers() {
   closeDialogs();
 
   try {
-    await api(`/api/attempts/${state.attempt.id}/submit`, {
+    const data = await api(`/api/attempts/${state.attempt.id}/submit`, {
       method: "POST",
       body: { answers: state.answers },
     });
     state.submitted = true;
-    showScreen("details");
+    if (data.result) {
+      renderScore(data.result);
+      showScreen("score");
+    } else {
+      showScreen("details");
+    }
     await exitFullscreen();
   } catch (error) {
     state.submitting = false;
@@ -545,6 +713,11 @@ async function submitAnswers() {
       toast(
         `${error.message || "Jawaban gagal dikirim."} Jawaban kamu masih tersimpan di halaman ini, silakan coba kirim lagi.`,
       );
+      if (state.perMode) {
+        // Keep the last question open so the answers can be sent again with the button.
+        els.timerValue.textContent = formatTime(0);
+        return;
+      }
       startTimer();
     } else {
       state.timeUp = true;
@@ -650,6 +823,35 @@ function renderResult(result) {
     : "Email hasil belum berhasil dikirim. Simpan halaman ini, atau hubungi admin melalui WhatsApp.";
 }
 
+// Pre-test and post-test results. The student is already known, so there is no contact step.
+function renderScore(result) {
+  const first = state.inviteInfo?.firstName || "";
+  $("#score-eyebrow").textContent = `Hasil ${result.testName}`;
+  $("#score-title").textContent = `Nilai kamu ${result.nilai}`;
+  $("#score-value").textContent = String(result.score);
+  $("#score-total").textContent = `/ ${result.total}`;
+
+  let summary;
+  let headline;
+  let description;
+  if (result.test !== "post") {
+    summary = `Terima kasih sudah mengerjakan pre-test${first ? `, ${first}` : ""}.`;
+    headline = "Nilai awal kamu sudah tercatat";
+    description = "Nilai ini menjadi titik awal untuk melihat perkembangan kamu selama program. Di akhir program, kamu akan mengerjakan post-test supaya kemajuan kamu bisa dibandingkan dengan nilai ini.";
+  } else if (result.passed) {
+    summary = `Selamat${first ? `, ${first}` : ""}. Nilai kamu sudah mencapai batas kelulusan ${result.passScore}.`;
+    headline = "Kamu siap lanjut ke level berikutnya";
+    description = "Tim pendidikan Titik Nol akan menghubungi kamu untuk membahas pilihan kelas di level berikutnya.";
+  } else {
+    summary = `${first ? `${first}, n` : "N"}ilai kamu belum mencapai batas kelulusan ${result.passScore}.`;
+    headline = "Level ini perlu diperkuat dulu";
+    description = "Tutor kamu akan membahas bagian yang masih perlu dilatih, lalu tim pendidikan membantu menentukan kelas berikutnya untuk kamu.";
+  }
+  $("#score-summary").textContent = summary;
+  $("#score-headline").textContent = headline;
+  $("#score-description").textContent = description;
+}
+
 async function retry() {
   if (state.restarting || !state.config) return;
   state.restarting = true;
@@ -662,12 +864,7 @@ async function retry() {
   await requestFullscreen();
 
   try {
-    const data = await api("/api/attempts", {
-      method: "POST",
-      body: {
-        consent: { accepted: true, version: state.config.consentVersion },
-      },
-    });
+    const data = await api("/api/attempts", { method: "POST", body: attemptBody() });
     beginAttempt(data);
   } catch (error) {
     toast(error.message || "Tes baru gagal dimulai. Silakan coba lagi.");
@@ -709,7 +906,7 @@ function registerViolation(type) {
   if (!FOCUS_TYPES.has(type)) return;
 
   state.strikes += 1;
-  if (state.strikes >= MAX_STRIKES) {
+  if (state.strikes >= state.maxStrikes) {
     state.ending = true;
     clearInterval(state.timerId);
     if (els.violationDialog.open) els.violationDialog.close();
@@ -844,7 +1041,9 @@ async function api(path, { method = "GET", body } = {}) {
   }
 
   if (!response.ok) {
-    throw new Error(data?.error || "Permintaan gagal diproses. Silakan coba lagi.");
+    const error = new Error(data?.error || "Permintaan gagal diproses. Silakan coba lagi.");
+    error.status = response.status;
+    throw error;
   }
   return data;
 }

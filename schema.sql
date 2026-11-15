@@ -1,5 +1,6 @@
--- TNEC Placement Test schema (Cloudflare D1 / SQLite)
--- Apply with: wrangler d1 execute tnec-placement-test --remote --file=./schema.sql
+-- TNEC Placement Test schema (Cloudflare D1 / SQLite), the original two tables.
+-- Kept for reference only. The schema is now managed by migrations/ and applied with
+-- npm run db:migrate (remote) or npm run db:migrate:local. Do not apply this file by hand.
 
 PRAGMA foreign_keys = ON;
 

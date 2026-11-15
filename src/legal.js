@@ -1,27 +1,33 @@
 // Legal copy and public config. Bump CONSENT_VERSION whenever the text changes,
 // so every stored consent record points to the exact version the user saw.
 
-export const CONSENT_VERSION = "2026-11-14c";
-export const TEST_DURATION_SECONDS = 300;
+export const CONSENT_VERSION = "2026-11-16";
 export const WHATSAPP = "6282333143544";
+// Fills the {{total}}, {{duration}}, and {{strikes}} tokens with the live test settings,
+// so the legal text always matches what the dashboard has configured.
+export function fillLegal(doc, values) {
+  const fill = (s) => s.replace(/\{\{(\w+)\}\}/g, (_, key) => String(values[key] ?? ""));
+  return { ...doc, sections: doc.sections.map((sec) => ({ ...sec, paragraphs: sec.paragraphs.map(fill) })) };
+}
+
 export const CAMPUS_ADDRESS =
   "Jl. Brawijaya No.75, Mangunrejo, Tulungrejo, Kec. Pare, Kab. Kediri, Jawa Timur";
 
 export const TERMS = {
   title: "Syarat dan Ketentuan",
-  updated: "14 November 2026",
+  updated: "16 November 2026",
   sections: [
     {
       heading: "1. Tentang tes ini",
       paragraphs: [
-        "Tes penempatan ini dibuat oleh Titik Nol English Course untuk mengukur kemampuan awal bahasa Inggris kamu. Tes ini terdiri dari 25 soal pilihan ganda dengan satu jawaban benar per soal, dan durasinya 5 menit.",
-        "Hasil tes ini dipakai untuk menentukan kelas dan bukan sertifikat resmi. Jangan memakai hasil ini sebagai bukti kemampuan bahasa Inggris untuk keperluan formal.",
+        "Tes ini dibuat oleh Titik Nol English Course untuk mengukur kemampuan bahasa Inggris kamu. Tes ini terdiri dari {{total}} soal pilihan ganda dengan satu jawaban benar per soal, dan durasinya {{duration}}.",
+        "Hasil tes ini dipakai untuk menentukan kelas atau memantau perkembangan belajar, dan bukan sertifikat resmi. Jangan memakai hasil ini sebagai bukti kemampuan bahasa Inggris untuk keperluan formal.",
       ],
     },
     {
       heading: "2. Aturan pengerjaan",
       paragraphs: [
-        "Tes berjalan dalam mode layar penuh. Kalau kamu keluar dari mode itu, berpindah tab, membuka aplikasi lain, atau memindahkan fokus dari jendela tes, aktivitas tersebut dicatat sebagai pelanggaran. Pada pelanggaran ketiga, tes berhenti dan jawaban kamu tidak dikirim.",
+        "Tes berjalan dalam mode layar penuh. Kalau kamu keluar dari mode itu, berpindah tab, membuka aplikasi lain, atau memindahkan fokus dari jendela tes, aktivitas tersebut dicatat sebagai pelanggaran. Pada pelanggaran ke-{{strikes}}, tes berhenti dan jawaban kamu tidak dikirim.",
         "Kerjakan tes ini sendiri tanpa bantuan kamus, aplikasi penerjemah, kecerdasan buatan, atau orang lain.",
         "Waktu terus berjalan ketika jendela tes kehilangan fokus, dan waktu tidak bisa dijeda.",
       ],
@@ -31,6 +37,7 @@ export const TERMS = {
       paragraphs: [
         "Skor dihitung di server setelah jawaban dikirim, dan jawaban yang sudah dikirim tidak bisa diubah.",
         "Kalau waktu habis, percobaan itu gagal dan jawaban kamu tidak dikirim. Kamu bisa mengulang tes dari awal, dan percobaan baru akan memakai soal yang sama dengan waktu yang baru.",
+        "Kalau tes memakai batas waktu per soal, soal berikutnya muncul otomatis saat waktu satu soal habis, soal sebelumnya tidak bisa dibuka lagi, dan jawaban terkirim setelah soal terakhir.",
       ],
     },
     {
@@ -52,7 +59,7 @@ export const TERMS = {
 
 export const PRIVACY = {
   title: "Kebijakan Privasi",
-  updated: "14 November 2026",
+  updated: "16 November 2026",
   sections: [
     {
       heading: "1. Pengendali data",
@@ -65,7 +72,8 @@ export const PRIVACY = {
     {
       heading: "2. Data yang kami kumpulkan",
       paragraphs: [
-        "Data identitas: nama lengkap, alamat email, dan nomor WhatsApp yang kamu isi setelah tes.",
+        "Data identitas: nama lengkap, alamat email, dan nomor WhatsApp yang kamu isi setelah tes. Kalau kamu sudah terdaftar sebagai siswa, data ini juga bisa berasal dari pendaftaran di kantor kami, dan hasil pre-test atau post-test tercatat di data siswa kamu.",
+        "Data pendaftaran dan komunikasi: program, periode, kelas, catatan tim, serta pesan WhatsApp yang kami kirim ke kamu.",
         "Data hasil tes: jawaban, skor, level, waktu mulai dan selesai, serta durasi pengerjaan.",
         "Data teknis: jenis dan versi perangkat atau browser, negara asal koneksi, dan catatan pelanggaran mode layar penuh atau perpindahan tab. Kami tidak menyimpan alamat IP lengkap.",
         "Data persetujuan: versi syarat dan kebijakan yang kamu setujui beserta waktu persetujuannya.",
@@ -74,7 +82,7 @@ export const PRIVACY = {
     {
       heading: "3. Tujuan dan dasar pemrosesan",
       paragraphs: [
-        "Kami memakai data kamu untuk menghitung skor, menentukan level, mengirim hasil tes ke email kamu, menindaklanjuti konsultasi atau pendaftaran kelas, dan menjaga integritas tes.",
+        "Kami memakai data kamu untuk menghitung skor, menentukan level, mengirim hasil tes ke email kamu, menghubungi kamu lewat WhatsApp untuk konsultasi, jadwal kelas, atau tautan tes, mengelola pendaftaran kelas, dan menjaga integritas tes.",
         "Dasar pemrosesan adalah persetujuan yang kamu berikan saat mencentang kotak persetujuan di halaman ini, dan kamu bisa menarik persetujuan itu kapan saja.",
         "Kami tidak memakai data kamu untuk iklan pihak ketiga dan tidak menjual data kamu.",
       ],
@@ -91,6 +99,7 @@ export const PRIVACY = {
       paragraphs: [
         "Data hanya diakses oleh tim Titik Nol yang membutuhkan, yaitu tim akademik dan admin penerimaan siswa.",
         "Cloudflare bertindak sebagai prosesor infrastruktur untuk hosting, basis data, dan pengiriman email hasil tes. Kami tidak membagikan data kamu kepada pihak lain untuk tujuan pemasaran.",
+        "Pesan WhatsApp dari tim kami dikirim melalui AttCos, layanan pesan yang kami pakai sebagai prosesor, lalu diteruskan lewat WhatsApp Business Platform milik Meta. Keduanya hanya menerima nomor WhatsApp dan isi pesan yang diperlukan untuk mengirimkannya.",
       ],
     },
     {

@@ -3,12 +3,12 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="description" content="Tes penempatan online Titik Nol English Course. 25 soal dalam 5 menit, lengkap dengan level, skor, dan rekomendasi program.">
+<meta name="description" content="Tes penempatan online Titik Nol English Course, lengkap dengan level, skor, dan rekomendasi program.">
 <meta name="theme-color" content="#0A1B38">
 <title>Tes Penempatan Online - Titik Nol English Course</title>
 <link rel="icon" href="/favicon.svg" type="image/svg+xml">
-<link rel="stylesheet" href="/assets/app.css?v=9">
-<script type="module" src="/assets/app.js?v=9"></script>
+<link rel="stylesheet" href="/assets/app.css?v=10">
+<script type="module" src="/assets/app.js?v=10"></script>
 </head>
 <body data-screen="intro">
 <a class="skip-link" href="#main">Lewati ke konten</a>
@@ -21,20 +21,21 @@
       <div class="wrap hero__grid">
         <div class="hero__copy">
           <img class="hero__logo" src="/assets/logo-titik-nol-white.png" alt="Titik Nol English Course" width="140" height="23">
-          <p class="eyebrow eyebrow--on-dark"><span class="eyebrow__dot" aria-hidden="true"></span>Tes Penempatan Online</p>
+          <p class="eyebrow eyebrow--on-dark"><span class="eyebrow__dot" aria-hidden="true"></span><span data-copy="eyebrow">Tes Penempatan Online</span></p>
           <h1 class="hero__title" id="intro-title" tabindex="-1">
-            Kenali level bahasa Inggris kamu dalam <span class="hero__accent">5 menit</span>.
+            Kenali level bahasa Inggris kamu dalam <span class="hero__accent" data-fill="duration">5 menit</span>.
           </h1>
-          <p class="hero__lead">
-            Tes ini berisi 25 soal pilihan ganda yang mengukur kemampuan bahasa Inggris kamu.
+          <p class="hero__lead" data-copy="intro-lead">
+            Tes ini berisi <span data-fill="total">25</span> soal pilihan ganda yang mengukur kemampuan bahasa Inggris kamu.
             Setelah selesai, level, skor, dan rekomendasi program akan langsung muncul, dan
             hasilnya juga kami kirim ke email kamu.
           </p>
           <div class="hero__facts">
-            <span class="fact"><strong>25</strong><span>soal</span></span>
-            <span class="fact"><strong>5</strong><span>menit</span></span>
-            <span class="fact"><strong>6</strong><span>level</span></span>
+            <span class="fact"><strong data-fill="total">25</strong><span>soal</span></span>
+            <span class="fact"><strong data-fill="time-num">5</strong><span data-fill="time-unit">menit</span></span>
+            <span class="fact" data-only="placement"><strong>6</strong><span>level</span></span>
           </div>
+          <p class="banner banner--warning hero__notice" id="intro-notice" role="status" hidden></p>
         </div>
 
           <div class="preview" aria-hidden="true">
@@ -82,9 +83,9 @@
           <span class="stepper__bar"></span>
           <span class="stepper__index">01</span>
           <span class="stepper__title">Mengerjakan tes</span>
-          <span class="stepper__meta">25 soal, 5 menit</span>
+          <span class="stepper__meta"><span data-fill="total">25</span> soal, <span data-fill="duration">5 menit</span></span>
         </li>
-        <li class="stepper__step">
+        <li class="stepper__step" data-only="placement">
           <span class="stepper__bar"></span>
           <span class="stepper__index">02</span>
           <span class="stepper__title">Melengkapi data</span>
@@ -92,9 +93,9 @@
         </li>
         <li class="stepper__step">
           <span class="stepper__bar"></span>
-          <span class="stepper__index">03</span>
+          <span class="stepper__index" data-copy="step3-index">03</span>
           <span class="stepper__title">Melihat hasil</span>
-          <span class="stepper__meta">Level dan rekomendasi</span>
+          <span class="stepper__meta" data-copy="step3-meta">Level dan rekomendasi</span>
         </li>
       </ol>
 
@@ -112,12 +113,12 @@
         <article class="how-card">
           <span class="how-card__num" aria-hidden="true">02</span>
           <h3 class="how-card__title">Mengerjakan tes di layar penuh</h3>
-          <p class="how-card__body">Tes berlangsung selama 5 menit tanpa jeda. Selama tes, layar akan otomatis masuk ke mode penuh agar kamu bisa fokus, dan waktu terus berjalan sampai tes selesai.</p>
+          <p class="how-card__body" data-copy="how2-body">Tes berlangsung selama <span data-fill="duration">5 menit</span> tanpa jeda. Selama tes, layar akan otomatis masuk ke mode penuh agar kamu bisa fokus, dan waktu terus berjalan sampai tes selesai.</p>
         </article>
         <article class="how-card">
           <span class="how-card__num" aria-hidden="true">03</span>
-          <h3 class="how-card__title">Melihat hasil dan rekomendasi</h3>
-          <p class="how-card__body">Setelah tes selesai, kamu mengisi nama, email, dan nomor WhatsApp. Level, skor, dan rekomendasi program akan langsung muncul, lalu kami kirimkan juga ke email kamu.</p>
+          <h3 class="how-card__title" data-copy="how3-title">Melihat hasil dan rekomendasi</h3>
+          <p class="how-card__body" data-copy="how3-body">Setelah tes selesai, kamu mengisi nama, email, dan nomor WhatsApp. Level, skor, dan rekomendasi program akan langsung muncul, lalu kami kirimkan juga ke email kamu.</p>
         </article>
       </div>
 
@@ -138,7 +139,7 @@
             <ol class="test-rules__list">
               <li>
                 <span class="test-rules__num" aria-hidden="true">1</span>
-                <p>Tes terdiri dari 25 soal pilihan ganda yang harus diselesaikan dalam 5 menit. Waktu terus berjalan sejak tes dimulai dan tidak bisa dijeda.</p>
+                <p data-copy="rule-time">Tes terdiri dari <span data-fill="total">25</span> soal pilihan ganda yang harus diselesaikan dalam <span data-fill="duration">5 menit</span>. Waktu terus berjalan sejak tes dimulai dan tidak bisa dijeda.</p>
               </li>
               <li>
                 <span class="test-rules__num" aria-hidden="true">2</span>
@@ -146,7 +147,7 @@
               </li>
               <li>
                 <span class="test-rules__num" aria-hidden="true">3</span>
-                <p>Setiap kali kamu keluar dari layar penuh atau berpindah tab, kejadian itu kami catat. Pada pelanggaran pertama dan kedua, kamu masih mendapat peringatan. Kalau pelanggaran sudah mencapai tiga kali, percobaan ini gagal dan jawaban kamu tidak dikirim.</p>
+                <p>Setiap kali kamu keluar dari layar penuh atau berpindah tab, kejadian itu kami catat dan kamu mendapat peringatan. Kalau pelanggaran sudah mencapai <span data-fill="strikes">3</span> kali, percobaan ini gagal dan jawaban kamu tidak dikirim.</p>
               </li>
               <li>
                 <span class="test-rules__num" aria-hidden="true">4</span>
@@ -159,19 +160,19 @@
             <ol class="test-rules__list">
               <li>
                 <span class="test-rules__num" aria-hidden="true">1</span>
-                <p>Kami menyimpan nama, email, nomor WhatsApp, jawaban, skor, waktu pengerjaan, dan catatan pelanggaran selama tes.</p>
+                <p data-copy="data-1">Kami menyimpan nama, email, nomor WhatsApp, jawaban, skor, waktu pengerjaan, dan catatan pelanggaran selama tes.</p>
               </li>
               <li>
                 <span class="test-rules__num" aria-hidden="true">2</span>
-                <p>Data itu kami pakai untuk menghitung skor, menentukan level, mengirim hasil ke email kamu, dan menindaklanjuti konsultasi kalau kamu membutuhkannya. Data tidak dijual dan tidak dipakai untuk iklan.</p>
+                <p data-copy="data-2">Data itu kami pakai untuk menghitung skor, menentukan level, mengirim hasil ke email kamu, dan menindaklanjuti konsultasi kalau kamu membutuhkannya. Data tidak dijual dan tidak dipakai untuk iklan.</p>
               </li>
               <li>
                 <span class="test-rules__num" aria-hidden="true">3</span>
-                <p>Setelah tes selesai, kamu mengisi nama, email, dan nomor WhatsApp. Level, skor, dan rekomendasi program akan muncul di layar dan dikirim ke email kamu.</p>
+                <p data-copy="data-3">Setelah tes selesai, kamu mengisi nama, email, dan nomor WhatsApp. Level, skor, dan rekomendasi program akan muncul di layar dan dikirim ke email kamu.</p>
               </li>
               <li>
                 <span class="test-rules__num" aria-hidden="true">4</span>
-                <p>Kalau waktu habis sebelum kamu selesai, percobaan ini gagal dan jawaban kamu tidak dikirim. Kamu bisa mengulang tes dari awal dengan waktu yang baru. Hasil tes ini dipakai untuk penempatan kelas, bukan sertifikat resmi.</p>
+                <p data-copy="data-4">Kalau waktu habis sebelum kamu selesai, percobaan ini gagal dan jawaban kamu tidak dikirim. Kamu bisa mengulang tes dari awal dengan waktu yang baru. Hasil tes ini dipakai untuk penempatan kelas, bukan sertifikat resmi.</p>
               </li>
             </ol>
           </div>
@@ -204,7 +205,7 @@
                 <path d="M5 12h14M13 6l6 6-6 6"></path>
               </svg>
             </button>
-            <p class="micro">Tes berlangsung 5 menit, dan jawaban hanya bisa dikirim satu kali.</p>
+            <p class="micro" data-copy="start-note">Tes berlangsung <span data-fill="duration">5 menit</span>, dan jawaban hanya bisa dikirim satu kali.</p>
           </div>
         </form>
       </section>
@@ -228,7 +229,7 @@
             <path d="M12 9v4l2.5 2.5M9 2h6"></path>
           </svg>
           <span id="timer-value">05:00</span>
-          <span class="timer__label">tersisa</span>
+          <span class="timer__label" id="timer-label">tersisa</span>
         </div>
       </div>
     </div>
@@ -306,7 +307,7 @@
               </svg>
               Selesaikan dan kirim
             </button>
-            <p class="micro">Periksa kembali jawaban kamu sebelum mengirim, karena jawaban tidak bisa diubah setelah terkirim.</p>
+            <p class="micro" id="finish-note">Periksa kembali jawaban kamu sebelum mengirim, karena jawaban tidak bisa diubah setelah terkirim.</p>
           </div>
         </aside>
       </div>
@@ -368,7 +369,7 @@
                   <path d="M20 6 9 17l-5-5"></path>
                 </svg>
               </span>
-              <span><strong>Level dan skor</strong> dari 25 soal yang sudah kamu kerjakan</span>
+              <span><strong>Level dan skor</strong> dari <span data-fill="total">25</span> soal yang sudah kamu kerjakan</span>
             </li>
             <li class="benefit">
               <span class="benefit__icon" aria-hidden="true">
@@ -489,13 +490,42 @@
     </div>
   </section>
 
+  <!-- 5. SCORE (pre-test and post-test links from the dashboard) -->
+  <section class="screen" id="screen-score" aria-labelledby="score-title" hidden>
+    <div class="wrap wrap--details result-wrap">
+      <div class="result-grid">
+        <div class="result-card">
+          <div class="result-card__head">
+            <p class="eyebrow eyebrow--on-dark" id="score-eyebrow">Hasil tes</p>
+          </div>
+          <h1 class="result-card__level" id="score-title" tabindex="-1">Nilai kamu</h1>
+          <p class="result-card__summary" id="score-summary"></p>
+          <div class="result-score">
+            <span class="result-score__value" id="score-value">0</span>
+            <span class="result-score__total" id="score-total">/ 0</span>
+            <span class="result-score__label">jawaban benar</span>
+          </div>
+        </div>
+
+        <div class="result-body panel">
+          <div class="result-block">
+            <p class="eyebrow">Langkah berikutnya</p>
+            <p class="result-program" id="score-headline"></p>
+          </div>
+          <p class="result-description" id="score-description"></p>
+          <p class="micro">Nilai ini sudah tercatat di data kamu sebagai siswa Titik Nol English Course, jadi halaman ini boleh ditutup.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
 </main>
 
 <footer class="footer">
   <div class="footer__inner">
     <img class="footer__logo" src="/assets/logo-titik-nol.png" alt="" width="110" height="19">
     <p>Titik Nol English Course. Jl. Brawijaya No.75, Pare, Kediri, Jawa Timur.</p>
-    <p class="footer__meta">Tes penempatan online. Data kamu diproses sesuai Kebijakan Privasi.</p>
+    <p class="footer__meta">Tes online Titik Nol English Course. Data kamu diproses sesuai Kebijakan Privasi.</p>
   </div>
 </footer>
 
@@ -511,9 +541,9 @@
     <h2 class="dialog__title" id="violation-title">Fokus tes kamu terputus</h2>
     <p class="dialog__text">
       Kamu terdeteksi keluar dari layar penuh atau berpindah dari jendela tes, dan kejadian
-      ini sudah kami catat. Ini adalah pelanggaran fokus yang ke-<strong id="violation-count">1</strong> dari 3.
+      ini sudah kami catat. Ini adalah pelanggaran fokus yang ke-<strong id="violation-count">1</strong> dari <span data-fill="strikes">3</span>.
     </p>
-    <p class="dialog__note">Waktu tes tetap berjalan selama peringatan ini ditampilkan. Pada pelanggaran ketiga, percobaan ini gagal.</p>
+    <p class="dialog__note">Waktu tes tetap berjalan selama peringatan ini ditampilkan. Pada pelanggaran ke-<span data-fill="strikes">3</span>, percobaan ini gagal.</p>
     <button class="btn btn--primary btn--block" id="violation-close" type="button">Kembali ke layar penuh</button>
   </div>
 </dialog>
@@ -528,7 +558,7 @@
     </span>
     <h2 class="dialog__title" id="end-title">Percobaan ini gagal</h2>
     <p class="dialog__text">
-      Kamu sudah tiga kali keluar dari layar tes, jadi percobaan ini gagal dan jawaban kamu
+      Kamu sudah <span data-fill="strikes">3</span> kali keluar dari layar tes, jadi percobaan ini gagal dan jawaban kamu
       tidak dikirim. Kalau ingin mendapatkan hasil, kamu perlu mengulang tes dari awal.
     </p>
     <div class="dialog__actions dialog__actions--stack">
@@ -542,7 +572,7 @@
   <div class="dialog__body">
     <h2 class="dialog__title" id="submit-title">Kirim jawaban sekarang?</h2>
     <p class="dialog__text">
-      Kamu sudah menjawab <strong id="submit-answered">0</strong> dari 25 soal.
+      Kamu sudah menjawab <strong id="submit-answered">0</strong> dari <span id="submit-total">25</span> soal.
       Setelah dikirim, jawaban tidak bisa diubah lagi.
     </p>
     <div class="dialog__actions">
@@ -562,7 +592,7 @@
     </span>
     <h2 class="dialog__title" id="timeup-title">Waktu pengerjaan habis</h2>
     <p class="dialog__text">
-      Waktu 5 menit sudah habis, jadi percobaan ini gagal dan jawaban kamu tidak dikirim.
+      Waktu <span data-fill="duration">5 menit</span> sudah habis, jadi percobaan ini gagal dan jawaban kamu tidak dikirim.
       Kalau ingin mendapatkan hasil, kamu perlu mengulang tes dari awal dengan waktu yang baru.
     </p>
     <div class="dialog__actions dialog__actions--stack">
