@@ -1,0 +1,407 @@
+<!DOCTYPE html>
+
+<html lang="id"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<meta content="web_blank" name="shell-type"/>
+<title>Diagnostic Placement Test - Titik Nol English Course</title>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&amp;display=swap" rel="stylesheet"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script id="tailwind-config">
+    tailwind.config = {
+      darkMode: "class",
+      theme: {
+        extend: {
+          colors: {
+            "navy-900": "#0A1B38",
+            "navy-800": "#10264A",
+            "navy-700": "#16325C",
+            "text-primary": "#0A1B38",
+            "text-secondary": "#5C6B7F",
+            "surface-50": "#F7F8FA",
+            "gray-50": "#F4F3F0",
+            "gray-100": "#ECEFF3",
+            "gray-200": "#E2E7ED",
+            "gray-300": "#CBD5E1",
+            "amber-flag": "#D97706"
+          },
+          fontFamily: {
+            sans: ["Inter", "sans-serif"]
+          },
+          boxShadow: {
+            'card': '0 4px 20px -2px rgba(10, 27, 56, 0.05), 0 2px 6px -1px rgba(10, 27, 56, 0.02)',
+            'float': '0 12px 32px -4px rgba(10, 27, 56, 0.08), 0 4px 12px -2px rgba(10, 27, 56, 0.03)'
+          }
+        }
+      }
+    }
+  </script>
+<style>
+    @layer base {
+      html, body {
+        margin: 0;
+        padding: 0;
+      }
+      body {
+        overscroll-behavior: none;
+      }
+    }
+    ::-webkit-scrollbar {
+      display: none;
+    }
+  </style>
+</head>
+<body class="bg-surface-50 text-text-primary font-sans antialiased min-h-screen selection:bg-navy-900 selection:text-white flex flex-col justify-between">
+<!-- TOP TEST CONTROL BAR -->
+<header class="sticky top-0 z-50 bg-white/95 backdrop-blur-md border-b border-navy-900/[0.08] px-4 sm:px-6 lg:px-8 py-3.5 transition-all">
+<div class="max-w-7xl mx-auto flex items-center justify-between gap-4">
+<!-- Brand & Section Lockup -->
+<div class="flex items-center gap-3.5 min-w-0">
+<div class="h-10 w-10 rounded-xl bg-navy-900 text-white flex items-center justify-center font-bold text-sm tracking-wider shadow-sm flex-shrink-0">
+          TN
+        </div>
+<div class="min-w-0">
+<div class="flex items-center gap-2 flex-wrap">
+<span class="text-sm font-bold text-navy-900 tracking-tight whitespace-nowrap">Titik Nol English Course</span>
+<span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-semibold tracking-wider text-navy-900 bg-navy-900/[0.06] uppercase">
+              Diagnostic Test
+            </span>
+</div>
+<p class="text-xs text-text-secondary truncate mt-0.5 font-medium">
+            Section 1: Grammar &amp; Structure
+          </p>
+</div>
+</div>
+<!-- Center Progress Indicator (Desktop / Tablet) -->
+<div class="hidden md:flex flex-col items-center justify-center w-64 lg:w-80">
+<div class="w-full flex justify-between items-center text-xs mb-1.5 font-medium">
+<span class="text-navy-900 font-semibold tracking-tight">Soal 7 dari 25</span>
+<span class="text-text-secondary font-semibold">28% Selesai</span>
+</div>
+<div class="w-full bg-navy-900/[0.06] h-1.5 rounded-full overflow-hidden">
+<div class="bg-navy-900 h-full rounded-full transition-all duration-300" style="width: 28%"></div>
+</div>
+</div>
+<!-- Timer & Session Action -->
+<div class="flex items-center gap-3 flex-shrink-0">
+<!-- Minimal Digital Countdown -->
+<div class="flex items-center gap-2 px-3 py-1.5 rounded-xl border border-navy-900/10 bg-white shadow-xs">
+<span class="material-symbols-outlined text-navy-900 text-base" style="font-variation-settings: 'FILL' 1;">timer</span>
+<span class="font-mono font-bold text-sm text-navy-900 tracking-wider" id="timer-display">09:33</span>
+<span class="text-text-secondary text-[11px] font-medium hidden sm:inline">tersisa</span>
+</div>
+<!-- Refined Ghost Button -->
+<button class="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl border border-navy-900/15 bg-white hover:bg-navy-900/[0.03] text-navy-900 text-xs font-semibold tracking-tight transition-all duration-150 active:scale-95 shadow-xs" type="button">
+<span class="material-symbols-outlined text-base text-navy-700">pause_circle</span>
+<span class="hidden sm:inline">Simpan &amp; Jeda</span>
+</button>
+</div>
+</div>
+<!-- Mobile Progress Bar Sub-strip -->
+<div class="md:hidden mt-3 pt-2.5 border-t border-navy-900/[0.06]">
+<div class="flex justify-between items-center text-xs mb-1">
+<span class="text-navy-900 font-semibold">Soal 7 dari 25</span>
+<span class="text-text-secondary font-medium">28% Selesai</span>
+</div>
+<div class="w-full bg-navy-900/[0.06] h-1.5 rounded-full overflow-hidden">
+<div class="bg-navy-900 h-full rounded-full transition-all duration-300" style="width: 28%"></div>
+</div>
+</div>
+</header>
+<!-- MAIN WORKSPACE -->
+<main class="flex-1 w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 lg:py-8">
+<div class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+<!-- LEFT PRIMARY QUESTION CANVAS (68% / 8 cols) -->
+<section class="lg:col-span-8 flex flex-col space-y-4">
+<!-- Primary Question Card -->
+<div class="bg-white rounded-2xl border border-navy-900/[0.08] shadow-card p-6 sm:p-8 flex flex-col justify-between">
+<div>
+<!-- Question Top Action Meta -->
+<div class="flex items-center justify-between pb-4 border-b border-navy-900/[0.06] mb-6">
+<span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-bold tracking-wider uppercase text-navy-900 bg-navy-900/[0.06]">
+                Structure &amp; Written Expression
+              </span>
+<!-- Flag / Bookmark Button -->
+<button class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold border border-navy-900/15 bg-white text-navy-900 hover:bg-navy-900/[0.03] transition-all duration-150" id="flag-btn" type="button">
+<span class="material-symbols-outlined text-sm text-navy-700" id="flag-icon" style="font-variation-settings: 'FILL' 0;">bookmark_border</span>
+<span id="flag-text">Tandai Soal</span>
+</button>
+</div>
+<!-- Question Prompt Stem -->
+<div class="space-y-4 mb-7">
+<p class="text-xs font-medium text-text-secondary flex items-center gap-1.5">
+<span class="material-symbols-outlined text-sm text-navy-700">help</span>
+                Pilih opsi yang paling tepat secara gramatikal untuk melengkapi kalimat berikut:
+              </p>
+<!-- Clean Sentence Prompt Canvas (Generous whitespace, refined micro-border, no thick accent edge) -->
+<div class="p-6 sm:p-8 rounded-2xl bg-white border border-navy-900/[0.08] shadow-xs">
+<p class="text-lg sm:text-xl md:text-[22px] font-semibold text-navy-900 leading-[1.6] tracking-tight">
+                  “Although the research team conducted several experiments, the conclusive results 
+                  <span class="inline-flex items-center justify-center min-w-[130px] px-3.5 py-1 mx-2 align-middle bg-navy-900/[0.04] border border-dashed border-navy-900/30 rounded-xl font-bold text-navy-900 text-base sm:text-lg tracking-normal">
+                              
+                  </span>
+                  until the final phase of the project.”
+                </p>
+</div>
+</div>
+<!-- Answer Choices -->
+<fieldset class="space-y-3">
+<legend class="sr-only">Pilihan Jawaban Soal 7</legend>
+<!-- Option A -->
+<label class="group relative flex items-center p-4 rounded-xl border border-navy-900/[0.12] bg-white hover:border-navy-900/40 hover:bg-navy-900/[0.01] cursor-pointer transition-all duration-150 shadow-xs">
+<input class="peer sr-only" name="placement_q7" type="radio" value="A"/>
+<div class="w-8 h-8 rounded-lg bg-navy-900/[0.05] text-navy-900 font-bold text-xs flex items-center justify-center transition-all mr-4 flex-shrink-0 group-hover:bg-navy-900/[0.08]">
+                  A
+                </div>
+<div class="flex-1 text-sm sm:text-base text-navy-900 font-medium tracking-tight">
+                  did not announce
+                </div>
+<div class="w-5 h-5 rounded-full border border-navy-900/25 flex items-center justify-center transition-all peer-checked:border-navy-900 peer-checked:bg-navy-900">
+<div class="w-2 h-2 rounded-full bg-white opacity-0 peer-checked:opacity-100 transition-opacity"></div>
+</div>
+<div class="absolute inset-0 rounded-xl pointer-events-none ring-2 ring-transparent peer-checked:ring-navy-900 peer-checked:bg-navy-900/[0.03] transition-all"></div>
+</label>
+<!-- Option B (Selected by default) -->
+<label class="group relative flex items-center p-4 rounded-xl border border-navy-900 bg-navy-900/[0.03] cursor-pointer transition-all duration-150 shadow-xs">
+<input checked="" class="peer sr-only" name="placement_q7" type="radio" value="B"/>
+<div class="w-8 h-8 rounded-lg bg-navy-900 text-white font-bold text-xs flex items-center justify-center transition-all mr-4 flex-shrink-0 shadow-xs">
+                  B
+                </div>
+<div class="flex-1 text-sm sm:text-base text-navy-900 font-bold tracking-tight">
+                  were not announced
+                </div>
+<div class="w-5 h-5 rounded-full border border-navy-900 bg-navy-900 flex items-center justify-center transition-all">
+<span class="material-symbols-outlined text-white text-xs font-bold leading-none">check</span>
+</div>
+<div class="absolute inset-0 rounded-xl pointer-events-none ring-2 ring-navy-900 transition-all"></div>
+</label>
+<!-- Option C -->
+<label class="group relative flex items-center p-4 rounded-xl border border-navy-900/[0.12] bg-white hover:border-navy-900/40 hover:bg-navy-900/[0.01] cursor-pointer transition-all duration-150 shadow-xs">
+<input class="peer sr-only" name="placement_q7" type="radio" value="C"/>
+<div class="w-8 h-8 rounded-lg bg-navy-900/[0.05] text-navy-900 font-bold text-xs flex items-center justify-center transition-all mr-4 flex-shrink-0 group-hover:bg-navy-900/[0.08]">
+                  C
+                </div>
+<div class="flex-1 text-sm sm:text-base text-navy-900 font-medium tracking-tight">
+                  have not been announcing
+                </div>
+<div class="w-5 h-5 rounded-full border border-navy-900/25 flex items-center justify-center transition-all peer-checked:border-navy-900 peer-checked:bg-navy-900">
+<div class="w-2 h-2 rounded-full bg-white opacity-0 peer-checked:opacity-100 transition-opacity"></div>
+</div>
+<div class="absolute inset-0 rounded-xl pointer-events-none ring-2 ring-transparent peer-checked:ring-navy-900 peer-checked:bg-navy-900/[0.03] transition-all"></div>
+</label>
+<!-- Option D -->
+<label class="group relative flex items-center p-4 rounded-xl border border-navy-900/[0.12] bg-white hover:border-navy-900/40 hover:bg-navy-900/[0.01] cursor-pointer transition-all duration-150 shadow-xs">
+<input class="peer sr-only" name="placement_q7" type="radio" value="D"/>
+<div class="w-8 h-8 rounded-lg bg-navy-900/[0.05] text-navy-900 font-bold text-xs flex items-center justify-center transition-all mr-4 flex-shrink-0 group-hover:bg-navy-900/[0.08]">
+                  D
+                </div>
+<div class="flex-1 text-sm sm:text-base text-navy-900 font-medium tracking-tight">
+                  had not to announce
+                </div>
+<div class="w-5 h-5 rounded-full border border-navy-900/25 flex items-center justify-center transition-all peer-checked:border-navy-900 peer-checked:bg-navy-900">
+<div class="w-2 h-2 rounded-full bg-white opacity-0 peer-checked:opacity-100 transition-opacity"></div>
+</div>
+<div class="absolute inset-0 rounded-xl pointer-events-none ring-2 ring-transparent peer-checked:ring-navy-900 peer-checked:bg-navy-900/[0.03] transition-all"></div>
+</label>
+</fieldset>
+</div>
+<!-- Question Action Bar -->
+<div class="flex flex-col sm:flex-row items-center justify-between gap-4 pt-6 mt-8 border-t border-navy-900/[0.08]">
+<button class="w-full sm:w-auto px-5 py-2.5 rounded-full border border-navy-900/15 bg-white hover:bg-navy-900/[0.04] text-navy-900 font-semibold text-xs sm:text-sm inline-flex items-center justify-center gap-2 transition-all shadow-xs active:scale-95" type="button">
+<span class="material-symbols-outlined text-base">arrow_back</span>
+<span>Sebelumnya</span>
+</button>
+<button class="text-text-secondary hover:text-navy-900 font-medium text-xs underline underline-offset-4 transition-colors py-1 order-first sm:order-none" type="button">
+              Lewati Soal
+            </button>
+<button class="w-full sm:w-auto px-7 py-2.5 rounded-full bg-navy-900 hover:bg-navy-800 active:bg-navy-700 text-white font-semibold text-xs sm:text-sm inline-flex items-center justify-center gap-2 shadow-sm transition-all duration-150 transform hover:-translate-y-0.5 active:translate-y-0" type="button">
+<span>Soal Selanjutnya</span>
+<span class="material-symbols-outlined text-base">arrow_forward</span>
+</button>
+</div>
+</div>
+<!-- Sleek Keyboard Shortcut Helper Ribbon -->
+<div class="px-5 py-3 bg-white rounded-xl border border-navy-900/[0.08] shadow-card flex items-center justify-between text-xs text-text-secondary">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-sm text-navy-700">keyboard</span>
+<span>Gunakan tombol</span>
+<kbd class="px-1.5 py-0.5 bg-navy-900/[0.06] rounded font-semibold text-navy-900 text-[11px]">A</kbd>
+<kbd class="px-1.5 py-0.5 bg-navy-900/[0.06] rounded font-semibold text-navy-900 text-[11px]">B</kbd>
+<kbd class="px-1.5 py-0.5 bg-navy-900/[0.06] rounded font-semibold text-navy-900 text-[11px]">C</kbd>
+<kbd class="px-1.5 py-0.5 bg-navy-900/[0.06] rounded font-semibold text-navy-900 text-[11px]">D</kbd>
+<span>untuk memilih langsung.</span>
+</div>
+<span class="hidden md:inline font-medium text-navy-900">
+<kbd class="px-1.5 py-0.5 bg-navy-900/[0.06] rounded font-semibold text-navy-900 text-[11px]">Enter ↵</kbd> Lanjut
+          </span>
+</div>
+</section>
+<!-- RIGHT QUESTION MATRIX NAVIGATOR (32% / 4 cols) -->
+<aside class="lg:col-span-4 flex flex-col space-y-4">
+<div class="bg-white rounded-2xl border border-navy-900/[0.08] shadow-card p-5 sm:p-6 flex flex-col gap-5">
+<!-- Navigator Header & Clean Dot Legend -->
+<div class="space-y-3">
+<div class="flex items-center justify-between">
+<h2 class="text-sm font-bold text-navy-900 tracking-tight flex items-center gap-2">
+<span class="material-symbols-outlined text-base text-navy-700">grid_view</span>
+                Navigasi Soal
+              </h2>
+<span class="text-xs font-semibold text-navy-900">
+                25 Soal
+              </span>
+</div>
+<!-- Clean Status Dots (No dull grey / no yellow pill backgrounds) -->
+<div class="flex items-center justify-between px-3 py-2 bg-navy-900/[0.03] rounded-xl text-xs font-medium text-navy-900">
+<div class="flex items-center gap-1.5">
+<span class="w-2.5 h-2.5 rounded-full bg-navy-900"></span>
+<span class="text-text-secondary text-[11px]">Terjawab: <strong class="text-navy-900">6</strong></span>
+</div>
+<div class="flex items-center gap-1.5">
+<span class="w-2.5 h-2.5 rounded-full border-2 border-navy-900 bg-white"></span>
+<span class="text-text-secondary text-[11px]">Aktif: <strong class="text-navy-900">1</strong></span>
+</div>
+<div class="flex items-center gap-1.5">
+<span class="w-2.5 h-2.5 rounded-full bg-amber-600"></span>
+<span class="text-text-secondary text-[11px]">Ditandai: <strong class="text-navy-900">1</strong></span>
+</div>
+</div>
+</div>
+<!-- 5x5 Matrix Grid (1-25) -->
+<div class="grid grid-cols-5 gap-2.5 py-1">
+<!-- 1 to 6: Answered (Crisp solid navy) -->
+<button class="h-10 rounded-xl bg-navy-900 text-white font-semibold text-xs hover:bg-navy-800 transition-colors shadow-xs" type="button">1</button>
+<button class="h-10 rounded-xl bg-navy-900 text-white font-semibold text-xs hover:bg-navy-800 transition-colors shadow-xs" type="button">2</button>
+<button class="h-10 rounded-xl bg-navy-900 text-white font-semibold text-xs hover:bg-navy-800 transition-colors shadow-xs" type="button">3</button>
+<button class="h-10 rounded-xl bg-navy-900 text-white font-semibold text-xs hover:bg-navy-800 transition-colors shadow-xs" type="button">4</button>
+<button class="h-10 rounded-xl bg-navy-900 text-white font-semibold text-xs hover:bg-navy-800 transition-colors shadow-xs" type="button">5</button>
+<button class="h-10 rounded-xl bg-navy-900 text-white font-semibold text-xs hover:bg-navy-800 transition-colors shadow-xs" type="button">6</button>
+<!-- 7: Current Active (White with deep navy border and ring) -->
+<button class="h-10 rounded-xl bg-white border-2 border-navy-900 text-navy-900 font-bold text-xs ring-2 ring-navy-900/20 shadow-xs" type="button">7</button>
+<!-- 8: Flagged (White card with clean top-right warm indicator, crisp text) -->
+<button class="h-10 rounded-xl bg-white border border-navy-900/15 text-navy-900 hover:border-navy-900/30 font-bold text-xs transition-colors shadow-xs relative" type="button">
+              8
+              <span class="absolute top-1.5 right-1.5 w-1.5 h-1.5 rounded-full bg-amber-600"></span>
+</button>
+<!-- 9 to 25: Unanswered (Crisp white cards, subtle border, dark navy text) -->
+<button class="h-10 rounded-xl bg-white border border-navy-900/10 text-navy-900 hover:bg-navy-900/[0.02] hover:border-navy-900/30 font-medium text-xs transition-colors shadow-xs" type="button">9</button>
+<button class="h-10 rounded-xl bg-white border border-navy-900/10 text-navy-900 hover:bg-navy-900/[0.02] hover:border-navy-900/30 font-medium text-xs transition-colors shadow-xs" type="button">10</button>
+<button class="h-10 rounded-xl bg-white border border-navy-900/10 text-navy-900 hover:bg-navy-900/[0.02] hover:border-navy-900/30 font-medium text-xs transition-colors shadow-xs" type="button">11</button>
+<button class="h-10 rounded-xl bg-white border border-navy-900/10 text-navy-900 hover:bg-navy-900/[0.02] hover:border-navy-900/30 font-medium text-xs transition-colors shadow-xs" type="button">12</button>
+<button class="h-10 rounded-xl bg-white border border-navy-900/10 text-navy-900 hover:bg-navy-900/[0.02] hover:border-navy-900/30 font-medium text-xs transition-colors shadow-xs" type="button">13</button>
+<button class="h-10 rounded-xl bg-white border border-navy-900/10 text-navy-900 hover:bg-navy-900/[0.02] hover:border-navy-900/30 font-medium text-xs transition-colors shadow-xs" type="button">14</button>
+<button class="h-10 rounded-xl bg-white border border-navy-900/10 text-navy-900 hover:bg-navy-900/[0.02] hover:border-navy-900/30 font-medium text-xs transition-colors shadow-xs" type="button">15</button>
+<button class="h-10 rounded-xl bg-white border border-navy-900/10 text-navy-900 hover:bg-navy-900/[0.02] hover:border-navy-900/30 font-medium text-xs transition-colors shadow-xs" type="button">16</button>
+<button class="h-10 rounded-xl bg-white border border-navy-900/10 text-navy-900 hover:bg-navy-900/[0.02] hover:border-navy-900/30 font-medium text-xs transition-colors shadow-xs" type="button">17</button>
+<button class="h-10 rounded-xl bg-white border border-navy-900/10 text-navy-900 hover:bg-navy-900/[0.02] hover:border-navy-900/30 font-medium text-xs transition-colors shadow-xs" type="button">18</button>
+<button class="h-10 rounded-xl bg-white border border-navy-900/10 text-navy-900 hover:bg-navy-900/[0.02] hover:border-navy-900/30 font-medium text-xs transition-colors shadow-xs" type="button">19</button>
+<button class="h-10 rounded-xl bg-white border border-navy-900/10 text-navy-900 hover:bg-navy-900/[0.02] hover:border-navy-900/30 font-medium text-xs transition-colors shadow-xs" type="button">20</button>
+<button class="h-10 rounded-xl bg-white border border-navy-900/10 text-navy-900 hover:bg-navy-900/[0.02] hover:border-navy-900/30 font-medium text-xs transition-colors shadow-xs" type="button">21</button>
+<button class="h-10 rounded-xl bg-white border border-navy-900/10 text-navy-900 hover:bg-navy-900/[0.02] hover:border-navy-900/30 font-medium text-xs transition-colors shadow-xs" type="button">22</button>
+<button class="h-10 rounded-xl bg-white border border-navy-900/10 text-navy-900 hover:bg-navy-900/[0.02] hover:border-navy-900/30 font-medium text-xs transition-colors shadow-xs" type="button">23</button>
+<button class="h-10 rounded-xl bg-white border border-navy-900/10 text-navy-900 hover:bg-navy-900/[0.02] hover:border-navy-900/30 font-medium text-xs transition-colors shadow-xs" type="button">24</button>
+<button class="h-10 rounded-xl bg-white border border-navy-900/10 text-navy-900 hover:bg-navy-900/[0.02] hover:border-navy-900/30 font-medium text-xs transition-colors shadow-xs" type="button">25</button>
+</div>
+<!-- Bottom Finish Action -->
+<div class="pt-4 border-t border-navy-900/[0.08] flex flex-col gap-2">
+<button class="w-full py-3 px-4 rounded-xl bg-navy-900 hover:bg-navy-800 active:bg-navy-700 text-white font-semibold text-xs sm:text-sm shadow-sm transition-all duration-150 flex items-center justify-center gap-2" type="button">
+<span class="material-symbols-outlined text-base">check_circle</span>
+<span>Selesaikan &amp; Kumpulkan Tes</span>
+</button>
+<p class="text-[11px] text-text-secondary text-center font-normal">
+              Pastikan Anda telah memeriksa kembali jawaban sebelum submit final.
+            </p>
+</div>
+</div>
+</aside>
+</div>
+</main>
+<script>
+    (function() {
+      // 1. Live Countdown Simulation
+      let totalSeconds = 9 * 60 + 33;
+      const timerEl = document.getElementById('timer-display');
+      
+      if (timerEl) {
+        const interval = setInterval(() => {
+          if (totalSeconds <= 0) {
+            clearInterval(interval);
+            timerEl.textContent = "00:00";
+            return;
+          }
+          totalSeconds--;
+          const mins = String(Math.floor(totalSeconds / 60)).padStart(2, '0');
+          const secs = String(totalSeconds % 60).padStart(2, '0');
+          timerEl.textContent = `${mins}:${secs}`;
+        }, 1000);
+      }
+
+      // 2. Interactive Radio Choice Styling (TNEC High-End Navy Palette)
+      const radioInputs = document.querySelectorAll('input[name="placement_q7"]');
+      radioInputs.forEach(input => {
+        input.addEventListener('change', () => {
+          radioInputs.forEach(r => {
+            const label = r.closest('label');
+            const keycap = label.querySelector('div:first-of-type');
+            const textDiv = label.querySelector('div.flex-1');
+            const checkContainer = label.querySelector('div.w-5');
+            const ring = label.querySelector('div.absolute');
+
+            if (r.checked) {
+              label.className = "group relative flex items-center p-4 rounded-xl border border-navy-900 bg-navy-900/[0.03] cursor-pointer transition-all duration-150 shadow-xs";
+              keycap.className = "w-8 h-8 rounded-lg bg-navy-900 text-white font-bold text-xs flex items-center justify-center transition-all mr-4 flex-shrink-0 shadow-xs";
+              textDiv.className = "flex-1 text-sm sm:text-base text-navy-900 font-bold tracking-tight";
+              checkContainer.className = "w-5 h-5 rounded-full border border-navy-900 bg-navy-900 flex items-center justify-center transition-all";
+              checkContainer.innerHTML = '<span class="material-symbols-outlined text-white text-xs font-bold leading-none">check</span>';
+              ring.className = "absolute inset-0 rounded-xl pointer-events-none ring-2 ring-navy-900 transition-all";
+            } else {
+              label.className = "group relative flex items-center p-4 rounded-xl border border-navy-900/[0.12] bg-white hover:border-navy-900/40 hover:bg-navy-900/[0.01] cursor-pointer transition-all duration-150 shadow-xs";
+              keycap.className = "w-8 h-8 rounded-lg bg-navy-900/[0.05] text-navy-900 font-bold text-xs flex items-center justify-center transition-all mr-4 flex-shrink-0 group-hover:bg-navy-900/[0.08]";
+              textDiv.className = "flex-1 text-sm sm:text-base text-navy-900 font-medium tracking-tight";
+              checkContainer.className = "w-5 h-5 rounded-full border border-navy-900/25 flex items-center justify-center transition-all";
+              checkContainer.innerHTML = '<div class="w-2 h-2 rounded-full bg-white opacity-0 peer-checked:opacity-100 transition-opacity"></div>';
+              ring.className = "absolute inset-0 rounded-xl pointer-events-none ring-2 ring-transparent peer-checked:ring-navy-900 peer-checked:bg-navy-900/[0.03] transition-all";
+            }
+          });
+        });
+      });
+
+      // 3. Question Flag Toggle (Subtle refined state)
+      const flagBtn = document.getElementById('flag-btn');
+      const flagIcon = document.getElementById('flag-icon');
+      const flagText = document.getElementById('flag-text');
+      let isFlagged = false;
+
+      if (flagBtn && flagIcon && flagText) {
+        flagBtn.addEventListener('click', () => {
+          isFlagged = !isFlagged;
+          if (isFlagged) {
+            flagBtn.className = "inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold border border-amber-600 bg-white text-amber-700 transition-all duration-150";
+            flagIcon.className = "material-symbols-outlined text-sm text-amber-600";
+            flagIcon.textContent = "bookmark";
+            flagIcon.style.fontVariationSettings = "'FILL' 1";
+            flagText.textContent = "Ditandai Ragu";
+          } else {
+            flagBtn.className = "inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold border border-navy-900/15 bg-white text-navy-900 hover:bg-navy-900/[0.03] transition-all duration-150";
+            flagIcon.className = "material-symbols-outlined text-sm text-navy-700";
+            flagIcon.textContent = "bookmark_border";
+            flagIcon.style.fontVariationSettings = "'FILL' 0";
+            flagText.textContent = "Tandai Soal";
+          }
+        });
+      }
+
+      // 4. Keyboard Shortcuts listener (A, B, C, D)
+      document.addEventListener('keydown', (e) => {
+        const key = e.key.toUpperCase();
+        if (['A', 'B', 'C', 'D'].includes(key)) {
+          const targetInput = document.querySelector(`input[name="placement_q7"][value="${key}"]`);
+          if (targetInput) {
+            targetInput.checked = true;
+            targetInput.dispatchEvent(new Event('change'));
+          }
+        }
+      });
+    })();
+  </script>
+</body></html>

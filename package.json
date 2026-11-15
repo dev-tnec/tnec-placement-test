@@ -1,0 +1,15 @@
+{
+  "name": "tnec-placement-test",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "test": "node tests/smoke.mjs",
+    "db:apply": "wrangler d1 execute tnec-placement-test --remote --file=./schema.sql"
+  },
+  "devDependencies": {
+    "wrangler": "^4"
+  }
+}
