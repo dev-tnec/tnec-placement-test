@@ -16,13 +16,13 @@ WhatsApp sending stays off locally until a key is provided. To try it against a 
 
 ## Deploy
 
-Run these in order. Steps 2 to 4 change production, so run them only when you mean to.
+Run these in order. Steps 2 to 5 change production, so run them only when you mean to.
 
 1. Authenticate wrangler with `npx wrangler login`, or set `CLOUDFLARE_API_TOKEN` in the shell.
 2. Run `npm run db:migrate` to apply `migrations/` to the remote D1. The first run applies `0001_initial.sql`, which matches the existing tables, and `0002_dashboard.sql`, which adds the dashboard tables and the seed questions.
-3. Run `npx wrangler secret put ATTCOS_API_KEY` and paste the AttCos API key when prompted.
-4. Create the first dashboard account with the same `admin:sql` command as above, then run it with `--remote` instead of `--local`.
-5. Run `npm run deploy`.
+3. Create the first dashboard account with the same `admin:sql` command as above, then run it with `--remote` instead of `--local`.
+4. Run `npm run deploy`. The first deploy creates the Worker at `https://tnec-placement-test.devaldo.workers.dev`.
+5. Run `npx wrangler secret put ATTCOS_API_KEY` and paste the AttCos API key when prompted. Until it is set, the dashboard shows that WhatsApp sending is off.
 6. Sign in at `/admin`, add the programs, periods, tutors, and classes, then review the pre-test and post-test drafts before opening those tests.
 
 The Worker name is `tnec-placement-test`. The D1 database and the Cloudflare account are pinned in `wrangler.toml`.

@@ -10,9 +10,9 @@ The source material is in this folder: `placement-test-questions.md`, `placement
 
 ## Current status
 
-The placement test has been live since 14 November 2026. On 16 November 2026 the real dashboard was built from the approved prototype and wired to D1: questions, test settings, and level thresholds moved from code into D1, pre-test and post-test were added, and the dashboard can send WhatsApp messages through AttCos. The full flow passes locally in a headless browser: dashboard login, catalog, student records, notes, WhatsApp through a local AttCos stub (including the 24 hour window error), invite links, the placement test with contact and result, the pre-test score screen, and per question timing with auto advance and auto submit.
+The placement test was built and tested locally on 14 November 2026 but has not been deployed. On 16 November 2026 the Worker did not exist on the Cloudflare account yet, and the remote D1 held only the original `attempts` and `answers` tables with no rows. On the same day the real dashboard was built from the approved prototype and wired to D1: questions, test settings, and level thresholds moved from code into D1, pre-test and post-test were added, and the dashboard can send WhatsApp messages through AttCos. The full flow passes locally in a headless browser: dashboard login, catalog, student records, notes, WhatsApp through a local AttCos stub (including the 24 hour window error), invite links, the placement test with contact and result, the pre-test score screen, and per question timing with auto advance and auto submit.
 
-Production still needs these steps, in this order, and each one needs the owner's approval: apply the migrations to the remote D1, set the `ATTCOS_API_KEY` secret, create the first dashboard account, and deploy. See Deploy notes.
+Production still needs these steps, in this order, and each one needs the owner's approval: apply the migrations to the remote D1, create the first dashboard account, deploy, and set the `ATTCOS_API_KEY` secret. See Deploy notes.
 
 The production email sender is `placement@index-now.dev` because `index-now.dev` is already an onboarded Email Sending domain on the Cloudflare account. Switch to a `titiknolenglish.com` sender once that domain is onboarded for Email Sending.
 
@@ -230,10 +230,10 @@ The Worker uses static assets with `run_worker_first = ["/api/*", "/admin", "/ad
 
 First production rollout of the dashboard, each step with the owner's approval:
 
-1. `npm run db:migrate`. The remote database was created from `schema.sql`, so `0001_initial.sql` changes nothing and `0002_dashboard.sql` adds the new columns, tables, and seeds.
-2. `npx wrangler secret put ATTCOS_API_KEY`.
-3. Create the first dashboard account with `scripts/create-admin.mjs` and `--remote`.
-4. `npm run deploy`.
+1. `npm run db:migrate`. The remote database was created from `schema.sql` and has no rows, so `0001_initial.sql` changes nothing and `0002_dashboard.sql` adds the new columns, tables, and seeds.
+2. Create the first dashboard account with `scripts/create-admin.mjs` and `--remote`.
+3. `npm run deploy`. The first deploy creates the Worker at `https://tnec-placement-test.devaldo.workers.dev`.
+4. `npx wrangler secret put ATTCOS_API_KEY`. This comes after the first deploy because the secret belongs to an existing Worker. Until it is set, the dashboard shows that WhatsApp sending is off.
 5. In the dashboard, add the real programs, periods, tutors, and classes, then review the pre-test and post-test drafts before opening those tests.
 
 After a deploy, verify in this order:
@@ -255,7 +255,7 @@ After a deploy, verify in this order:
 
 ## Known limits and next steps
 
-1. Students who took the placement test before the dashboard existed are not in Database Siswa, because their attempts have no student link. A one time backfill from `attempts` can create them if the team wants the history.
+1. Placement attempts are linked to a student only after the contact step. An attempt that stops before contact stays in Submission as Tanpa kontak and never reaches Database Siswa.
 2. No resume after a refresh. A refresh during the test loses the in-memory answers and leaves an `in_progress` row.
 3. No rate limit on attempt creation and no bot check. Add Cloudflare Turnstile or a Worker rate limit if spam appears.
 4. The email sender is on `index-now.dev`, not `titiknolenglish.com`. Onboard the brand domain before public launch if the sender address matters.
