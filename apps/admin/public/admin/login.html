@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="id">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex, nofollow">
+  <title>Masuk | Dasbor Titik Nol</title>
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/admin/assets/admin.css?v=2">
+  <script src="/admin/assets/login.js?v=2" defer></script>
+</head>
+<body class="login-page">
+  <main class="login">
+    <div class="login__card">
+      <img class="login__logo" src="/assets/logo-titik-nol.png" alt="Titik Nol English Course" width="502" height="85">
+      <h1 class="login__title" id="login-title">Masuk ke dasbor internal</h1>
+      <p class="login__desc" id="login-desc">Dasbor ini khusus untuk tim admin dan tim pendidikan Titik Nol English Course.</p>
+      <form class="login__form" id="login-form" novalidate>
+        <div class="field" id="field-name" hidden>
+          <label class="label" for="login-name">Nama</label>
+          <input class="input" id="login-name" name="name" type="text" autocomplete="name">
+        </div>
+        <div class="field">
+          <label class="label" for="login-email">Email</label>
+          <input class="input" id="login-email" name="email" type="email" autocomplete="username" required>
+        </div>
+        <div class="field">
+          <label class="label" for="login-password">Kata sandi</label>
+          <input class="input" id="login-password" name="password" type="password" autocomplete="current-password" required>
+          <p class="hint" id="password-hint" hidden>Minimal 12 karakter.</p>
+        </div>
+        <div class="field" id="field-confirm" hidden>
+          <label class="label" for="login-confirm">Ulangi kata sandi</label>
+          <input class="input" id="login-confirm" name="confirm" type="password" autocomplete="new-password">
+        </div>
+        <div class="field" id="field-code" hidden>
+          <label class="label" for="login-code">Kode setup</label>
+          <input class="input" id="login-code" name="code" type="text" autocomplete="off">
+          <p class="hint">Kode ini muncul di log server saat aplikasi admin dijalankan.</p>
+        </div>
+        <p class="error" id="login-error" role="alert" hidden></p>
+        <button class="btn btn--primary btn--block" type="submit" id="login-submit">Masuk</button>
+      </form>
+    </div>
+    <p class="login__foot" id="login-foot">Lupa kata sandi atau belum punya akun? Minta admin teknis membuatkan akun baru.</p>
+  </main>
+</body>
+</html>

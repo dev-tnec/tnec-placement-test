@@ -1,5 +1,5 @@
 // WhatsApp sending through AttCos (CSQ API).
-// POST {ATTCOS_API_BASE}/messages with a tenant API key. The key is a Worker secret,
+// POST {ATTCOS_API_BASE}/messages with a tenant API key. The key lives in the server's .env,
 // never part of the code or the repository.
 
 const DEFAULT_BASE = "https://csq-api.onrender.com/api/v1";
@@ -8,7 +8,7 @@ const TIMEOUT_MS = 25000;
 // Messages for each provider response, written for the admin who pressed Kirim.
 const ERROR_TEXT = {
   400: "AttCos menolak isi pesan. Periksa nomor tujuan dan teks pesannya.",
-  401: "Kunci API AttCos tidak diterima. Periksa secret ATTCOS_API_KEY.",
+  401: "Kunci API AttCos tidak diterima. Periksa ATTCOS_API_KEY di file .env server.",
   403: "Channel WhatsApp ini bukan milik akun AttCos yang dipakai.",
   409: "Belum ada channel WhatsApp yang tersambung di AttCos.",
   422: "Jendela 24 jam WhatsApp untuk nomor ini sudah tertutup, jadi pesan biasa tidak bisa dikirim lewat AttCos. Minta siswa mengirim pesan dulu ke nomor Titik Nol, atau kirim dari aplikasi lewat tombol Buka di WhatsApp.",
@@ -22,7 +22,7 @@ export function whatsappConfigured(env) {
 
 export async function sendWhatsApp(env, { to, text }) {
   if (!whatsappConfigured(env)) {
-    return { ok: false, status: "skipped", error: "Integrasi WhatsApp belum diatur. Isi secret ATTCOS_API_KEY dan variabel ATTCOS_CHANNEL_ID." };
+    return { ok: false, status: "skipped", error: "Integrasi WhatsApp belum diatur. Isi ATTCOS_API_KEY dan ATTCOS_CHANNEL_ID di file .env server." };
   }
   const base = (env.ATTCOS_API_BASE || DEFAULT_BASE).replace(/\/+$/, "");
   const controller = new AbortController();

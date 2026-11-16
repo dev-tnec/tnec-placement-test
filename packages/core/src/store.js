@@ -1,5 +1,5 @@
-// D1 access shared by the public test API and the admin API.
-// Questions, test settings, and level thresholds live in D1 so the dashboard can edit them.
+// Database access shared by the public test API and the admin API.
+// Questions, test settings, and level thresholds live in the database so the dashboard can edit them.
 
 import { LEVELS as LEVEL_COPY } from "./levels.js";
 import { randomToken } from "./crypto.js";

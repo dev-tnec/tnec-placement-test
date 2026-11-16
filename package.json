@@ -1,17 +1,22 @@
 {
   "name": "tnec-placement-test",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "private": true,
   "type": "module",
-  "scripts": {
-    "dev": "wrangler dev",
-    "deploy": "wrangler deploy",
-    "test": "node tests/smoke.mjs",
-    "db:migrate:local": "wrangler d1 migrations apply tnec-placement-test --local",
-    "db:migrate": "wrangler d1 migrations apply tnec-placement-test --remote",
-    "admin:sql": "node scripts/create-admin.mjs"
+  "description": "TNEC placement test (apps/web) and internal dashboard (apps/admin) on Node.js with Neon PostgreSQL.",
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "engines": {
+    "node": ">=21.7"
   },
-  "devDependencies": {
-    "wrangler": "^4"
+  "scripts": {
+    "start": "node scripts/start.mjs",
+    "start:web": "npm run start -w @tnec/web",
+    "start:admin": "npm run start -w @tnec/admin",
+    "db:migrate": "node scripts/migrate.mjs",
+    "admin:create": "node scripts/create-admin.mjs",
+    "test": "node tests/smoke.mjs"
   }
 }

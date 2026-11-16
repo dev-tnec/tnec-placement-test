@@ -1,20 +1,23 @@
 // Small self-check for the rules that must not drift:
 // question integrity, the level boundaries, the answer key staying server side,
-// the seed migration, password hashing, attempt status, and the AttCos client.
+// the seed migration, password hashing, attempt status, the database placeholders,
+// the email transport, and the AttCos client. Runs without a database.
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import {
   QUESTIONS,
   TOTAL_QUESTIONS,
   publicQuestions,
-} from "../src/questions.js";
-import { levelForScore } from "../src/levels.js";
-import { buildResultEmail } from "../src/email.js";
-import { hashPassword, verifyPassword, randomToken, sha256Hex } from "../src/crypto.js";
-import { fillLegal, TERMS } from "../src/legal.js";
-import { attemptStatus, focusStrikes } from "../src/store.js";
-import { normalizeWhatsapp } from "../src/http.js";
-import { sendWhatsApp, whatsappConfigured } from "../src/whatsapp.js";
+} from "@tnec/core/questions";
+import { levelForScore } from "@tnec/core/levels";
+import { buildResultEmail } from "@tnec/core/email";
+import { hashPassword, verifyPassword, randomToken, sha256Hex } from "@tnec/core/crypto";
+import { fillLegal, TERMS } from "@tnec/core/legal";
+import { attemptStatus, focusStrikes } from "@tnec/core/store";
+import { normalizeWhatsapp } from "@tnec/core/http";
+import { sendWhatsApp, whatsappConfigured } from "@tnec/core/whatsapp";
+import { numberPlaceholders } from "@tnec/core/db";
+import { createMailer, parseAddress } from "@tnec/core/mailer";
 
 /* ---------- Questions and levels ---------- */
 assert.equal(TOTAL_QUESTIONS, 25);
@@ -47,10 +50,10 @@ for (const [score, key] of boundaries) {
 }
 
 /* ---------- Seed migration matches the source questions ---------- */
-const migration = readFileSync(new URL("../migrations/0002_dashboard.sql", import.meta.url), "utf8");
+const migration = readFileSync(new URL("../db/migrations/0001_init.sql", import.meta.url), "utf8");
 const seeded = new Map();
 for (const line of migration.split(/\r?\n/)) {
-  const m = line.match(/^\((\d+), '(placement|pre|post)', \d+, .*, '([ABCD])', (\d+), '(aktif|draf)', CAST/);
+  const m = line.match(/^\((\d+), '(placement|pre|post)', \d+, .*, '([ABCD])', (\d+), '(aktif|draf)', EXTRACT/);
   if (m) seeded.set(Number(m[1]), { test: m[2], answer: m[3], status: m[5] });
 }
 for (const question of QUESTIONS) {
@@ -138,5 +141,25 @@ try {
 } finally {
   globalThis.fetch = realFetch;
 }
+
+/* ---------- Database placeholders ---------- */
+assert.equal(numberPlaceholders("SELECT ? AS a WHERE b = '?' AND c = ? AND d = 'it''s ?'"), "SELECT $1 AS a WHERE b = '?' AND c = $2 AND d = 'it''s ?'");
+assert.equal(numberPlaceholders("UPDATE t SET a = ?, b = ? WHERE id IN (?, ?)"), "UPDATE t SET a = $1, b = $2 WHERE id IN ($3, $4)");
+
+/* ---------- Email transport ---------- */
+assert.deepEqual(parseAddress("Titik Nol English Course <placement@index-now.dev>"), { address: "placement@index-now.dev", name: "Titik Nol English Course" });
+assert.deepEqual(parseAddress("placement@index-now.dev"), { address: "placement@index-now.dev" });
+assert.equal(createMailer({}), null, "no token means no mailer");
+const sent = [];
+const mailer = createMailer({ CLOUDFLARE_EMAIL_TOKEN: "t", CLOUDFLARE_ACCOUNT_ID: "acc" }, async (url, init) => {
+  sent.push({ url, init });
+  return new Response(JSON.stringify({ success: true, result: { id: "m1" } }), { status: 200 });
+});
+await mailer.send({ from: "TNEC <placement@index-now.dev>", to: "rani@example.com", subject: "Hasil", html: "<p>x</p>", text: "x" });
+assert.equal(sent[0].url, "https://api.cloudflare.com/client/v4/accounts/acc/email/sending/send");
+assert.equal(sent[0].init.headers.Authorization, "Bearer t");
+assert.deepEqual(JSON.parse(sent[0].init.body).from, { address: "placement@index-now.dev", name: "TNEC" });
+const failing = createMailer({ CLOUDFLARE_EMAIL_TOKEN: "t", CLOUDFLARE_ACCOUNT_ID: "acc" }, async () => new Response(JSON.stringify({ success: false, errors: [{ message: "domain not verified" }] }), { status: 403 }));
+await assert.rejects(() => failing.send({ from: "a@b.co", to: "c@d.co", subject: "s", text: "t" }), /domain not verified/);
 
 console.log("smoke ok");

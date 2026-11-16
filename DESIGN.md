@@ -276,13 +276,13 @@ The email uses the same hex values as this file. It cannot use CSS variables, so
 
 ## 15. Implementation
 
-The app is plain HTML, one CSS file, and one ES module. There is no framework and no build step. Tailwind is not used, even though the reference mock uses it, because the production page needs a strict content security policy and a small payload.
+The test site is plain HTML, one CSS file, and one ES module, served by a small Node.js server. There is no framework and no build step. Tailwind is not used, even though the reference mock uses it, because the production page needs a strict content security policy and a small payload.
 
-The CSS lives in `public/assets/app.css`. Tokens are declared once at the top. Component classes are prefixed by block name (`option`, `nav-btn`, `dialog`, `stepper`, `ladder`) rather than utility names. State classes use `is-` (`is-selected`, `is-current`, `is-answered`, `is-flagged`, `is-warning`, `is-active`, `is-done`).
+The CSS lives in `apps/web/public/assets/app.css`. Tokens are declared once at the top. Component classes are prefixed by block name (`option`, `nav-btn`, `dialog`, `stepper`, `ladder`) rather than utility names. State classes use `is-` (`is-selected`, `is-current`, `is-answered`, `is-flagged`, `is-warning`, `is-active`, `is-done`).
 
-The brand logo is `public/assets/logo-titik-nol.png` (black lockup, 502 by 85 pixels) and `public/assets/logo-titik-nol-white.png` (white lockup, 501 by 84 pixels), copied from the TNEC asset folder. The white lockup renders at 140px in the hero, the black lockup at 110px in the footer. Do not redraw or recolor either file.
+The brand logo is `apps/web/public/assets/logo-titik-nol.png` (black lockup, 502 by 85 pixels) and `apps/web/public/assets/logo-titik-nol-white.png` (white lockup, 501 by 84 pixels), copied from the TNEC asset folder. The white lockup renders at 140px in the hero, the black lockup at 110px in the footer. Do not redraw or recolor either file.
 
-The content security policy is declared in `public/_headers`: `default-src 'self'`, no inline scripts, no inline styles, no third-party fonts, no external images. Any new dependency must fit that policy or the policy must be changed deliberately.
+The content security policy is set by the server in `packages/core/src/node-server.js`: `default-src 'self'`, no inline scripts, no inline styles, no third-party fonts, no external images. Any new dependency must fit that policy or the policy must be changed deliberately.
 
 Counts, durations, and the violation limit in the copy are not hardcoded. Elements with `data-fill` (`total`, `duration`, `strikes`, `time-num`, `time-unit`) are filled from `/api/config`, so the page always matches the dashboard settings.
 
@@ -292,7 +292,7 @@ A pre-test or post-test opens from a personal link, `/?undangan=<token>`, that t
 
 ## 17. Dashboard
 
-The internal dashboard at `/admin` follows the approved `dashboard-prototype.html`. Its CSS is `public/admin/assets/admin.css`. It uses the same tokens with the same color rule: primary and destructive buttons are navy, red is only for status dots, error text, and low accuracy bars, and focus rings are navy. Status is a dot plus a text label. There are no colored edge stripes.
+The internal dashboard at `/admin` follows the approved `dashboard-prototype.html`. Its CSS is `apps/admin/public/admin/assets/admin.css`, and the dashboard copies of the logos live in `apps/admin/public/assets/`. It uses the same tokens with the same color rule: primary and destructive buttons are navy, red is only for status dots, error text, and low accuracy bars, and focus rings are navy. Status is a dot plus a text label. There are no colored edge stripes.
 
 ## 18. Do not
 

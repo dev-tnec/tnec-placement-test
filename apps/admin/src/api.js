@@ -1,11 +1,16 @@
 // Admin dashboard: protected pages under /admin and the JSON API under /api/admin.
-// Sessions are random tokens in an HttpOnly cookie; only their SHA-256 hash is stored in D1.
+// Sessions are random tokens in an HttpOnly cookie; only their SHA-256 hash is stored in the database.
 
-import { HttpError, json, readJson, nowSeconds, normalizeWhatsapp, isEmail, text, multiline, int } from "./http.js";
-import { randomToken, sha256Hex, verifyPassword } from "./crypto.js";
-import { TEST_KEYS, TEST_NAMES, mapTest, mapQuestion, loadQuestions, loadLevels, publicLevel, attemptStatus, focusStrikes, addActivity, newId } from "./store.js";
-import { sendWhatsApp, whatsappConfigured } from "./whatsapp.js";
-import { buildResultEmail } from "./email.js";
+import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
+import { HttpError, json, readJson, nowSeconds, normalizeWhatsapp, isEmail, text, multiline, int } from "@tnec/core/http";
+import { randomToken, sha256Hex, verifyPassword, hashPassword } from "@tnec/core/crypto";
+import { TEST_KEYS, TEST_NAMES, mapTest, mapQuestion, loadQuestions, loadLevels, publicLevel, attemptStatus, focusStrikes, addActivity, newId } from "@tnec/core/store";
+import { sendWhatsApp, whatsappConfigured } from "@tnec/core/whatsapp";
+import { buildResultEmail } from "@tnec/core/email";
+import { staticResponse, textResponse } from "@tnec/core/node-server";
+
+const PUBLIC_DIR = resolve(dirname(fileURLToPath(import.meta.url)), "../public");
 
 const SESSION_COOKIE = "tnec_admin";
 const SESSION_TTL = 60 * 60 * 12;
@@ -30,15 +35,22 @@ const fmtDate = (sec) => {
 /* ===================== Pages ===================== */
 export async function serveAdminPage(request, env, url) {
   const path = url.pathname;
-  if (path.startsWith("/admin/assets/")) return withHeaders(await env.ASSETS.fetch(request), "private, max-age=300");
-  if (path === "/admin") return Response.redirect(new URL("/admin/", url), 302);
+  if (request.method !== "GET" && request.method !== "HEAD") return withHeaders(textResponse(405, "Metode tidak diizinkan."));
+  if (path === "/" || path === "/admin") return Response.redirect(new URL("/admin/", url), 302);
+  if (path.startsWith("/admin/assets/") || path.startsWith("/assets/") || path === "/favicon.svg") {
+    const file = await staticResponse(PUBLIC_DIR, path, { cacheControl: path === "/favicon.svg" ? "public, max-age=86400" : "private, max-age=300" });
+    return withHeaders(file || textResponse(404, "File tidak ditemukan."), null);
+  }
   const user = await currentUser(request, env);
   if (path === "/admin/login" || path === "/admin/login/") {
     if (user) return Response.redirect(new URL("/admin/", url), 302);
-    return withHeaders(await env.ASSETS.fetch(new Request(new URL("/admin/login", url), request)));
+    return withHeaders(await staticResponse(PUBLIC_DIR, "/admin/login.html"));
   }
-  if (!user) return Response.redirect(new URL("/admin/login", url), 302);
-  return withHeaders(await env.ASSETS.fetch(new Request(new URL("/admin/", url), request)));
+  if (path === "/admin/" || path === "/admin/index.html") {
+    if (!user) return Response.redirect(new URL("/admin/login", url), 302);
+    return withHeaders(await staticResponse(PUBLIC_DIR, "/admin/index.html"));
+  }
+  return withHeaders(textResponse(404, "Halaman tidak ditemukan."));
 }
 
 function withHeaders(response, cache = "no-store") {
@@ -48,7 +60,7 @@ function withHeaders(response, cache = "no-store") {
   r.headers.set("X-Content-Type-Options", "nosniff");
   r.headers.set("Referrer-Policy", "same-origin");
   r.headers.set("X-Robots-Tag", "noindex, nofollow");
-  r.headers.set("Cache-Control", cache);
+  if (cache) r.headers.set("Cache-Control", cache);
   return r;
 }
 
@@ -61,18 +73,36 @@ function readCookie(request, name) {
   }
   return null;
 }
-const sessionCookie = (token, maxAge) => `${SESSION_COOKIE}=${token}; Path=/; HttpOnly; Secure; SameSite=Strict; Max-Age=${maxAge}`;
+// Secure is set on HTTPS and on localhost (browsers accept it there). Plain HTTP on another host
+// would drop a Secure cookie, so it is left off there; put the admin app behind HTTPS in production.
+function secureFor(request) {
+  const url = new URL(request.url);
+  return url.protocol === "https:" || url.hostname === "localhost";
+}
+const sessionCookie = (token, maxAge, secure) => `${SESSION_COOKIE}=${token}; Path=/; HttpOnly;${secure ? " Secure;" : ""} SameSite=Strict; Max-Age=${maxAge}`;
+
+// Session lookups are cached for a minute so every dashboard request does not hit the database.
+const SESSION_CACHE_MS = 60_000;
+const sessionCache = new Map();
 
 async function currentUser(request, env) {
   const token = readCookie(request, SESSION_COOKIE);
   if (!token || token.length < 20 || token.length > 100) return null;
   const tokenHash = await sha256Hex(token);
+  const hit = sessionCache.get(tokenHash);
+  if (hit && hit.until > Date.now()) return hit.user;
   const row = await env.DB.prepare(
     `SELECT u.id, u.email, u.name, u.role, s.expires_at FROM admin_sessions s
        JOIN admin_users u ON u.id = s.user_id WHERE s.token_hash = ? AND u.active = 1`,
   ).bind(tokenHash).first();
-  if (!row || row.expires_at < nowSeconds()) return null;
-  return { id: row.id, email: row.email, name: row.name, role: row.role, tokenHash };
+  if (!row || row.expires_at < nowSeconds()) {
+    sessionCache.delete(tokenHash);
+    return null;
+  }
+  const user = { id: row.id, email: row.email, name: row.name, role: row.role, tokenHash };
+  if (sessionCache.size > 500) sessionCache.clear();
+  sessionCache.set(tokenHash, { user, until: Math.min(Date.now() + SESSION_CACHE_MS, row.expires_at * 1000) });
+  return user;
 }
 
 function checkOrigin(request, url) {
@@ -105,12 +135,60 @@ async function login(request, env) {
     env.DB.prepare("UPDATE admin_users SET failed_logins = 0, locked_until = NULL, last_login_at = ? WHERE id = ?").bind(now, user.id),
     env.DB.prepare("DELETE FROM admin_sessions WHERE expires_at < ?").bind(now),
   ]);
-  return json({ ok: true, user: { name: user.name, email: user.email, role: user.role } }, 200, { "Set-Cookie": sessionCookie(token, SESSION_TTL) });
+  return json({ ok: true, user: { name: user.name, email: user.email, role: user.role } }, 200, { "Set-Cookie": sessionCookie(token, SESSION_TTL, secureFor(request)) });
 }
 
 async function logout(request, env, user) {
+  sessionCache.delete(user.tokenHash);
   await env.DB.prepare("DELETE FROM admin_sessions WHERE token_hash = ?").bind(user.tokenHash).run();
-  return json({ ok: true }, 200, { "Set-Cookie": sessionCookie("", 0) });
+  return json({ ok: true }, 200, { "Set-Cookie": sessionCookie("", 0, secureFor(request)) });
+}
+
+/* ===================== First admin account ===================== */
+// While no admin exists, the login page offers to create the first account. From this computer
+// (localhost) no code is needed; from anywhere else the setup code printed in the server log is.
+let setupCode = null;
+export function setSetupCode(code) { setupCode = code; }
+export async function adminCount(env) {
+  const r = await env.DB.prepare("SELECT COUNT(*) AS n FROM admin_users").first();
+  return r ? r.n : 0;
+}
+function isLocalRequest(request, ctx) {
+  const ip = String(ctx?.remoteAddress || "");
+  const loopback = ip === "127.0.0.1" || ip === "::1" || ip === "::ffff:127.0.0.1";
+  const host = new URL(request.url).hostname;
+  return loopback && !request.headers.get("x-forwarded-for") && ["localhost", "127.0.0.1", "[::1]"].includes(host);
+}
+async function setupStatus(request, env, ctx) {
+  const needed = (await adminCount(env)) === 0;
+  return json({ needed, local: needed && isLocalRequest(request, ctx) });
+}
+async function setupFirstAdmin(request, env, ctx) {
+  const body = await readJson(request, 4096);
+  if ((await adminCount(env)) > 0) throw new HttpError(409, "Akun admin sudah ada. Masuk dengan akun tersebut.");
+  if (!isLocalRequest(request, ctx) && (!setupCode || String(body.code || "").trim().toUpperCase() !== setupCode)) {
+    throw new HttpError(403, "Kode setup salah. Kode ada di log server saat aplikasi admin dijalankan.", { field: "code" });
+  }
+  const name = text(body.name, 80);
+  const email = text(body.email, 160).toLowerCase();
+  const password = String(body.password || "");
+  if (name.length < 2) throw new HttpError(400, "Nama minimal 2 karakter.", { field: "name" });
+  if (!isEmail(email)) throw new HttpError(400, "Format email belum benar.", { field: "email" });
+  if (password.length < 12) throw new HttpError(400, "Kata sandi minimal 12 karakter.", { field: "password" });
+  const { hash, salt, iterations } = await hashPassword(password);
+  const id = `adm_${randomToken(9)}`;
+  const now = nowSeconds();
+  const token = randomToken(32);
+  const [created] = await env.DB.batch([
+    env.DB.prepare(`INSERT INTO admin_users (id, email, name, role, password_hash, password_salt, password_iter, created_at)
+                    SELECT ?, ?, ?, 'admin', ?, ?, ?::integer, ?::bigint WHERE NOT EXISTS (SELECT 1 FROM admin_users)`)
+      .bind(id, email, name, hash, salt, iterations, now),
+  ]);
+  if (!created.meta.changes) throw new HttpError(409, "Akun admin sudah dibuat dari tempat lain. Masuk dengan akun tersebut.");
+  await env.DB.prepare("INSERT INTO admin_sessions (token_hash, user_id, created_at, expires_at, user_agent) VALUES (?, ?, ?, ?, ?)")
+    .bind(await sha256Hex(token), id, now, now + SESSION_TTL, (request.headers.get("user-agent") || "").slice(0, 200)).run();
+  setupCode = null;
+  return json({ ok: true }, 200, { "Set-Cookie": sessionCookie(token, SESSION_TTL, secureFor(request)) });
 }
 
 /* ===================== Router ===================== */
@@ -149,9 +227,21 @@ const ROUTES = [
   ["DELETE", /^\/api\/admin\/tutors\/([\w-]+)$/, deleteTutor],
 ];
 
-export async function handleAdminApi(request, env, url) {
+export async function handleAdmin(request, env, url, ctx) {
+  try {
+    return await handleAdminApi(request, env, url, ctx);
+  } catch (error) {
+    if (error instanceof HttpError) return json({ error: error.message, ...error.extra }, error.status);
+    console.error("admin api", error);
+    return json({ error: "Terjadi kesalahan pada server." }, 500);
+  }
+}
+
+async function handleAdminApi(request, env, url, ctx) {
   checkOrigin(request, url);
   if (url.pathname === "/api/admin/login" && request.method === "POST") return login(request, env);
+  if (url.pathname === "/api/admin/setup" && request.method === "GET") return setupStatus(request, env, ctx);
+  if (url.pathname === "/api/admin/setup" && request.method === "POST") return setupFirstAdmin(request, env, ctx);
   const user = await currentUser(request, env);
   if (!user) throw new HttpError(401, "Sesi kamu sudah berakhir. Masuk lagi untuk melanjutkan.", { code: "auth" });
   for (const [method, pattern, handler] of ROUTES) {
@@ -201,7 +291,7 @@ async function bootstrap(request, env, user, url) {
   return json({
     me: { name: user.name, email: user.email, role: user.role },
     now: Date.now(),
-    publicUrl: url.origin,
+    publicUrl: env.PUBLIC_WEB_URL,
     whatsapp: { configured: whatsappConfigured(env) },
     tests: Object.fromEntries(TEST_KEYS.map((key) => [key, {
       key,
@@ -454,12 +544,12 @@ async function createInvite(request, env, user, url, id) {
   const body = await readJson(request);
   const test = TEST_KEYS.includes(body.test) ? body.test : null;
   if (!test) throw new HttpError(400, "Jenis tes tidak dikenal.");
-  if (test === "placement") return json({ ok: true, link: `${url.origin}/`, expiresAt: null });
+  if (test === "placement") return json({ ok: true, link: `${env.PUBLIC_WEB_URL}/`, expiresAt: null });
   const token = randomToken(24);
   const now = nowSeconds();
   await env.DB.prepare("INSERT INTO invites (id, token_hash, student_id, test_key, created_at, expires_at, created_by) VALUES (?, ?, ?, ?, ?, ?, ?)")
     .bind(newId("inv"), await sha256Hex(token), s.id, test, now, now + INVITE_TTL, user.name).run();
-  return json({ ok: true, link: `${url.origin}/?undangan=${token}`, expiresAt: ms(now + INVITE_TTL) });
+  return json({ ok: true, link: `${env.PUBLIC_WEB_URL}/?undangan=${token}`, expiresAt: ms(now + INVITE_TTL) });
 }
 
 /* ===================== Tests and questions ===================== */
@@ -498,9 +588,9 @@ async function createQuestion(request, env, user, url, key) {
   const max = await env.DB.prepare("SELECT COALESCE(MAX(position), 0) AS p FROM questions WHERE test_key = ?").bind(key).first();
   const now = nowSeconds();
   const r = await env.DB.prepare(`INSERT INTO questions (test_key, position, skill, prompt, passage, option_a, option_b, option_c, option_d, answer, seconds, status, created_at, updated_at)
-                                  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
-    .bind(key, max.p + 1, q.skill, q.prompt, q.passage, q.options.A, q.options.B, q.options.C, q.options.D, q.answer, q.seconds ?? test.per_default, q.status, now, now).run();
-  return json({ ok: true, id: r.meta?.last_row_id });
+                                  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id`)
+    .bind(key, max.p + 1, q.skill, q.prompt, q.passage, q.options.A, q.options.B, q.options.C, q.options.D, q.answer, q.seconds ?? test.per_default, q.status, now, now).first();
+  return json({ ok: true, id: r ? r.id : null });
 }
 
 async function getQuestionRow(env, key, id) {
@@ -540,7 +630,7 @@ async function questionAction(request, env, user, url, key, id, action) {
     await env.DB.batch([
       env.DB.prepare("UPDATE questions SET position = position + 1 WHERE test_key = ? AND position > ?").bind(key, fresh.position),
       env.DB.prepare(`INSERT INTO questions (test_key, position, skill, prompt, passage, option_a, option_b, option_c, option_d, answer, seconds, status, created_at, updated_at)
-                      SELECT test_key, position + 1, skill, prompt, passage, option_a, option_b, option_c, option_d, answer, seconds, 'draf', ?, ? FROM questions WHERE id = ?`).bind(now, now, fresh.id),
+                      SELECT test_key, position + 1, skill, prompt, passage, option_a, option_b, option_c, option_d, answer, seconds, 'draf', ?::bigint, ?::bigint FROM questions WHERE id = ?`).bind(now, now, fresh.id),
     ]);
   } else {
     const other = await env.DB.prepare(`SELECT id, position FROM questions WHERE test_key = ? AND position ${action === "up" ? "< ? ORDER BY position DESC" : "> ? ORDER BY position ASC"} LIMIT 1`)
@@ -596,7 +686,7 @@ async function getAttemptRow(env, id) {
 
 async function getAttemptDetail(request, env, user, url, id) {
   const a = await getAttemptRow(env, id);
-  const { results } = await env.DB.prepare("SELECT question_id, choice, is_correct, answer_key FROM answers WHERE attempt_id = ? ORDER BY rowid").bind(id).all();
+  const { results } = await env.DB.prepare("SELECT question_id, choice, is_correct, answer_key FROM answers WHERE attempt_id = ? ORDER BY question_id").bind(id).all();
   const order = a.question_ids ? JSON.parse(a.question_ids) : null;
   const answers = results.map((r) => ({ questionId: r.question_id, choice: r.choice, ok: Boolean(r.is_correct), key: r.answer_key }));
   if (order) answers.sort((x, y) => order.indexOf(x.questionId) - order.indexOf(y.questionId));
@@ -645,7 +735,7 @@ async function attemptAction(request, env, user, url, id, action) {
     return json({ ok: true });
   }
   if (a.test_key !== "placement" || a.status !== "submitted" || !a.email) throw new HttpError(400, "Email hasil hanya bisa dikirim ulang untuk placement test yang sudah punya kontak.");
-  if (!env.SEND_EMAIL) throw new HttpError(503, "Pengiriman email belum diatur di Worker ini.");
+  if (!env.SEND_EMAIL) throw new HttpError(503, "Pengiriman email belum diatur di server ini.");
   const levels = await loadLevels(env);
   const level = levels.find((l) => l.key === a.level_key) || levels[0];
   const { subject, html, text: plain } = buildResultEmail({ name: a.name, email: a.email, score: a.score, total: a.total, level: publicLevel(level) });
@@ -686,7 +776,7 @@ async function saveProgram(request, env, user, url, id) {
   const body = await readJson(request);
   const name = text(body.name, 80);
   if (!name) throw new HttpError(400, "Nama program wajib diisi.");
-  const dup = await env.DB.prepare("SELECT id FROM programs WHERE name = ? COLLATE NOCASE AND id != ?").bind(name, id || "").first();
+  const dup = await env.DB.prepare("SELECT id FROM programs WHERE lower(name) = lower(?) AND id != ?").bind(name, id || "").first();
   if (dup) throw new HttpError(409, "Nama program ini sudah ada.");
   const mode = MODES.includes(body.mode) ? body.mode : MODES[0];
   const status = body.status === "nonaktif" ? "nonaktif" : "aktif";
@@ -794,7 +884,7 @@ async function createTutor(request, env) {
   const body = await readJson(request);
   const name = text(body.name, 60);
   if (!name) throw new HttpError(400, "Nama tutor wajib diisi.");
-  const dup = await env.DB.prepare("SELECT id FROM tutors WHERE name = ? COLLATE NOCASE").bind(name).first();
+  const dup = await env.DB.prepare("SELECT id FROM tutors WHERE lower(name) = lower(?)").bind(name).first();
   if (dup) throw new HttpError(409, "Tutor dengan nama ini sudah ada.");
   await env.DB.prepare("INSERT INTO tutors (id, name, created_at) VALUES (?, ?, ?)").bind(newId("tut"), name, nowSeconds()).run();
   return json({ ok: true });

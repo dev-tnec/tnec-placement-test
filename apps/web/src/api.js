@@ -1,16 +1,14 @@
-// TNEC Placement Test Worker.
-// Serves the public test from ./public, the protected dashboard under /admin,
-// and the JSON APIs backed by D1. The answer key never leaves this Worker.
+// Public test API for the web app: config, invites, attempts, violations, submit, and contact.
+// The answer key never leaves the server.
 
-import { HttpError, json, readJson, nowSeconds, normalizeWhatsapp, isEmail } from "./http.js";
+import { HttpError, json, readJson, nowSeconds, normalizeWhatsapp, isEmail } from "@tnec/core/http";
 import {
   TEST_NAMES, PER_MODE_GRACE_SECONDS, loadTest, loadQuestions, loadLevels, levelFor, publicLevel,
   focusStrikes, addActivity, upsertStudentFromContact,
-} from "./store.js";
-import { CONSENT_VERSION, PRIVACY, TERMS, WHATSAPP, fillLegal } from "./legal.js";
-import { buildResultEmail } from "./email.js";
-import { sha256Hex } from "./crypto.js";
-import { handleAdminApi, serveAdminPage } from "./admin.js";
+} from "@tnec/core/store";
+import { CONSENT_VERSION, PRIVACY, TERMS, WHATSAPP, fillLegal } from "@tnec/core/legal";
+import { buildResultEmail } from "@tnec/core/email";
+import { sha256Hex } from "@tnec/core/crypto";
 
 const PUBLIC_BODY_LIMIT = 16 * 1024;
 const SUBMIT_GRACE_SECONDS = 15;
@@ -18,22 +16,15 @@ const ATTEMPT_ID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]
 const CHOICES = new Set(["A", "B", "C", "D"]);
 const VIOLATION_TYPES = new Set(["fullscreen_exit", "tab_hidden", "window_blur", "copy_attempt", "shortcut_blocked"]);
 
-export default {
-  async fetch(request, env) {
-    const url = new URL(request.url);
-    const path = url.pathname;
-    try {
-      if (path.startsWith("/api/admin/")) return await handleAdminApi(request, env, url);
-      if (path.startsWith("/api/")) return await handleApi(request, env, url);
-      if (path === "/admin" || path.startsWith("/admin/")) return await serveAdminPage(request, env, url);
-      return env.ASSETS.fetch(request);
-    } catch (error) {
-      if (error instanceof HttpError) return json({ error: error.message, ...error.extra }, error.status);
-      console.error("unhandled", error);
-      return json({ error: "Terjadi kesalahan pada server." }, 500);
-    }
-  },
-};
+export async function handlePublic(request, env, url = new URL(request.url)) {
+  try {
+    return await handleApi(request, env, url);
+  } catch (error) {
+    if (error instanceof HttpError) return json({ error: error.message, ...error.extra }, error.status);
+    console.error("public api", error);
+    return json({ error: "Terjadi kesalahan pada server." }, 500);
+  }
+}
 
 async function handleApi(request, env, url) {
   const path = url.pathname;
@@ -63,6 +54,7 @@ function spanText(seconds) {
   return s ? `${m} menit ${s} detik` : `${m} menit`;
 }
 
+// Read fresh on every request, so a change in the dashboard applies to the next test right away.
 async function liveTest(env, key) {
   const [test, questions] = await Promise.all([loadTest(env, key), loadQuestions(env, key, { activeOnly: true })]);
   const durationSeconds = test.timeMode === "per" ? questions.reduce((sum, q) => sum + q.seconds, 0) : test.totalSeconds;
@@ -137,7 +129,7 @@ async function createAttempt(request, env) {
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   ).bind(
     id, now, expiresAt, questions.length, CONSENT_VERSION, now,
-    (request.headers.get("user-agent") || "").slice(0, 300), request.cf?.country || null,
+    (request.headers.get("user-agent") || "").slice(0, 300), (request.headers.get("cf-ipcountry") || "").slice(0, 2) || null,
     testKey, invite ? invite.student_id : null, JSON.stringify(questions.map((q) => q.id)), test.timeMode,
     durationSeconds, test.maxViolations, testKey === "post" ? test.passScore ?? 70 : null, invite ? invite.id : null,
   ).run();
@@ -224,7 +216,8 @@ async function submitAttempt(request, env, attemptId) {
     const isCorrect = choice === question.answer ? 1 : 0;
     score += isCorrect;
     return env.DB.prepare(
-      `INSERT OR REPLACE INTO answers (attempt_id, question_id, choice, is_correct, answer_key) VALUES (?, ?, ?, ?, ?)`,
+      `INSERT INTO answers (attempt_id, question_id, choice, is_correct, answer_key) VALUES (?, ?, ?, ?, ?)
+       ON CONFLICT (attempt_id, question_id) DO UPDATE SET choice = EXCLUDED.choice, is_correct = EXCLUDED.is_correct, answer_key = EXCLUDED.answer_key`,
     ).bind(attemptId, question.id, choice, isCorrect, question.answer);
   });
 
@@ -315,7 +308,7 @@ async function saveContact(request, env, attemptId) {
 }
 
 async function sendResultEmail(env, { name, email, score, total, level }) {
-  if (!env.SEND_EMAIL) return { emailSent: false, emailStatus: "skipped: binding missing" };
+  if (!env.SEND_EMAIL) return { emailSent: false, emailStatus: "skipped: email not configured" };
   const { subject, html, text } = buildResultEmail({ name, email, score, total, level });
   try {
     await env.SEND_EMAIL.send({

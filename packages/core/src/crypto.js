@@ -1,8 +1,9 @@
 // Password hashing, token generation, and hashing with Web Crypto.
-// Works in the Workers runtime and in Node 20+, so the admin script and tests share it.
+// Uses Web Crypto, which Node provides, so the servers, the admin script, and the tests share it.
 
 const encoder = new TextEncoder();
-export const PBKDF2_ITERATIONS = 100000;
+// OWASP's 2023 guidance for PBKDF2-HMAC-SHA256. Each account stores its own count, so older hashes still verify.
+export const PBKDF2_ITERATIONS = 600000;
 
 export function toHex(buffer) {
   return [...new Uint8Array(buffer)].map((b) => b.toString(16).padStart(2, "0")).join("");

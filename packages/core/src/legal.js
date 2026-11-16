@@ -1,7 +1,7 @@
 // Legal copy and public config. Bump CONSENT_VERSION whenever the text changes,
 // so every stored consent record points to the exact version the user saw.
 
-export const CONSENT_VERSION = "2026-11-16";
+export const CONSENT_VERSION = "2026-11-16b";
 export const WHATSAPP = "6282333143544";
 // Fills the {{total}}, {{duration}}, and {{strikes}} tokens with the live test settings,
 // so the legal text always matches what the dashboard has configured.
@@ -90,7 +90,7 @@ export const PRIVACY = {
     {
       heading: "4. Penyimpanan dan retensi",
       paragraphs: [
-        "Data disimpan di Cloudflare D1 pada infrastruktur Cloudflare. Data bisa diproses di luar Indonesia melalui penyedia infrastruktur tersebut, dengan pengamanan kontraktual dan teknis yang wajar.",
+        "Data disimpan di basis data PostgreSQL yang dikelola Neon pada server Amazon Web Services di Singapura. Artinya data diproses di luar Indonesia, dengan pengamanan kontraktual dan teknis yang wajar dari penyedia tersebut.",
         "Data hasil tes disimpan paling lama 24 bulan sejak tanggal tes, lalu dihapus. Kalau kamu meminta penghapusan lebih awal, kami menghapusnya dalam 30 hari, kecuali ada kewajiban hukum yang mengharuskan penyimpanan lebih lama.",
       ],
     },
@@ -98,7 +98,7 @@ export const PRIVACY = {
       heading: "5. Pembagian data",
       paragraphs: [
         "Data hanya diakses oleh tim Titik Nol yang membutuhkan, yaitu tim akademik dan admin penerimaan siswa.",
-        "Cloudflare bertindak sebagai prosesor infrastruktur untuk hosting, basis data, dan pengiriman email hasil tes. Kami tidak membagikan data kamu kepada pihak lain untuk tujuan pemasaran.",
+        "Neon bertindak sebagai prosesor untuk basis data, dan Cloudflare untuk pengiriman email hasil tes. Kami tidak membagikan data kamu kepada pihak lain untuk tujuan pemasaran.",
         "Pesan WhatsApp dari tim kami dikirim melalui AttCos, layanan pesan yang kami pakai sebagai prosesor, lalu diteruskan lewat WhatsApp Business Platform milik Meta. Keduanya hanya menerima nomor WhatsApp dan isi pesan yang diperlukan untuk mengirimkannya.",
       ],
     },

@@ -1,6 +1,6 @@
 // TNEC internal dashboard client.
 // Views come from the approved prototype. Data comes from /api/admin/bootstrap and every change
-// goes through the admin API, after which the data is reloaded so the screen matches D1.
+// goes through the admin API, after which the data is reloaded so the screen matches the database.
 
 /* ===================== Core helpers ===================== */
 let NOW = Date.now();
@@ -122,7 +122,7 @@ const TEST_META = {
 };
 const TEST_KEYS = ["placement", "pre", "post"];
 
-/* ===================== Database (loaded from D1) ===================== */
+/* ===================== Database (loaded from the server) ===================== */
 const db = { tests: {}, levels: [], programs: [], tutors: [], tutorIds: new Map(), periods: [], classes: [], students: [], attempts: [], enrolledAt: [], publicUrl: location.origin, whatsapp: { configured: false } };
 let dataReady = false;
 // Detail caches keep the last loaded copy while a fresh copy loads, so pages do not flicker after a change.
@@ -188,7 +188,7 @@ function periodState(p) {
 }
 function currentPeriod() { const past = periodsSorted().filter((p) => p.start <= NOW); return past[past.length - 1] || periodsSorted()[0]; }
 
-/* Question accuracy comes from D1, grouped for the last 7 and 30 days. */
+/* Question accuracy comes from the database, grouped for the last 7 and 30 days. */
 function accuracyMap(testKey, since = 0) {
   const t = testOf(testKey);
   const bucket = NOW - since <= 8 * DAY ? t.stats.d7 : t.stats.d30;

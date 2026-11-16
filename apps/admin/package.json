@@ -1,0 +1,14 @@
+{
+  "name": "@tnec/admin",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Internal dashboard for the admin and education team.",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "@tnec/core": "*"
+  }
+}

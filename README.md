@@ -1,50 +1,48 @@
 # TNEC Placement Test and Internal Dashboard
 
-Online placement test for Titik Nol English Course, plus the internal dashboard for the admin and education team. The public test grades on the server and emails the result. The dashboard at `/admin` is a CRM, an education dashboard, and the database in one place: student records, classes, the question banks for the placement test, pre-test, and post-test, submissions, and WhatsApp messages through AttCos. Everything runs on one Cloudflare Worker with a D1 database.
+Online placement test, pre-test, and post-test for Titik Nol English Course, plus the internal dashboard for the admin and education team. It is a Node.js monorepo with two apps that share one PostgreSQL database on Neon.
+
+| Part | Folder | Default address |
+|---|---|---|
+| Test site for students | `apps/web` | `http://localhost:4000` |
+| Dashboard for the team | `apps/admin` | `http://localhost:4001/admin` |
+| Shared server code | `packages/core` | |
+| Database schema and seeds | `db/migrations` | |
 
 The product and design decisions are documented in `AGENTS.md` and `DESIGN.md`. Read those before changing anything.
 
-## Local setup
+## Run it
 
-1. Run `npm install`.
-2. Run `npm run db:migrate:local` to create the local tables and the seed questions.
-3. Create a local dashboard account. Set `ADMIN_PASSWORD` in the shell, run `npm run admin:sql -- --email you@example.com --name "Your Name" --out admin.sql`, then run `npx wrangler d1 execute tnec-placement-test --local --file=admin.sql` and delete `admin.sql`.
-4. Run `npm run dev`, then open `http://localhost:8787` for the test and `http://localhost:8787/admin` for the dashboard. Use `localhost`, not `127.0.0.1`, because the session cookie is marked Secure.
-5. Run `npm test` for the smoke checks.
+On Windows, double-click `start.cmd`. It installs what it needs the first time, then runs both apps until you close the window.
 
-WhatsApp sending stays off locally until a key is provided. To try it against a stub, pass `--var ATTCOS_API_KEY:anything --var ATTCOS_API_BASE:http://127.0.0.1:PORT/api/v1` to `wrangler dev`.
+From a terminal, the same thing is `npm install` once, then `npm start`. If PowerShell refuses `npm` because scripts are disabled, use `node scripts/start.mjs` instead. The settings live in `.env` at the repository root, and `.env.example` lists every key.
 
-## Deploy
-
-Run these in order. Steps 2 to 5 change production, so run them only when you mean to.
-
-1. Authenticate wrangler with `npx wrangler login`, or set `CLOUDFLARE_API_TOKEN` in the shell.
-2. Run `npm run db:migrate` to apply `migrations/` to the remote D1. The first run applies `0001_initial.sql`, which matches the existing tables, and `0002_dashboard.sql`, which adds the dashboard tables and the seed questions.
-3. Create the first dashboard account with the same `admin:sql` command as above, then run it with `--remote` instead of `--local`.
-4. Run `npm run deploy`. The first deploy creates the Worker at `https://tnec-placement-test.devaldo.workers.dev`.
-5. Run `npx wrangler secret put ATTCOS_API_KEY` and paste the AttCos API key when prompted. Until it is set, the dashboard shows that WhatsApp sending is off.
-6. Sign in at `/admin`, add the programs, periods, tutors, and classes, then review the pre-test and post-test drafts before opening those tests.
-
-The Worker name is `tnec-placement-test`. The D1 database and the Cloudflare account are pinned in `wrangler.toml`.
+Starting updates the database schema when needed, then runs both apps. The first time the dashboard opens with an empty database, the login page offers to create the first admin account. From the same computer no code is needed; from another computer, enter the setup code that `npm start` prints.
 
 ## Configuration
 
-| Setting | Where | Default |
-|---|---|---|
-| Questions, answer keys, and skills | Dashboard, Soal & Jawaban | 25 placement questions, 12 draft questions each for pre-test and post-test |
-| Time mode and duration | Dashboard, Pengaturan of each test | Placement 5 minutes total, pre-test and post-test 10 minutes |
-| Focus violation limit | Dashboard, Pengaturan of each test | 3 |
-| Post-test pass score | Dashboard, Post-test Pengaturan | 70 out of 100 |
-| Level thresholds | Dashboard, Placement Test Pengaturan | Six levels, 0 to 25 |
-| Programs, periods, classes, tutors | Dashboard, Program & Kelas | Empty until the team adds them |
-| Consent version and legal text | `src/legal.js` | `2026-11-16` |
-| Public WhatsApp number | `src/legal.js` | `6282333143544` |
-| Sender address | `wrangler.toml` | `placement@index-now.dev` |
-| AttCos base URL and channel | `wrangler.toml` vars | `https://csq-api.onrender.com/api/v1`, channel `6a94705f-8df3-47e7-9262-639637209fc5` |
-| AttCos API key | Worker secret `ATTCOS_API_KEY` | Not set |
+| Setting | Where |
+|---|---|
+| Database | `DATABASE_URL` in `.env`, the Neon connection string |
+| Ports and public addresses | `WEB_PORT`, `ADMIN_PORT`, `PUBLIC_WEB_URL`, `ADMIN_URL` in `.env`. Test links sent from the dashboard use `PUBLIC_WEB_URL` |
+| Result email | `CLOUDFLARE_ACCOUNT_ID`, `CLOUDFLARE_EMAIL_TOKEN`, `RESULT_FROM_EMAIL` in `.env`. Leave the token empty to skip emails |
+| WhatsApp through AttCos | `ATTCOS_API_KEY`, `ATTCOS_CHANNEL_ID`, `ATTCOS_API_BASE` in `.env` |
+| Questions, timing, violation limit, pass score, levels | Dashboard, each test's Pengaturan and Soal & Jawaban |
+| Programs, periods, classes, tutors | Dashboard, Program & Kelas |
+| Consent version and legal text | `packages/core/src/legal.js` |
 
 Bump `CONSENT_VERSION` whenever the terms or privacy text changes, so each stored consent points to the exact version the user saw.
 
-## Structure
+## Other commands
 
-`src/` holds the Worker: `index.js` for the public API, `admin.js` for the dashboard API and pages, `store.js` for shared D1 helpers, `whatsapp.js` for AttCos, and the legal copy and email template. `public/` holds the static test app, and `public/admin/` holds the dashboard and its login page. `migrations/` is the D1 schema history; `schema.sql` is kept only as a reference for the original tables. `scripts/create-admin.mjs` prints the SQL for a dashboard account. `tests/smoke.mjs` checks the questions, levels, seed migration, password hashing, attempt status, and the AttCos client.
+| Command | What it does |
+|---|---|
+| `npm run start:web` | Runs only the test site |
+| `npm run start:admin` | Runs only the dashboard |
+| `npm run db:migrate` | Applies pending files in `db/migrations` without starting the apps |
+| `npm run admin:create -- --email someone@example.com --name Name` | Adds a dashboard account or resets its password; it asks for the password |
+| `npm test` | Smoke checks, no database needed |
+
+## Hosting
+
+Any Node.js host works, including a VPS, Render, or the Node.js app feature in cPanel. Run `npm install`, set the same keys as `.env` in the host's environment, and start with `npm start`, or start each app on its own with `npm run start:web` and `npm run start:admin`. Behind a reverse proxy, set `TRUST_PROXY=1` and serve the dashboard over HTTPS so the login cookie stays secure.
