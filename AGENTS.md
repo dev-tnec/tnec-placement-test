@@ -19,6 +19,7 @@ On 16 November 2026 the owner asked to run everything on Node.js instead of Clou
 | Branch `dev` | For local testing. The headless browser tests write their data here, never to `main` |
 | Result email | Cloudflare Email Sending API with the account token "TNEC placement test - result email", which can only send email |
 | Old Cloudflare Worker | Deleted on 16 November 2026. The old D1 database `tnec-placement-test` is kept untouched and is no longer used |
+| Hosting | Render, workspace IndexNow, region Singapore, Starter plan. `tnec-placement-test` (`srv-dbt6h3tg1s2s738toue0`) serves https://tnec-placement-test.onrender.com and `tnec-placement-admin` (`srv-dbt6h3tg1s2s738touf0`) serves https://tnec-placement-admin.onrender.com/admin. Every push to `main` deploys both. The settings are in each service's Environment page; the README lists which keys each service has |
 
 The full flow passes in a headless browser against the `dev` branch: first admin setup on the login page, login and logout, catalog, student records, notes, WhatsApp through a local AttCos stub (including the 24 hour window error), invite links, the placement test with contact and result, the pre-test score screen, per question timing with auto advance and auto submit, a student name containing HTML staying plain text, and the dashboard layout at 1024, 900, and 390 pixels.
 
@@ -61,7 +62,8 @@ The full flow passes in a headless browser against the `dev` branch: first admin
 
 1. Double-click `start.cmd` on Windows, or run `npm install` once and then `npm start`. PowerShell on this machine blocks `npm.ps1`, so from PowerShell use `node scripts/start.mjs` or `npm.cmd start`.
 2. Starting applies pending migrations, then serves the test on `WEB_PORT` (4000) and the dashboard on `ADMIN_PORT` (4001).
-3. With no admin in the database, the login page at `/admin/login` turns into "Buat akun admin pertama". Requests from localhost need no code; any other request needs the setup code that `npm start` prints. After the first account exists, setup is closed and more accounts come from `npm run admin:create`.
+3. With no admin in the database, the login page at `/admin/login` turns into "Buat akun admin pertama". Requests from localhost need no code; any other request needs the setup code that the admin app prints when it starts. On Render the code comes from `ADMIN_SETUP_CODE`, so it stays the same across restarts. After the first account exists, setup is closed and more accounts come from `npm run admin:create`.
+4. A host that sets `PORT`, such as Render, gives that port to an app started on its own with `npm run start:web` or `npm run start:admin`.
 
 To run against the `dev` branch, point `ENV_FILE` at a second env file with the `dev` connection string. Never run tests against `main`.
 
@@ -172,7 +174,7 @@ Read `DESIGN.md` before touching CSS. Navy structure, navy buttons, white readin
 ## Git and push rules
 
 1. This folder is its own repository. Never commit the parent `tnec` folder, `credentials/`, `cpanel-titiknolenglishcom/`, or `tnec-cpanel/`.
-2. The remote is the private repository `dev-tnec/tnec-placement-test`.
+2. The remote is `dev-tnec/tnec-placement-test`. The owner made it public on 16 November 2026 so Render can deploy it, so anyone can read every commit. A pushed secret counts as leaked and must be rotated.
 3. Commits are authored as Aldo `<354270602+dev-tnec@users.noreply.github.com>` only. No AI attribution, no Co-Authored-By trailers.
 4. Use conventional subjects (`feat:`, `fix:`, `docs:`, `chore:`), imperative and one line. Review `git status` and `git diff --staged` before every push.
 5. Never commit `.env`, `node_modules/`, the session export `tikno-english-placement-test-setup.json`, or any secret. Pushing from this machine works with the GitHub CLI login: `git -c credential.helper= -c "credential.helper=!gh auth git-credential" push origin main`.
@@ -187,4 +189,4 @@ Read `DESIGN.md` before touching CSS. Navy structure, navy buttons, white readin
 6. The public WhatsApp number `6282333143544` comes from the TOEFL online page; confirm it.
 7. WhatsApp templates are not supported by AttCos yet, so first contact goes through the `wa.me` fallback.
 8. Both dashboard roles see everything.
-9. The apps run on the owner's computer for now. For a public launch they need a Node.js host with HTTPS, and `PUBLIC_WEB_URL` and `ADMIN_URL` set to the real addresses.
+9. The apps run on their onrender.com addresses. A custom domain on `titiknolenglish.com` is not set up yet; adding one means changing `PUBLIC_WEB_URL` and `ADMIN_URL` on Render too.

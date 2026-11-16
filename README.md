@@ -43,6 +43,23 @@ Bump `CONSENT_VERSION` whenever the terms or privacy text changes, so each store
 | `npm run admin:create -- --email someone@example.com --name Name` | Adds a dashboard account or resets its password; it asks for the password |
 | `npm test` | Smoke checks, no database needed |
 
-## Hosting
+## Hosting on Render
 
-Any Node.js host works, including a VPS, Render, or the Node.js app feature in cPanel. Run `npm install`, set the same keys as `.env` in the host's environment, and start with `npm start`, or start each app on its own with `npm run start:web` and `npm run start:admin`. Behind a reverse proxy, set `TRUST_PROXY=1` and serve the dashboard over HTTPS so the login cookie stays secure.
+Both apps run on Render as two web services in the IndexNow workspace, in the Singapore region next to the Neon database, on the Starter plan. Every push to `main` deploys both.
+
+| Service | Address | Start command |
+|---|---|---|
+| `tnec-placement-test` | https://tnec-placement-test.onrender.com | `npm run start:web` |
+| `tnec-placement-admin` | https://tnec-placement-admin.onrender.com/admin | `npm run start:admin` |
+
+Both build with `npm ci --no-audit --no-fund` from `dev-tnec/tnec-placement-test`. Each app listens on the `PORT` that Render sets and applies pending migrations when it starts.
+
+| Setting | Test service | Dashboard service |
+|---|---|---|
+| `DATABASE_URL`, `TRUST_PROXY=1`, `PUBLIC_WEB_URL` | Yes | Yes |
+| `CLOUDFLARE_ACCOUNT_ID`, `CLOUDFLARE_EMAIL_TOKEN`, `RESULT_FROM_EMAIL` | Yes | Yes |
+| `ADMIN_URL`, `ATTCOS_API_BASE`, `ATTCOS_CHANNEL_ID`, `ATTCOS_API_KEY`, `ADMIN_SETUP_CODE` | No | Yes |
+
+The values live only in Render and in the local `.env`. To change one, edit it under the service's Environment page in Render and deploy again. The repository is public, so a secret must never be committed.
+
+Any other Node.js host works the same way: set the keys in the host's environment, start each app with its start command, set `TRUST_PROXY=1` behind a reverse proxy, and serve the dashboard over HTTPS so the login cookie stays secure.
