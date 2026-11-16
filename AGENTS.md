@@ -155,12 +155,13 @@ The seed thresholds match the JotForm conditions. The team can change them in th
 
 What the app does:
 
-1. Requests fullscreen when the test starts. If the browser refuses, the test continues with a warning banner.
-2. Counts leaving fullscreen, hiding the tab, and blurring the window as focus violations. At the limit, 3 by default and set per test, the test stops without submitting.
-3. Logs blocked copy, cut, paste, context menu, drag, F12, and developer shortcuts without counting them as strikes.
-4. Keeps the timer running while the violation modal is open, and grades on the server.
+1. Requests fullscreen when the test starts, with the navigation bar hidden where the browser allows it. If the browser refuses, the test continues with a warning banner.
+2. Locks the Esc key during the test in Chrome, Edge, and Opera (Keyboard Lock API), asked for right before fullscreen and released when fullscreen ends. A quick press does nothing; leaving fullscreen takes holding Esc for 2 seconds, which the browser always allows and which still counts as a strike. Firefox and Safari have no Keyboard Lock, so Esc leaves fullscreen at once there.
+3. Counts leaving fullscreen, hiding the tab, and blurring the window as focus violations. At the limit, 3 by default and set per test, the test stops without submitting.
+4. Logs blocked copy, cut, paste, context menu, drag, F12, and developer shortcuts without counting them as strikes.
+5. Keeps the timer running while the violation modal is open, and grades on the server.
 
-What it cannot do, and must not claim: stop a second device, a camera, or a helper in the room; pause when someone leaves fullscreen briefly; detect virtual machines or remote control tools. There is no per-IP rate limit on attempt creation. Do not write "tidak bisa dicurangi" or any absolute claim.
+What it cannot do, and must not claim: stop a second device, a camera, or a helper in the room; block screenshots; switch Esc off completely; hide a phone's navigation bar for good or block the home and back gestures (iPhone Safari has no web fullscreen at all, so there only the strike rule applies); pause when someone leaves fullscreen briefly; detect virtual machines or remote control tools. There is no per-IP rate limit on attempt creation. Do not write "tidak bisa dicurangi" or any absolute claim.
 
 ## Privacy and consent
 

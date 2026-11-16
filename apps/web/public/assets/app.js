@@ -931,11 +931,25 @@ async function reenterFullscreen() {
   els.violationDialog.close();
 }
 
+// Chrome, Edge, and Opera can hold the Esc key while the test is in fullscreen (Keyboard Lock).
+// A quick press then reaches the page and does nothing, and leaving fullscreen takes holding Esc
+// for 2 seconds, which still counts as a strike. Firefox and Safari have no Keyboard Lock, so Esc
+// still leaves fullscreen at once there. The spec asks for the lock before fullscreen starts.
+function lockEscape() {
+  if (!navigator.keyboard?.lock) return;
+  navigator.keyboard.lock(["Escape"]).catch(() => {});
+}
+
+function unlockEscape() {
+  if (navigator.keyboard?.unlock) navigator.keyboard.unlock();
+}
+
 async function requestFullscreen() {
   const element = document.documentElement;
   if (!element.requestFullscreen || document.fullscreenElement) {
     return Boolean(document.fullscreenElement);
   }
+  lockEscape();
   try {
     // Some browsers leave the promise pending without a user gesture.
     await Promise.race([
@@ -953,6 +967,9 @@ async function exitFullscreen() {
     if (document.fullscreenElement) await document.exitFullscreen();
   } catch {
     /* the browser may refuse outside a user gesture, which is fine */
+  } finally {
+    // Release Esc after fullscreen ends, the order the Keyboard Lock spec recommends.
+    unlockEscape();
   }
 }
 

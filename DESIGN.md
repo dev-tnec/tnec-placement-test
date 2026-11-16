@@ -232,7 +232,7 @@ A pale yellow block with a 3px yellow left edge, a navy icon, and 13px text. It 
 
 ## 10. Anti-cheat UI
 
-The test runs in fullscreen. Three focus events are treated as violations: leaving fullscreen, hiding the tab, and blurring the window while the tab is visible. A fourth category (blocked copy, cut, paste, context menu, and developer shortcuts) is logged to the server but does not count toward the three strikes.
+The test runs in fullscreen. In Chrome, Edge, and Opera the Esc key is locked while it runs, so a quick press does nothing and leaving fullscreen takes holding Esc for 2 seconds; the browser shows its own hint for that, so the page adds no copy. Three focus events are treated as violations: leaving fullscreen, hiding the tab, and blurring the window while the tab is visible. A fourth category (blocked copy, cut, paste, context menu, and developer shortcuts) is logged to the server but does not count toward the three strikes.
 
 On the first and second strike, a modal blocks the test with the count and one action: return to fullscreen. The timer keeps running behind it, and the copy says so. On the third strike, the test stops without submitting. A dialog says the attempt failed and offers to retry or return to the start.
 
