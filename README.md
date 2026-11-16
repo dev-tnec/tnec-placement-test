@@ -45,7 +45,9 @@ Bump `CONSENT_VERSION` whenever the terms or privacy text changes, so each store
 
 ## Hosting on Render
 
-Both apps run on Render as two web services in the IndexNow workspace, in the Singapore region next to the Neon database, on the Starter plan. Every push to `main` deploys both.
+Both apps run on Render as two web services in the IndexNow workspace, in the Singapore region next to the Neon database, on the Starter plan.
+
+Render pulls the code from the public repository URL, and Render only deploys on its own when the repository comes through a connected GitHub account. So after a push to `main`, start a deploy for both services, with Manual Deploy in the Render dashboard or through the Render API. Connecting the dev-tnec GitHub account to Render would make every push deploy by itself.
 
 | Service | Address | Start command |
 |---|---|---|

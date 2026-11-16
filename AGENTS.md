@@ -19,7 +19,7 @@ On 16 November 2026 the owner asked to run everything on Node.js instead of Clou
 | Branch `dev` | For local testing. The headless browser tests write their data here, never to `main` |
 | Result email | Cloudflare Email Sending API with the account token "TNEC placement test - result email", which can only send email |
 | Old Cloudflare Worker | Deleted on 16 November 2026. The old D1 database `tnec-placement-test` is kept untouched and is no longer used |
-| Hosting | Render, workspace IndexNow, region Singapore, Starter plan. `tnec-placement-test` (`srv-dbt6h3tg1s2s738toue0`) serves https://tnec-placement-test.onrender.com and `tnec-placement-admin` (`srv-dbt6h3tg1s2s738touf0`) serves https://tnec-placement-admin.onrender.com/admin. Every push to `main` deploys both. The settings are in each service's Environment page; the README lists which keys each service has |
+| Hosting | Render, workspace IndexNow, region Singapore, Starter plan. `tnec-placement-test` (`srv-dbt6h3tg1s2s738toue0`) serves https://tnec-placement-test.onrender.com and `tnec-placement-admin` (`srv-dbt6h3tg1s2s738touf0`) serves https://tnec-placement-admin.onrender.com/admin. Both deploy from the public repository URL, so a push does not deploy by itself; deploy both after each push. The settings are in each service's Environment page; the README lists which keys each service has |
 
 The full flow passes in a headless browser against the `dev` branch: first admin setup on the login page, login and logout, catalog, student records, notes, WhatsApp through a local AttCos stub (including the 24 hour window error), invite links, the placement test with contact and result, the pre-test score screen, per question timing with auto advance and auto submit, a student name containing HTML staying plain text, and the dashboard layout at 1024, 900, and 390 pixels.
 
@@ -178,6 +178,7 @@ Read `DESIGN.md` before touching CSS. Navy structure, navy buttons, white readin
 3. Commits are authored as Aldo `<354270602+dev-tnec@users.noreply.github.com>` only. No AI attribution, no Co-Authored-By trailers.
 4. Use conventional subjects (`feat:`, `fix:`, `docs:`, `chore:`), imperative and one line. Review `git status` and `git diff --staged` before every push.
 5. Never commit `.env`, `node_modules/`, the session export `tikno-english-placement-test-setup.json`, or any secret. Pushing from this machine works with the GitHub CLI login: `git -c credential.helper= -c "credential.helper=!gh auth git-credential" push origin main`.
+6. After a push, deploy both Render services (`srv-dbt6h3tg1s2s738toue0` and `srv-dbt6h3tg1s2s738touf0`) with the Render MCP `trigger_deploy` tool or Manual Deploy in the dashboard, then check that both reach `live`.
 
 ## Known limits and next steps
 
