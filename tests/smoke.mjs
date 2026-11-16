@@ -2,7 +2,7 @@
 // question integrity, the level boundaries, the answer key staying server side,
 // the seed migration, password hashing, attempt status, the database placeholders,
 // the email transport, the AttCos client, the result WhatsApp message, the hosted settings,
-// the first admin setup code, and the background result delivery.
+// the first admin setup code, the background result delivery, and the certificate numbers and templates.
 // Runs without a database.
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
@@ -23,6 +23,10 @@ import { numberPlaceholders } from "@tnec/core/db";
 import { createMailer, parseAddress } from "@tnec/core/mailer";
 import { buildEnv } from "@tnec/core/env";
 import { announceSetup, createAdminHandler } from "../apps/admin/server.js";
+import {
+  BUILT_IN_FIELDS, CERT_DIR, TEMPLATES, englishDate, formatCertificateNumber, isIsoDate,
+  numberFormatProblem, numberPattern, periodKey, renderCertificateHtml,
+} from "../apps/admin/src/certificates.js";
 
 /* ---------- Questions and levels ---------- */
 assert.equal(TOTAL_QUESTIONS, 25);
@@ -230,5 +234,71 @@ try {
 }
 assert.equal(await drainDeliveries(2000), true, "a stopping server waits for running sends");
 assert.equal(finished, true);
+
+/* ---------- Certificate numbers, resets, templates, and escaping ---------- */
+const certIso = "2026-11-15";
+assert.equal(formatCertificateNumber("{nomor}/MoM/MKT/TNEC/{bulan_romawi}/{tahun}", { seq: 146, code: "MOM", iso: certIso }), "146/MoM/MKT/TNEC/XI/2026");
+assert.equal(formatCertificateNumber("{nomor:3}/{kode}/{bulan:2}/{tahun}", { seq: 7, code: "TOEFL", iso: "2026-03-01" }), "007/TOEFL/03/2026");
+assert.equal(formatCertificateNumber("{Nomor:2}-{KODE}", { seq: 1234, code: "C", iso: certIso }), "1234-C", "tokens ignore case and padding never cuts digits");
+assert.equal(periodKey("tahun", certIso), "2026");
+assert.equal(periodKey("bulan", certIso), "2026-11");
+assert.equal(periodKey("tidak", certIso), "semua");
+const formatCases = [
+  ["{nomor}/{kode}/TNEC/{bulan_romawi}/{tahun}", "tahun", null],
+  ["{nomor}/{kode}/{bulan_romawi}/{tahun}", "bulan", null],
+  ["{nomor:4}/{kode}", "tidak", null],
+  ["{kode}/{tahun}", "tahun", /\{nomor\}/],
+  ["{nomor}/{kode}", "tahun", /\{tahun\}/],
+  ["{nomor}/{tahun}", "bulan", /\{bulan\}/],
+  ["{nomor}/{tanggal}", "tidak", /tidak dikenal/],
+  ["{nomor}/{kode:2}", "tidak", /digit/],
+  ["{nomor:9}", "tidak", /antara 1 dan 8/],
+  ["   ", "tahun", /wajib/],
+];
+for (const [format, reset, expected] of formatCases) {
+  const problem = numberFormatProblem(format, reset);
+  if (expected) assert.match(problem || "", expected, `${format} with reset ${reset}`);
+  else assert.equal(problem, null, `${format} with reset ${reset}`);
+}
+assert.notEqual(numberPattern("{nomor}/{kode}/{tahun}", "TOEFL"), numberPattern("{nomor}/{kode}/{tahun}", "IELTS"));
+assert.equal(numberPattern("{Nomor}/{kode}/{tahun}", "X"), numberPattern("{nomor}/X/{TAHUN}", "Y"), "two types that would print the same numbers are caught");
+assert.equal(englishDate("2026-11-15"), "15 November 2026");
+assert.equal(isIsoDate("2026-02-30"), false);
+assert.equal(isIsoDate("2026-02-28"), true);
+
+// The dashboard mirrors the number rules for its live preview, so both sides must agree.
+const adminJs = readFileSync(new URL("../apps/admin/public/admin/assets/admin.js", import.meta.url), "utf8");
+const mirrorSource = adminJs.slice(adminJs.indexOf("const CERT_RESETS"), adminJs.indexOf("/* ===================== Database"));
+const clientRules = new Function("MONTHS_LONG", `${mirrorSource}; return { formatCertNumber, certFormatProblem, certPeriodKey };`)(Array(12).fill("Bulan"));
+for (const [format, reset] of formatCases) {
+  assert.equal(clientRules.certFormatProblem(format, reset), numberFormatProblem(format, reset), `dashboard and server agree on ${format}`);
+  assert.equal(clientRules.certPeriodKey(reset, certIso), periodKey(reset, certIso));
+  if (!numberFormatProblem(format, reset)) {
+    assert.equal(clientRules.formatCertNumber(format, 146, "MOM", certIso), formatCertificateNumber(format, { seq: 146, code: "MOM", iso: certIso }));
+  }
+}
+
+// Every {{placeholder}} in a template is a built-in value or one of its fields, and every field shows up.
+for (const [key, template] of Object.entries(TEMPLATES)) {
+  const html = readFileSync(`${CERT_DIR}/${template.file}`, "utf8").replace(/<!--[\s\S]*?-->/g, "");
+  const used = new Set([...html.matchAll(/\{\{(\w+)\}\}/g)].map((m) => m[1]));
+  const known = new Set([...BUILT_IN_FIELDS, ...template.fields.map((f) => f.key)]);
+  for (const name of used) assert.ok(known.has(name), `${key} template uses an unknown {{${name}}}`);
+  for (const name of known) assert.ok(used.has(name), `${key} template never shows ${name}`);
+  assert.equal(/<script|<style| style="/i.test(html), false, `${key} template needs no inline script or style`);
+}
+
+// Names are escaped, and a "$" in a value stays literal instead of acting as a replace pattern.
+const certHtml = await renderCertificateHtml({
+  templateKey: "toefl",
+  values: { nomor: "1/TOEFL/TNEC/XI/2026", nama: "<script>alert(1)</script> $& $1", listening: "50", structure: "48", reading: "52", skor_akhir: "500", tanggal: "15 November 2026", penanda_tangan: "A", jabatan: "B" },
+  title: "Rani $&", info: "Info", note: "Catatan", back: "/admin/", revoked: true,
+});
+assert.equal(certHtml.includes("<script>alert(1)</script>"), false);
+assert.ok(certHtml.includes("&lt;script&gt;alert(1)&lt;/script&gt; $&amp; $1"));
+assert.ok(certHtml.includes("<title>Rani $&amp;</title>"));
+assert.ok(certHtml.includes('class="cert-void"'), "a cancelled certificate carries the DIBATALKAN mark");
+assert.ok(certHtml.includes('href="logo.css"'), "the template keeps its relative stylesheet links");
+assert.equal(/\{\{\w+\}\}/.test(certHtml), false, "no placeholder is left on the page");
 
 console.log("smoke ok");

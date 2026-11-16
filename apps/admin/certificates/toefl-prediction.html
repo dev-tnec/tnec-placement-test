@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sertifikat TOEFL Prediction, Titik Nol English Course</title>
+<link rel="stylesheet" href="logo.css">
+<link rel="stylesheet" href="certificate.css">
+</head>
+<body>
+
+<!-- Template sertifikat TOEFL Prediction untuk dasbor. Setiap {{isian}} diganti data sertifikat
+     saat dibuka dari menu Sertifikat; daftar isiannya ada di apps/admin/src/certificates.js.
+     Cetak dari browser: A4 lanskap, margin none, aktifkan background graphics. -->
+<div class="sheet sheet--ink">
+  <img class="frame" src="frame.svg" alt="">
+
+  <div class="page">
+    <header class="masthead">
+      <div class="logo logo--gold" role="img" aria-label="Titik Nol English Course"></div>
+      <p class="legal">SK DIKNAS NO. 421.9/985/418.20/2021</p>
+      <p>Head Office: Jl. Brawijaya No. 75, Kampung Inggris Pare, Kediri, Jawa Timur</p>
+      <p>Hp: 0823-3314-3544 | E-mail: admin@titiknolenglish.com | Website: titiknolenglish.com</p>
+      <div class="ornament">
+        <i class="diamond diamond--sm"></i>
+        <i class="diamond"></i>
+        <span class="line"></span>
+        <i class="diamond"></i>
+        <i class="diamond diamond--sm"></i>
+      </div>
+    </header>
+
+    <h1 class="title">TOEFL PREDICTION</h1>
+    <p class="cert-no">No. Certificate: {{nomor}}</p>
+    <p class="cert-title">Certificate of Achievement</p>
+    <div class="ribbon">This is to certify that</div>
+
+    <div class="score-block">
+      <span class="name">{{nama}}</span>
+      <p class="score-intro">achieved the following scores on the</p>
+      <dl class="scores scores--spaced">
+        <div><dt>Listening Comprehension</dt><dd>{{listening}}</dd></div>
+        <div><dt>Structure Comprehension</dt><dd>{{structure}}</dd></div>
+        <div><dt>Reading Comprehension</dt><dd>{{reading}}</dd></div>
+        <div><dt>Average Score</dt><dd>{{skor_akhir}}</dd></div>
+      </dl>
+    </div>
+
+    <div class="sign">
+      <p class="awarded">awarded on <span>{{tanggal}}</span></p>
+      <div class="logo logo--blue" role="img" aria-label="Titik Nol English Course"></div>
+      <div class="sig-space"><!-- Letakkan gambar tanda tangan di sini. --></div>
+      <span class="sig-name">{{penanda_tangan}}</span>
+      <p class="sig-role">{{jabatan}}</p>
+    </div>
+
+    <p class="footnote">This certificate is valid for 1 year.</p>
+  </div>
+</div>
+
+</body>
+</html>

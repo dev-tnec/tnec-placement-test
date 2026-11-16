@@ -21,7 +21,7 @@ On 16 November 2026 the owner asked to run everything on Node.js instead of Clou
 | Old Cloudflare Worker | Deleted on 16 November 2026. The old D1 database `tnec-placement-test` is kept untouched and is no longer used |
 | Hosting | Render, workspace IndexNow, region Singapore, Starter plan. `tnec-placement-test` (`srv-dbt6h3tg1s2s738toue0`) serves https://tnec-placement-test.onrender.com and `tnec-placement-admin` (`srv-dbt6h3tg1s2s738touf0`) serves https://tnec-placement-admin.onrender.com/admin. Both deploy from the public repository URL, so a push does not deploy by itself; deploy both after each push. The settings are in each service's Environment page; the README lists which keys each service has |
 
-The full flow passes in a headless browser against the `dev` branch: first admin setup on the login page, login and logout, catalog, student records, notes, WhatsApp through a local AttCos stub (including the 24 hour window error), invite links, the placement test with contact and result, the pre-test score screen, per question timing with auto advance and auto submit, a student name containing HTML staying plain text, and the dashboard layout at 1024, 900, and 390 pixels.
+The full flow passes in a headless browser against the `dev` branch: first admin setup on the login page, login and logout, catalog, student records, notes, WhatsApp through a local AttCos stub (including the 24 hour window error), invite links, the placement test with contact and result, the pre-test score screen, per question timing with auto advance and auto submit, a student name containing HTML staying plain text, and the dashboard layout at 1024, 900, and 390 pixels. The certificate flow passes there too: types and their validation, the MoM number example, two certificates issued at the same moment, a refused number rolling back, editing, cancelling and restoring, and the printable pages in A4 portrait and landscape.
 
 ## Stack
 
@@ -43,8 +43,10 @@ The full flow passes in a headless browser against the `dev` branch: first admin
 | `apps/web/public/` | `index.html`, `assets/app.css`, `assets/app.js`, logos, favicon |
 | `apps/admin/server.js` | Dashboard server and the first admin setup notice |
 | `apps/admin/src/api.js` | Dashboard pages, sessions, first admin setup, and every `/api/admin` route |
-| `apps/admin/public/admin/` | Dashboard `index.html`, `login.html`, and `assets/` (admin.css, admin.js, login.js) |
-| `packages/core/src/db.js` | Postgres pool with a small `prepare(sql).bind(...).first()/all()/run()` and `batch()` API. `?` placeholders become `$1..$n`; `batch()` is one transaction; read-only batches run in parallel |
+| `apps/admin/src/certificates.js` | Certificate types, number formats and counters, issuing, and the printable certificate page. See Certificates below |
+| `apps/admin/certificates/` | The certificate HTML templates with their CSS and drawings |
+| `apps/admin/public/admin/` | Dashboard `index.html`, `login.html`, and `assets/` (admin.css, admin.js, login.js, and certificate-page.css and certificate-page.js for the bar above a printable certificate) |
+| `packages/core/src/db.js` | Postgres pool with a small `prepare(sql).bind(...).first()/all()/run()` and `batch()` API. `?` placeholders become `$1..$n`; `batch()` is one transaction; read-only batches run in parallel; `transaction(work)` runs steps that need an earlier result, such as taking a certificate number, in one transaction |
 | `packages/core/src/env.js` | Loads `.env` (or `ENV_FILE`) and builds the shared `env` object |
 | `packages/core/src/node-server.js` | Node HTTP adapter for fetch-style handlers, static files, security headers |
 | `packages/core/src/migrate.js` | Applies pending `db/migrations` files in one transaction with an advisory lock |
@@ -53,6 +55,7 @@ The full flow passes in a headless browser against the `dev` branch: first admin
 | `db/migrations/0001_init.sql` | Full schema plus seeds: 3 tests, 6 levels, 25 placement questions, 12 draft questions each for pre-test and post-test |
 | `db/migrations/0002_result_whatsapp.sql` | Adds `wa_sent_at` and `wa_status` to `attempts` for the automatic result WhatsApp |
 | `db/migrations/0003_result_delivery.sql` | Adds `delivery_lease_until` to `attempts` for the background result delivery |
+| `db/migrations/0004_certificates.sql` | Adds `certificate_types`, `certificate_counters`, and `certificates`, and seeds the Certificate of Completion, TOEFL Prediction, and IELTS Prediction types |
 | `start.cmd` | Double-click launcher for Windows: installs on first run, then runs `scripts/start.mjs` |
 | `scripts/start.mjs` | `npm start`: migrate, then run both apps in one process |
 | `scripts/migrate.mjs`, `scripts/create-admin.mjs` | `npm run db:migrate`, `npm run admin:create` |
@@ -100,6 +103,7 @@ Every response is `no-store`. Bodies are capped at 16 KB. The consent version in
 |---|---|
 | Ringkasan | Metric strip, follow-up queue for status Baru, placement level spread, hardest placement questions |
 | Database Siswa | CRM table with status chips, search, filters for periode, program, tutor, and level, bulk actions, CSV export, and a full record page per student |
+| Sertifikat | Sertifikat terbit lists every issued certificate with search, a type filter, and status chips. Pengaturan lists the certificate types with their template, number format, reset rule, last number, and signer. Each student page also has a Sertifikat panel |
 | Placement Test, Pre-test, Post-test | Soal & Jawaban, Submission, and Pengaturan for each test |
 | Program & Kelas | Program catalog with durations and prices, intake periods, classes, and tutors |
 
@@ -109,7 +113,7 @@ The user rejected five earlier versions. Rejected patterns: a generic stat card 
 
 The client loads everything from `GET /api/admin/bootstrap`, then loads a student's activities and a submission's answers when those pages open. Every change goes through the API, then the client reloads. Test links point at `PUBLIC_WEB_URL`.
 
-Admin routes, all under `/api/admin`, need a session except `login` and `setup`, and reject writes whose `Origin` is not the admin app's own origin: `bootstrap`, `logout`, `students` (create, bulk, get, patch, delete, notes, whatsapp, invite), `tests/:key` (settings, questions, reorder, duplicate, toggle, apply-seconds), `levels`, `attempts/:id` (detail, void, restore, resend-email, delete, bulk-delete), and the catalog (`programs`, `periods`, `classes`, `tutors`).
+Admin routes, all under `/api/admin`, need a session except `login` and `setup`, and reject writes whose `Origin` is not the admin app's own origin: `bootstrap`, `logout`, `students` (create, bulk, get, patch, delete, notes, whatsapp, invite), `tests/:key` (settings, questions, reorder, duplicate, toggle, apply-seconds), `levels`, `attempts/:id` (detail, void, restore, resend-email, delete, bulk-delete), the catalog (`programs`, `periods`, `classes`, `tutors`), and certificates (`certificate-types` create, update, delete; `certificates` issue, update, revoke, restore). The printable page `/admin/certificates/<id>` needs a session too; only the template CSS and SVG files next to it are served without one.
 
 ## Accounts and sessions
 
@@ -145,6 +149,8 @@ Times are Unix seconds in BIGINT columns, flags are 0 or 1 in INTEGER columns, a
 | `programs`, `program_durations`, `program_tutors`, `tutors`, `periods`, `classes` | The catalog |
 | `invites` | Personal pre-test and post-test links; only the token hash is stored |
 | `wa_messages` | Every WhatsApp send attempt |
+| `certificate_types`, `certificate_counters` | Certificate types, and one number counter per type and period |
+| `certificates` | Issued certificates with their number, template, printed name, and filled fields. A cancelled one keeps its row |
 | `admin_users`, `admin_sessions` | Dashboard accounts and sessions |
 | `schema_migrations` | Which migration files have run |
 
@@ -185,6 +191,38 @@ The legal copy follows `.opencode/skills/data-privacy-compliance/SKILL.md`. The 
 
 `packages/core/src/email.js` builds a 600px HTML email with inline styles and a plain text fallback, with a navy WhatsApp CTA. `mailer.js` sends it through the Cloudflare Email Sending API from `RESULT_FROM_EMAIL` (`placement@index-now.dev`, an onboarded sending domain). The placement result email goes out in the background after the contact step (see Result delivery). Without `CLOUDFLARE_EMAIL_TOKEN` the email is skipped and the result screen leaves it out of its note. The dashboard can resend from the submission page.
 
+## Certificates
+
+The owner asked on 16 November 2026 for student certificates where every certificate type has its own number format that the team manages, starting with Certificate of Completion, TOEFL Prediction, and IELTS Prediction. In the Sertifikat menu, Pengaturan holds the types. Each type picks one of the HTML templates and has a code, a number format, a reset rule, a last number, a signer, and a status.
+
+A number format is plain text with these tokens. The month and year come from the issue date.
+
+| Token | Becomes | Example for 15 November 2026 |
+|---|---|---|
+| `{nomor}` | The sequence number. Every format needs it | 146 |
+| `{nomor:3}` | The sequence number with at least 3 digits, from 1 to 8 | 007 |
+| `{kode}` | The code of the type | MoM |
+| `{bulan}`, `{bulan:2}` | The month as a number | 11 |
+| `{bulan_romawi}` | The month in Roman numerals | XI |
+| `{tahun}` | The year | 2026 |
+
+So `{nomor}/MoM/MKT/TNEC/{bulan_romawi}/{tahun}` gives 146/MoM/MKT/TNEC/XI/2026, the format of the MoM and MeMo letters. Any other text, such as MKT for the division or TNEC for the branch, is printed as typed.
+
+The reset rule says when the sequence starts again at 1: every year (counter period `2026`), every month (`2026-11`), or never (`semua`). A yearly reset needs `{tahun}` in the format, and a monthly one needs `{tahun}` plus `{bulan}` or `{bulan_romawi}`, so a number cannot come back in a later period. The server also refuses a type whose format, with its code filled in, matches another type, because both would print the same numbers.
+
+The number comes from `certificate_counters` through one `INSERT ... ON CONFLICT DO UPDATE ... RETURNING` inside the transaction that saves the certificate. Two people issuing at the same moment get different numbers, and a save that fails gives its number back. A unique index on `certificates.number` is the last guard. Nomor terakhir in Pengaturan edits the counter of the current period. It can move forward to continue a register kept outside the dashboard, but never below a number already issued in that period. The dialogs show the expected number while someone types, using a copy of the format rules in `admin.js`; `tests/smoke.mjs` checks that the copy matches the server.
+
+An issued certificate keeps its number, type, template, issue date, printed name, template fields, and the signer at the time of issue, so a reprint after a signer change still shows who signed it. Editing changes only the printed name and the fields. A certificate is cancelled with a reason instead of deleted, so every number stays accounted for; its print page carries a DIBATALKAN mark, and it can be restored. A type that has been used cannot be deleted, only set to nonaktif. Deleting a student keeps their certificates in the register without the link to the student.
+
+Printing happens in the browser. Cetak opens `/admin/certificates/<id>`, and Cetak atau simpan PDF opens the print dialog, where the paper is A4, the margin None, and Background graphics on. There is no server-side PDF. Every value is HTML-escaped before it goes into the template, and the sample of a type opens at `/admin/certificates/<type id>` with made-up data and the next real number.
+
+A new type that reuses an existing design needs no code, because the team adds it in Pengaturan. A new design is developer work:
+
+1. Add the HTML file to `apps/admin/certificates` with `{{nomor}}`, `{{nama}}`, `{{tanggal}}`, `{{penanda_tangan}}`, `{{jabatan}}`, and one `{{key}}` per field. Keep the links to its CSS and SVG files relative, and add no inline script or style, because the page is served under the dashboard CSP.
+2. Add an entry to `TEMPLATES` in `apps/admin/src/certificates.js` with the file, the paper, the default signer, and the fields (key, label, sample, maximum length, and `type: "date"` for a date).
+3. Run `npm test`, which checks that the placeholders in the file and the fields in `TEMPLATES` match.
+4. Push, deploy the admin service, and create the type in Sertifikat, Pengaturan.
+
 ## Design
 
 Read `DESIGN.md` before touching CSS. Navy structure, navy buttons, white reading surface, red only for errors and urgent state, one yellow emphasis. No gradients, no third-party fonts, and no inline scripts or styles, because both apps send a strict CSP.
@@ -209,3 +247,4 @@ Read `DESIGN.md` before touching CSS. Navy structure, navy buttons, white readin
 7. A failed result email or WhatsApp is not retried automatically. The student's activity shows the error; the team can resend the email from the submission page and send the WhatsApp by hand from the student page. A crash in the middle of a send can make one message arrive twice.
 8. Both dashboard roles see everything.
 9. The apps run on their onrender.com addresses. A custom domain on `titiknolenglish.com` is not set up yet; adding one means changing `PUBLIC_WEB_URL` and `ADMIN_URL` on Render too.
+10. Certificates have no signature image, no QR code or public page to verify them, and no server-side PDF. The IELTS template still prints the title IELTS SIMULATION while the type is called IELTS Prediction; confirm which one is right. The completion template keeps an empty 3 x 4 photo box.

@@ -9,6 +9,10 @@ import { TEST_KEYS, TEST_NAMES, mapTest, mapQuestion, loadQuestions, loadLevels,
 import { sendWhatsApp, whatsappConfigured } from "@tnec/core/whatsapp";
 import { buildResultEmail } from "@tnec/core/email";
 import { staticResponse, textResponse } from "@tnec/core/node-server";
+import {
+  CERT_DIR, certificateData, certificatePage, saveCertificateType, deleteCertificateType,
+  issueCertificate, updateCertificate, certificateAction,
+} from "./certificates.js";
 
 const PUBLIC_DIR = resolve(dirname(fileURLToPath(import.meta.url)), "../public");
 
@@ -41,7 +45,22 @@ export async function serveAdminPage(request, env, url) {
     const file = await staticResponse(PUBLIC_DIR, path, { cacheControl: path === "/favicon.svg" ? "public, max-age=86400" : "private, max-age=300" });
     return withHeaders(file || textResponse(404, "File tidak ditemukan."), null);
   }
+  // The stylesheets and drawings of the certificate templates. The HTML templates are never served raw.
+  const certAsset = path.match(/^\/admin\/certificates\/([\w.-]+\.(?:css|svg))$/);
+  if (certAsset) {
+    const file = await staticResponse(CERT_DIR, `/${certAsset[1]}`, { cacheControl: "private, max-age=300" });
+    return withHeaders(file || textResponse(404, "File tidak ditemukan."), null);
+  }
   const user = await currentUser(request, env);
+  // A printable certificate (crt_...) or a sample of a certificate type (ctp_...). The page sits
+  // next to the template assets, so the templates' relative links to their CSS keep working.
+  const certPage = path.match(/^\/admin\/certificates\/((?:crt|ctp)_[\w-]+)$/);
+  if (certPage) {
+    if (!user) return Response.redirect(new URL("/admin/login", url), 302);
+    const html = await certificatePage(env, certPage[1]);
+    if (!html) return withHeaders(textResponse(404, "Sertifikat tidak ditemukan."));
+    return withHeaders(new Response(html, { status: 200, headers: { "Content-Type": "text/html; charset=utf-8" } }));
+  }
   if (path === "/admin/login" || path === "/admin/login/") {
     if (user) return Response.redirect(new URL("/admin/", url), 302);
     return withHeaders(await staticResponse(PUBLIC_DIR, "/admin/login.html"));
@@ -225,6 +244,12 @@ const ROUTES = [
   ["DELETE", /^\/api\/admin\/classes\/([\w-]+)$/, deleteClass],
   ["POST", /^\/api\/admin\/tutors$/, createTutor],
   ["DELETE", /^\/api\/admin\/tutors\/([\w-]+)$/, deleteTutor],
+  ["POST", /^\/api\/admin\/certificate-types$/, saveCertificateType],
+  ["PUT", /^\/api\/admin\/certificate-types\/([\w-]+)$/, saveCertificateType],
+  ["DELETE", /^\/api\/admin\/certificate-types\/([\w-]+)$/, deleteCertificateType],
+  ["POST", /^\/api\/admin\/certificates$/, issueCertificate],
+  ["PUT", /^\/api\/admin\/certificates\/([\w-]+)$/, updateCertificate],
+  ["POST", /^\/api\/admin\/certificates\/([\w-]+)\/(revoke|restore)$/, certificateAction],
 ];
 
 export async function handleAdmin(request, env, url, ctx) {
@@ -260,7 +285,7 @@ async function bootstrap(request, env, user, url) {
   const statSql = `SELECT a.test_key, an.question_id, COUNT(*) AS n, SUM(an.is_correct) AS correct
     FROM answers an JOIN attempts a ON a.id = an.attempt_id
     WHERE a.status = 'submitted' AND a.voided_at IS NULL AND a.started_at >= ? GROUP BY a.test_key, an.question_id`;
-  const res = await db.batch([
+  const [res, certificates] = await Promise.all([db.batch([
     stmt("SELECT * FROM tests"),
     stmt("SELECT * FROM questions ORDER BY test_key, position, id"),
     stmt("SELECT * FROM levels ORDER BY position"),
@@ -278,7 +303,7 @@ async function bootstrap(request, env, user, url) {
     stmt("SELECT c.*, t.name AS tutor_name FROM classes c JOIN tutors t ON t.id = c.tutor_id ORDER BY c.code"),
     stmt(statSql, now - 7 * 86400),
     stmt(statSql, now - 30 * 86400),
-  ]);
+  ]), certificateData(env)]);
   const [tests, questions, levels, students, attempts, lastActs, enrolled, programs, durations, programTutors, tutors, periods, classes, s7, s30] = res.map((r) => r.results);
   const last = new Map(lastActs.map((r) => [r.student_id, r.last_at]));
   const stats = {};
@@ -317,6 +342,7 @@ async function bootstrap(request, env, user, url) {
       periods: periods.map((p) => ({ id: p.id, start: ms(dateToSeconds(p.start_date)), startDate: p.start_date, note: p.note || "" })),
       classes: classes.map((c) => ({ id: c.id, code: c.code, programId: c.program_id, periodId: c.period_id, tutorId: c.tutor_id, tutor: c.tutor_name, capacity: c.capacity })),
     },
+    certificates,
   });
 }
 

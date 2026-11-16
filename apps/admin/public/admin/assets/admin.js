@@ -122,8 +122,52 @@ const TEST_META = {
 };
 const TEST_KEYS = ["placement", "pre", "post"];
 
+/* Certificate numbers. These rules mirror apps/admin/src/certificates.js so the dialogs can show
+   the next number while someone types. The server assigns the real number when a certificate is saved. */
+const CERT_RESETS = [["tahun", "Setiap tahun"], ["bulan", "Setiap bulan"], ["tidak", "Tidak pernah"]];
+const CERT_RESET_LABEL = Object.fromEntries(CERT_RESETS);
+const CERT_TOKENS = ["nomor", "kode", "bulan", "bulan_romawi", "tahun"];
+const CERT_ROMAN = ["I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX", "X", "XI", "XII"];
+const certToken = () => /\{([A-Za-z_]+)(?::(\d+))?\}/g;
+function certPeriodKey(reset, iso) { return reset === "bulan" ? iso.slice(0, 7) : reset === "tidak" ? "semua" : iso.slice(0, 4); }
+function certPeriodLabel(reset, iso) {
+  if (reset === "bulan") return `bulan ${MONTHS_LONG[Number(iso.slice(5, 7)) - 1]} ${iso.slice(0, 4)}`;
+  return reset === "tidak" ? "seluruh waktu" : `tahun ${iso.slice(0, 4)}`;
+}
+function formatCertNumber(format, seq, code, iso) {
+  const month = Number(iso.slice(5, 7));
+  return String(format).replace(certToken(), (all, raw, width) => {
+    const name = raw.toLowerCase(), digits = Math.min(Number(width) || 0, 8);
+    if (name === "nomor") return String(seq).padStart(digits, "0");
+    if (name === "kode") return code;
+    if (name === "bulan") return String(month).padStart(digits, "0");
+    if (name === "bulan_romawi") return CERT_ROMAN[month - 1];
+    if (name === "tahun") return iso.slice(0, 4);
+    return all;
+  });
+}
+function certFormatProblem(format, reset) {
+  const f = String(format || "");
+  if (!f.trim()) return "Format nomor wajib diisi.";
+  if (f.length > 120) return "Format nomor maksimal 120 karakter.";
+  const names = new Set();
+  for (const [all, raw, width] of f.matchAll(certToken())) {
+    const name = raw.toLowerCase();
+    if (!CERT_TOKENS.includes(name)) return `${all} tidak dikenal. Pakai {nomor}, {kode}, {bulan}, {bulan_romawi}, atau {tahun}.`;
+    if (width !== undefined) {
+      if (name !== "nomor" && name !== "bulan") return "Jumlah digit hanya bisa dipakai di {nomor} dan {bulan}, misalnya {nomor:3}.";
+      if (Number(width) < 1 || Number(width) > 8) return "Jumlah digit harus antara 1 dan 8, misalnya {nomor:3}.";
+    }
+    names.add(name);
+  }
+  if (!names.has("nomor")) return "Format perlu memuat {nomor} supaya setiap sertifikat punya nomor sendiri.";
+  if (reset === "tahun" && !names.has("tahun")) return "Nomor kembali ke 1 setiap tahun, jadi format perlu memuat {tahun} supaya nomornya tidak kembar dengan tahun lalu.";
+  if (reset === "bulan" && (!names.has("tahun") || !(names.has("bulan") || names.has("bulan_romawi")))) return "Nomor kembali ke 1 setiap bulan, jadi format perlu memuat {tahun} serta {bulan} atau {bulan_romawi}.";
+  return null;
+}
+
 /* ===================== Database (loaded from the server) ===================== */
-const db = { tests: {}, levels: [], programs: [], tutors: [], tutorIds: new Map(), periods: [], classes: [], students: [], attempts: [], enrolledAt: [], publicUrl: location.origin, whatsapp: { configured: false } };
+const db = { tests: {}, levels: [], programs: [], tutors: [], tutorIds: new Map(), periods: [], classes: [], students: [], attempts: [], enrolledAt: [], publicUrl: location.origin, whatsapp: { configured: false }, certs: { templates: [], types: [], issued: [] } };
 let dataReady = false;
 // Detail caches keep the last loaded copy while a fresh copy loads, so pages do not flicker after a change.
 const studentDetails = new Map();
@@ -146,6 +190,7 @@ async function loadData() {
   db.tutorIds = new Map(data.catalog.tutors.map((t) => [t.name, t.id]));
   db.periods = data.catalog.periods;
   db.classes = data.catalog.classes;
+  db.certs = data.certificates;
   for (const entry of studentDetails.values()) entry.stale = true;
   for (const entry of attemptDetails.values()) entry.stale = true;
   dataReady = true;
@@ -239,6 +284,7 @@ const ui = {
   questions: { placement: { q: "", skill: "all" }, pre: { q: "", skill: "all" }, post: { q: "", skill: "all" } },
   attempts: { placement: attemptFilter("30"), pre: attemptFilter("all"), post: attemptFilter("all") },
   classes: { period: "", program: "" },
+  certs: { q: "", type: "", status: "all", page: 1 },
   answers: "all",
   lastPath: null,
 };
@@ -521,7 +567,7 @@ function renderStudentsResults() {
 }
 
 /* ===================== View: student record (full page) ===================== */
-const FEED_ICON = { system: "user", test: "clipboard", email: "mail", stage: "flag", note: "note", wa: "message", void: "ban", class: "layers" };
+const FEED_ICON = { system: "user", test: "clipboard", email: "mail", stage: "flag", note: "note", wa: "message", void: "ban", class: "layers", sertifikat: "award" };
 
 function resultCell(a) {
   if (a.score === null) return `<span class="muted">Tidak dinilai</span>`;
@@ -545,6 +591,7 @@ function viewStudent(id) {
   const level = placement ? levelByKey(placement.levelKey) : null;
   const pre = latestGraded(s.id, "pre"), post = latestGraded(s.id, "post");
   const attempts = attemptsOf(s.id);
+  const certs = certsOfStudent(s.id);
   const feedData = studentFeed(s.id);
   const feed = feedData || [];
   const prog = programById(s.programId), dur = durationOf(s), per = periodById(s.periodId), cls = classById(s.classId);
@@ -619,6 +666,17 @@ function viewStudent(id) {
             <td class="is-action chev">${icon("chevron-right")}</td>
           </tr>`).join("")}</tbody></table></div>`
           : emptyHtml("Belum pernah mengerjakan tes.", "Kirim tautan placement test lewat WhatsApp supaya level dan program yang cocok bisa ditentukan.")}
+      </section>
+
+      <section class="panel">
+        <header class="panel__head">
+          <div><h2 class="panel__title">Sertifikat <span class="count-pill">${certs.length}</span></h2></div>
+          <button class="btn btn--quiet btn--sm" type="button" data-action="new-cert" data-student="${s.id}">${icon("award", "icon--sm")}Terbitkan sertifikat</button>
+        </header>
+        ${certs.length ? `<div class="table-wrap"><table class="table">
+          <thead><tr><th scope="col">Nomor</th><th scope="col">Jenis</th><th scope="col" class="hide-md">Tanggal terbit</th><th scope="col">Status</th><th scope="col" class="is-action"><span class="sr-only">Aksi</span></th></tr></thead>
+          <tbody>${certs.map((c) => certRow(c, { withRecipient: false })).join("")}</tbody></table></div>`
+          : emptyHtml("Belum ada sertifikat.", `Sertifikat yang terbit atas nama ${firstName(s.name)} muncul di sini.`)}
       </section>
 
       <details class="panel fold" id="notes-fold"${ui.notesOpen ? " open" : ""}>
@@ -1246,6 +1304,142 @@ function viewAttempt(key, id) {
   return `${meta.name} ${a.short}`;
 }
 
+/* ===================== View: Sertifikat ===================== */
+const certTypeById = (id) => db.certs.types.find((t) => t.id === id);
+const certById = (id) => db.certs.issued.find((c) => c.id === id);
+const certTemplateOf = (key) => db.certs.templates.find((t) => t.key === key);
+const certsOfStudent = (sid) => db.certs.issued.filter((c) => c.studentId === sid);
+const certPageUrl = (id) => `/admin/certificates/${encodeURIComponent(id)}`;
+const openCertPage = (id) => window.open(certPageUrl(id), "_blank", "noopener");
+const todayIso = () => toDateInput(NOW);
+/** The last number used by a type in the period of `iso`. The next certificate gets this plus one. */
+const certCounter = (type, iso, reset = type.reset) => type.counters[certPeriodKey(reset, iso)] || 0;
+const nextCertNumber = (type, iso) => formatCertNumber(type.format, certCounter(type, iso) + 1, type.code, iso);
+/** The highest number already issued for a type in the period of `iso`. Nomor terakhir cannot go below it. */
+function topIssuedSeq(typeId, reset, iso) {
+  const period = certPeriodKey(reset, iso);
+  return db.certs.issued.reduce((top, c) => (c.typeId === typeId && c.period === period && c.seq > top ? c.seq : top), 0);
+}
+const certTypeName = (c) => certTypeById(c.typeId)?.name || certTemplateOf(c.template)?.name || c.template;
+/* A number or format that may wrap only after a slash, never inside {bulan_romawi} or a year. */
+const slashWrap = (s) => esc(s).replace(/\//g, "/<wbr>");
+
+function viewCertificates(tab) {
+  const tabs = [["daftar", "Sertifikat terbit", db.certs.issued.length], ["pengaturan", "Pengaturan", null]];
+  if (!tabs.some((t) => t[0] === tab)) tab = "daftar";
+  const actions = tab === "daftar"
+    ? `<button class="btn btn--primary" type="button" data-action="new-cert">${icon("plus")}Terbitkan sertifikat</button>`
+    : `<button class="btn btn--primary" type="button" data-action="new-cert-type">${icon("plus")}Tambah jenis</button>`;
+  main.innerHTML = `
+    ${pageHead({ title: "Sertifikat", actions })}
+    <nav class="seg tabs" aria-label="Bagian sertifikat">
+      ${tabs.map(([k, label, n]) => `<a class="seg__item" href="#/sertifikat/${k}"${k === tab ? ' aria-current="page"' : ""}>${esc(label)}${n === null ? "" : ` <span class="seg__n">${n}</span>`}</a>`).join("")}
+    </nav>
+    <div id="tab-body"></div>`;
+  if (tab === "daftar") renderCertsTab();
+  else renderCertTypesTab();
+  return tab === "daftar" ? "Sertifikat" : "Sertifikat, Pengaturan";
+}
+
+function certMatches(c, f, ignoreStatus) {
+  if (!ignoreStatus && f.status !== "all" && (f.status === "batal") !== Boolean(c.revokedAt)) return false;
+  if (f.type && c.typeId !== f.type) return false;
+  if (f.q) {
+    const s = c.studentId ? studentById(c.studentId) : null;
+    if (!`${c.number} ${c.recipient} ${s ? `${s.name} ${s.email}` : ""}`.toLowerCase().includes(f.q.trim().toLowerCase())) return false;
+  }
+  return true;
+}
+
+/* One certificate row, used by the register and by the student page. */
+function certRow(c, { withRecipient }) {
+  const s = c.studentId ? studentById(c.studentId) : null;
+  const sameName = s && s.name.toLowerCase() === c.recipient.toLowerCase();
+  const recipientCell = withRecipient
+    ? `<td>${s ? `<a class="cell-main" href="#/siswa/${s.id}">${esc(c.recipient)}</a>` : `<span class="cell-main">${esc(c.recipient)}</span>`}${s ? (sameName ? "" : `<span class="cell-sub">Data siswa: ${esc(s.name)}</span>`) : `<span class="cell-sub">Data siswa sudah dihapus</span>`}</td>`
+    : "";
+  const numberSub = !withRecipient && !sameName ? `<span class="cell-sub">Atas nama ${esc(c.recipient)}</span>` : "";
+  return `<tr class="${c.revokedAt ? "is-draft" : ""}">
+    <td><span class="cell-main num-code nowrap">${esc(c.number)}</span>${numberSub}</td>
+    ${recipientCell}
+    <td class="${withRecipient ? "hide-sm" : ""}">${esc(certTypeName(c))}</td>
+    <td class="hide-md nowrap">${esc(fmtDate(c.issuedAt))}<span class="cell-sub">oleh ${esc(c.createdBy || "Sistem")}</span></td>
+    <td>${c.revokedAt ? statusHtml("Dibatalkan", "ring", true) : statusHtml("Berlaku", "navy")}${c.revokedAt && c.revokeReason ? `<span class="cell-sub">${esc(c.revokeReason)}</span>` : ""}</td>
+    <td class="is-action"><span class="row-actions">
+      <a class="btn btn--quiet btn--sm" href="${certPageUrl(c.id)}" target="_blank" rel="noopener">${icon("printer", "icon--sm")}${c.revokedAt ? "Lihat" : "Cetak"}</a>
+      <button class="icon-btn" type="button" data-menu="cert" data-id="${c.id}" aria-haspopup="menu" aria-expanded="false" aria-label="Aksi lain untuk sertifikat ${esc(c.number)}">${icon("more")}</button>
+    </span></td>
+  </tr>`;
+}
+
+function renderCertsTab() {
+  const f = ui.certs;
+  if (f.type && !certTypeById(f.type)) f.type = "";
+  $("#tab-body").innerHTML = `<section class="panel">
+    <div class="toolbar"><div class="chips" id="certs-chips" role="group" aria-label="Saring status sertifikat"></div></div>
+    <div class="toolbar toolbar--last">
+      <label class="search"><span class="sr-only">Cari sertifikat</span>${icon("search")}<input class="input" type="search" data-input="certs-q" placeholder="Cari nama atau nomor sertifikat" value="${esc(f.q)}" autocomplete="off"></label>
+      <select class="select select--auto" data-change="certs-type" aria-label="Saring jenis sertifikat">${options([["", "Semua jenis"], ...db.certs.types.map((t) => [t.id, t.name])], f.type)}</select>
+    </div>
+    <div id="certs-results"></div>
+  </section>`;
+  renderCertsResults();
+}
+
+function renderCertsResults() {
+  const box = $("#certs-results");
+  if (!box) return;
+  const f = ui.certs;
+  const base = db.certs.issued.filter((c) => certMatches(c, f, true));
+  const counts = { all: base.length, aktif: base.filter((c) => !c.revokedAt).length, batal: base.filter((c) => c.revokedAt).length };
+  $("#certs-chips").innerHTML = [["all", "Semua"], ["aktif", "Berlaku"], ["batal", "Dibatalkan"]].map(([k, label]) => chip("certs-status", k, label, counts[k], f.status === k)).join("");
+  const rows = base.filter((c) => certMatches(c, f, false));
+  const pages = Math.max(1, Math.ceil(rows.length / PAGE_SIZE));
+  f.page = Math.min(Math.max(1, f.page), pages);
+  const pageRows = rows.slice((f.page - 1) * PAGE_SIZE, f.page * PAGE_SIZE);
+  if (!db.certs.issued.length) {
+    box.innerHTML = emptyHtml("Belum ada sertifikat yang terbit.", "Sertifikat bisa diterbitkan dari tombol Terbitkan sertifikat atau dari halaman siswa.");
+    return;
+  }
+  box.innerHTML = rows.length ? `<div class="table-wrap"><table class="table">
+    <caption class="sr-only">Daftar sertifikat yang terbit</caption>
+    <thead><tr><th scope="col">Nomor</th><th scope="col">Penerima</th><th scope="col" class="hide-sm">Jenis</th><th scope="col" class="hide-md">Tanggal terbit</th><th scope="col">Status</th><th scope="col" class="is-action"><span class="sr-only">Aksi</span></th></tr></thead>
+    <tbody>${pageRows.map((c) => certRow(c, { withRecipient: true })).join("")}</tbody></table></div>
+    ${pagerHtml("certs", f.page, rows.length, "sertifikat")}`
+    : emptyHtml("Tidak ada sertifikat yang cocok dengan filter ini.", "Coba kata kunci lain atau pilih jenis yang berbeda.");
+}
+
+function renderCertTypesTab() {
+  const today = todayIso();
+  const types = db.certs.types;
+  $("#tab-body").innerHTML = `<section class="panel">
+    <header class="panel__head"><div>
+      <h2 class="panel__title">Jenis sertifikat</h2>
+      <p class="panel__desc">Setiap jenis memakai salah satu desain template yang ada, dengan format nomor dan penanda tangan sendiri. Desain baru perlu template HTML baru dari tim teknis.</p>
+    </div></header>
+    ${types.length ? `<div class="table-wrap"><table class="table">
+      <thead><tr><th scope="col">Jenis</th><th scope="col">Format nomor</th><th scope="col" class="hide-md">Kembali ke 1</th><th scope="col" class="is-num is-wrap">Nomor terakhir</th><th scope="col" class="hide-lg">Penanda tangan</th><th scope="col" class="hide-sm">Status</th><th scope="col" class="is-action"><span class="sr-only">Aksi</span></th></tr></thead>
+      <tbody>${types.map((t) => {
+        const tpl = certTemplateOf(t.template);
+        const issued = db.certs.issued.filter((c) => c.typeId === t.id).length;
+        const sub = [`Kode ${t.code}`, !tpl ? "template tidak ditemukan" : tpl.name === t.name ? "" : `template ${tpl.name}`, `${issued} terbit`].filter(Boolean).join(", ");
+        return `<tr data-row-action="edit-cert-type" data-id="${t.id}" class="${t.status === "aktif" ? "" : "is-draft"}">
+          <td><span class="cell-main">${esc(t.name)}</span><span class="cell-sub">${esc(sub)}</span></td>
+          <td><span class="num-code">${slashWrap(t.format)}</span><span class="cell-sub">Berikutnya <span class="num-code">${slashWrap(nextCertNumber(t, today))}</span></span></td>
+          <td class="hide-md">${esc(CERT_RESET_LABEL[t.reset] || t.reset)}</td>
+          <td class="is-num">${fmtNum(certCounter(t, today))}<span class="cell-sub">${esc(certPeriodLabel(t.reset, today))}</span></td>
+          <td class="hide-lg">${esc(t.signerName)}<span class="cell-sub">${esc(t.signerRole)}</span></td>
+          <td class="hide-sm">${t.status === "aktif" ? statusHtml("Aktif", "navy") : statusHtml("Nonaktif", "ring", true)}</td>
+          <td class="is-action"><span class="row-actions">
+            <button class="btn btn--quiet btn--sm" type="button" data-action="edit-cert-type" data-id="${t.id}">Ubah</button>
+            <button class="icon-btn" type="button" data-menu="cert-type" data-id="${t.id}" aria-haspopup="menu" aria-expanded="false" aria-label="Aksi lain untuk ${esc(t.name)}">${icon("more")}</button>
+          </span></td>
+        </tr>`;
+      }).join("")}</tbody></table></div>`
+      : emptyHtml("Belum ada jenis sertifikat.", "Tambah jenis pertama supaya sertifikat bisa diterbitkan.")}
+  </section>`;
+}
+
 /* ===================== Router ===================== */
 function route() {
   const raw = location.hash.replace(/^#\/?/, "") || "ringkasan";
@@ -1268,6 +1462,7 @@ function render() {
   else if (parts[0] === "tes" && parts[2] === "submission" && parts[3]) { title = viewAttempt(parts[1], parts[3]); nav = TEST_META[parts[1]].nav; }
   else if (parts[0] === "tes") { title = viewTest(parts[1], parts[2] || "soal"); nav = TEST_META[parts[1]].nav; }
   else if (parts[0] === "program") { title = viewPrograms(parts[1] || "program"); nav = "program"; }
+  else if (parts[0] === "sertifikat") { title = viewCertificates(parts[1] || "daftar"); nav = "sertifikat"; }
   else { title = viewOverview(); nav = "ringkasan"; }
   $$(".nav__link").forEach((a) => { if (a.dataset.nav === nav) a.setAttribute("aria-current", "page"); else a.removeAttribute("aria-current"); });
   const fresh = db.students.filter((s) => s.stage === "baru").length;
@@ -1407,6 +1602,27 @@ function contextMenu(el) {
       { label: "Lihat siswa kelas ini", icon: "users", run: () => { Object.assign(ui.students, { q: c.code, stage: "all", program: c.programId, period: c.periodId, tutor: c.tutor, level: "", page: 1 }); location.hash = "#/siswa"; } },
       { sep: true },
       { label: n ? "Hapus kelas, masih ada siswa" : "Hapus kelas", icon: "trash", danger: true, disabled: !!n, run: () => confirmThen(`Hapus kelas ${c.code}?`, "Kelas ini belum berisi siswa, jadi aman dihapus.", "Hapus kelas", () => api(`/api/admin/classes/${c.id}`, { method: "DELETE" }), `Kelas ${c.code} dihapus.`) },
+    ];
+  }
+  if (kind === "cert") {
+    const c = certById(id);
+    const s = c.studentId ? studentById(c.studentId) : null;
+    const items = [{ label: c.revokedAt ? "Ubah data, sudah dibatalkan" : "Ubah data", icon: "pencil", disabled: Boolean(c.revokedAt), run: () => openCertDialog({ certId: c.id }) }];
+    if (s && route().parts[0] !== "siswa") items.push({ label: "Buka profil siswa", icon: "user", run: () => { location.hash = `#/siswa/${s.id}`; } });
+    items.push({ sep: true });
+    items.push(c.revokedAt
+      ? { label: "Pulihkan sertifikat", icon: "undo", run: () => mutate(() => api(`/api/admin/certificates/${c.id}/restore`, { method: "POST" }), `Sertifikat ${c.number} berlaku lagi.`) }
+      : { label: "Batalkan sertifikat", icon: "ban", danger: true, run: () => revokeCert(c) });
+    return items;
+  }
+  if (kind === "cert-type") {
+    const t = certTypeById(id);
+    const used = db.certs.issued.some((c) => c.typeId === t.id);
+    return [
+      { label: "Lihat contoh", icon: "printer", run: () => openCertPage(t.id) },
+      { label: t.status === "aktif" ? "Nonaktifkan" : "Aktifkan", icon: t.status === "aktif" ? "eye-off" : "eye", run: () => toggleCertType(t) },
+      { sep: true },
+      { label: used ? "Hapus jenis, sudah dipakai" : "Hapus jenis", icon: "trash", danger: true, disabled: used, run: () => confirmThen(`Hapus ${t.name}?`, "Jenis ini belum pernah dipakai untuk menerbitkan sertifikat, jadi aman dihapus. Hitungan nomornya ikut terhapus.", "Hapus jenis", () => api(`/api/admin/certificate-types/${t.id}`, { method: "DELETE" }), `${t.name} dihapus.`) },
     ];
   }
   if (kind === "tutor") {
@@ -1661,7 +1877,7 @@ async function deleteStudents(ids, single) {
   if (!list.length) return;
   const r = await confirmDialog({
     title: single ? `Hapus data ${list[0].name}?` : `Hapus ${list.length} siswa?`,
-    message: "Data kontak, kelas, catatan, dan riwayat aktivitas akan terhapus. Submission placement test tetap tersimpan tanpa nama, sedangkan pre-test dan post-test ikut terhapus.",
+    message: "Data kontak, kelas, catatan, dan riwayat aktivitas akan terhapus. Submission placement test tetap tersimpan tanpa nama, sedangkan pre-test dan post-test ikut terhapus. Sertifikat yang sudah terbit tetap tercatat di menu Sertifikat.",
     confirmLabel: single ? "Hapus siswa" : `Hapus ${list.length} siswa`,
   });
   if (!r.ok) return;
@@ -1948,6 +2164,286 @@ function openTutorDialog() {
   });
 }
 
+/* ===================== Certificates ===================== */
+// Server field names for errors, mapped to the inputs in the two certificate dialogs.
+const CT_FIELDS = { name: "ct-name", code: "ct-code", template: "ct-template", reset: "ct-reset", format: "ct-format", signer: "ct-signer", role: "ct-role", last: "ct-last" };
+const CR_FIELDS = { student: "cr-student", type: "cr-type", date: "cr-date", recipient: "cr-name" };
+/* Shows a server error on its input when the input is visible, otherwise as a toast. */
+function showFieldError(error, inputId) {
+  const input = inputId ? $(`#${inputId}`) : null;
+  if (!input || input.closest("[hidden]")) { toast(error.message); return; }
+  fieldError(input, `${inputId}-err`, error.message);
+  input.focus();
+}
+
+let ctState = null;
+function openCertTypeDialog(id) {
+  const t = id ? certTypeById(id) : null;
+  if (id && !t) return;
+  const tplKey = t ? t.template : db.certs.templates[0]?.key || "";
+  const tpl = certTemplateOf(tplKey);
+  ctState = { id: t ? t.id : null, template: tplKey, lastDirty: false };
+  const dlg = $("#dlg-certtype");
+  clearErrors(dlg);
+  $("#ct-title").textContent = t ? `Ubah ${t.name}` : "Tambah jenis sertifikat";
+  const issued = t ? db.certs.issued.filter((c) => c.typeId === t.id).length : 0;
+  $("#ct-sub").textContent = t
+    ? (issued ? `${issued} sertifikat sudah terbit dengan jenis ini. Perubahan hanya berlaku untuk sertifikat berikutnya.` : "Belum ada sertifikat yang terbit dengan jenis ini.")
+    : "Jenis baru langsung bisa dipilih saat menerbitkan sertifikat.";
+  $("#ct-name").value = t ? t.name : "";
+  $("#ct-code").value = t ? t.code : "";
+  $("#ct-template").innerHTML = options(db.certs.templates.map((x) => [x.key, `${x.name}, ${x.paper}`]), tplKey);
+  $("#ct-format").value = t ? t.format : "{nomor}/{kode}/TNEC/{bulan_romawi}/{tahun}";
+  $("#ct-reset").value = t ? t.reset : "tahun";
+  $("#ct-last").value = String(t ? certCounter(t, todayIso()) : 0);
+  $("#ct-signer").value = t ? t.signerName : tpl ? tpl.signer.name : "";
+  $("#ct-role").value = t ? t.signerRole : tpl ? tpl.signer.role : "";
+  $("#ct-status").value = t ? t.status : "aktif";
+  $("#ct-save").textContent = t ? "Simpan perubahan" : "Simpan jenis";
+  syncCertTypeForm();
+  dlg.showModal();
+  $("#ct-name").focus();
+}
+
+/* Live preview of the next number while the format, code, reset, or last number changes. */
+function syncCertTypeForm() {
+  const today = todayIso();
+  const reset = $("#ct-reset").value;
+  const format = $("#ct-format").value.trim();
+  const code = $("#ct-code").value.trim() || "KODE";
+  const lastRaw = $("#ct-last").value.trim();
+  const last = Number(lastRaw);
+  const top = ctState.id ? topIssuedSeq(ctState.id, reset, today) : 0;
+  $("#ct-last-hint").textContent = `Nomor yang sudah terpakai di ${certPeriodLabel(reset, today)}.${top ? ` Paling kecil ${top}, karena nomor itu sudah terbit.` : ""}`;
+  const preview = $("#ct-preview");
+  const problem = certFormatProblem(format, reset);
+  // While the same problem already shows in red under the field, the preview does not repeat it.
+  if (problem) preview.textContent = $("#ct-format-err").hidden ? problem : "Contoh nomor muncul lagi setelah formatnya diperbaiki.";
+  else if (lastRaw === "" || !Number.isInteger(last) || last < 0 || last > 999999) preview.textContent = "Isi nomor terakhir dengan angka bulat untuk melihat nomor berikutnya.";
+  else preview.innerHTML = `Sertifikat berikutnya bernomor <strong class="num-code">${slashWrap(formatCertNumber(format, last + 1, code, today))}</strong>.`;
+}
+
+function insertCertToken(token) {
+  const input = $("#ct-format");
+  const from = input.selectionStart ?? input.value.length, to = input.selectionEnd ?? input.value.length;
+  input.setRangeText(token, from, to, "end");
+  input.focus();
+  syncCertTypeForm();
+}
+
+/* A new template brings its usual signer, unless someone already typed a different one. */
+function changeCertTemplate(key) {
+  const before = certTemplateOf(ctState.template), next = certTemplateOf(key);
+  ctState.template = key;
+  if (!next) return;
+  const signer = $("#ct-signer"), role = $("#ct-role");
+  if (!signer.value.trim() || (before && signer.value.trim() === before.signer.name)) signer.value = next.signer.name;
+  if (!role.value.trim() || (before && role.value.trim() === before.signer.role)) role.value = next.signer.role;
+}
+
+/* Another reset rule means another counter, so the last number follows it unless it was typed. */
+function changeCertReset() {
+  const t = ctState.id ? certTypeById(ctState.id) : null;
+  if (!ctState.lastDirty) $("#ct-last").value = String(t ? certCounter(t, todayIso(), $("#ct-reset").value) : 0);
+  syncCertTypeForm();
+}
+
+async function saveCertType(form) {
+  clearErrors(form);
+  const editing = ctState.id;
+  const clean = (sel) => $(sel).value.trim().replace(/\s+/g, " ");
+  const name = clean("#ct-name"), code = $("#ct-code").value.trim(), template = $("#ct-template").value;
+  const format = $("#ct-format").value.trim(), reset = $("#ct-reset").value;
+  const signerName = clean("#ct-signer"), signerRole = clean("#ct-role");
+  const lastRaw = $("#ct-last").value.trim(), last = Number(lastRaw);
+  const today = todayIso();
+  let first = null;
+  const fail = (input, errId, msg) => { fieldError(input, errId, msg); if (!first) first = input; };
+  if (name.length < 2) fail($("#ct-name"), "ct-name-err", "Nama sertifikat minimal 2 karakter.");
+  else if (db.certs.types.some((t) => t.id !== editing && t.name.toLowerCase() === name.toLowerCase())) fail($("#ct-name"), "ct-name-err", "Jenis sertifikat dengan nama ini sudah ada.");
+  if (!code || /\s/.test(code)) fail($("#ct-code"), "ct-code-err", "Kode wajib diisi tanpa spasi, misalnya COMP.");
+  if (!certTemplateOf(template)) fail($("#ct-template"), "ct-template-err", "Pilih template sertifikat.");
+  const problem = certFormatProblem(format, reset);
+  if (problem) fail($("#ct-format"), "ct-format-err", problem);
+  const top = editing ? topIssuedSeq(editing, reset, today) : 0;
+  if (lastRaw === "" || !Number.isInteger(last) || last < 0 || last > 999999) fail($("#ct-last"), "ct-last-err", "Nomor terakhir harus angka bulat dari 0 sampai 999999.");
+  else if (last < top) fail($("#ct-last"), "ct-last-err", `Nomor terakhir tidak bisa di bawah ${top}, karena nomor itu sudah terbit di ${certPeriodLabel(reset, today)}.`);
+  if (!signerName) fail($("#ct-signer"), "ct-signer-err", "Nama penanda tangan wajib diisi.");
+  if (!signerRole) fail($("#ct-role"), "ct-role-err", "Jabatan penanda tangan wajib diisi.");
+  if (first) { syncCertTypeForm(); first.focus(); return; }
+  const body = { name, code, template, format, reset, signerName, signerRole, status: $("#ct-status").value };
+  // The counter is only sent when someone typed a new last number, so saving a signer change never
+  // fights with a certificate that was issued while the dialog was open.
+  if (ctState.lastDirty) body.lastNumber = last;
+  const done = busy($("#ct-save"), "Menyimpan...");
+  try {
+    await api(editing ? `/api/admin/certificate-types/${editing}` : "/api/admin/certificate-types", { method: editing ? "PUT" : "POST", body });
+    $("#dlg-certtype").close();
+    await refresh();
+    toast(editing ? `${name} tersimpan.` : `${name} ditambahkan dan bisa dipilih saat menerbitkan sertifikat.`);
+  } catch (error) {
+    if (!sessionEnded(error)) showFieldError(error, CT_FIELDS[error.field]);
+  } finally {
+    done();
+  }
+}
+
+function toggleCertType(t) {
+  const status = t.status === "aktif" ? "nonaktif" : "aktif";
+  const body = { name: t.name, code: t.code, template: t.template, format: t.format, reset: t.reset, signerName: t.signerName, signerRole: t.signerRole, status };
+  return mutate(() => api(`/api/admin/certificate-types/${t.id}`, { method: "PUT", body }),
+    status === "aktif" ? `${t.name} aktif dan bisa dipilih saat menerbitkan sertifikat.` : `${t.name} nonaktif dan tidak muncul saat menerbitkan sertifikat.`);
+}
+
+/* --- Issuing and editing a certificate --- */
+let crState = null;
+const certFieldValues = () => Object.fromEntries($$("#cr-fields [data-key]").map((el) => [el.dataset.key, el.value.trim()]));
+/* Template fields the student record can fill in, by field key, so any template using these keys gets them. */
+function certPrefill(s) {
+  if (!s) return {};
+  const prog = programById(s.programId), per = periodById(s.periodId), end = endOf(s);
+  return { program: prog ? prog.name : "", mulai: per ? per.startDate : "", selesai: end ? toDateInput(end) : "" };
+}
+function renderCertFields(tpl, values) {
+  $("#cr-fields-title").hidden = !tpl || !tpl.fields.length;
+  $("#cr-fields").innerHTML = tpl ? tpl.fields.map((f) => {
+    const id = `cr-f-${f.key}`;
+    const attrs = f.type === "date" ? `type="date"` : `type="text" maxlength="${f.max || 80}" placeholder="Contoh: ${esc(f.sample)}"`;
+    return `<div class="field${f.wide ? " span-all" : ""}">
+      <label class="label" for="${id}">${esc(f.label)}</label>
+      <input class="input" id="${id}" data-key="${esc(f.key)}" ${attrs} value="${esc(values[f.key] ?? "")}" autocomplete="off">
+      <p class="error" id="${id}-err" hidden></p>
+    </div>`;
+  }).join("") : "";
+}
+/* Typed values stay. Empty fields, and fields still holding the previous student's values, take the new prefill. */
+function mergeCertValues(typed, prefill, oldPrefill = {}) {
+  const out = { ...typed };
+  for (const [k, v] of Object.entries(prefill)) if (!typed[k] || typed[k] === oldPrefill[k]) out[k] = v;
+  return out;
+}
+const selectedCertType = () => (crState.certId ? certTypeById(certById(crState.certId).typeId) : certTypeById($("#cr-type").value));
+
+function fillCertStudents(query) {
+  const q = query.trim().toLowerCase(), digits = q.replace(/\D/g, "");
+  const match = (s) => !q || `${s.name} ${s.email}`.toLowerCase().includes(q) || (digits.length >= 3 && (s.wa.includes(digits) || `0${s.wa.slice(2)}`.includes(digits)));
+  const list = db.students.filter(match).sort((a, b) => a.name.localeCompare(b.name, "id"));
+  const enrolled = list.filter((s) => s.stage === "terdaftar"), others = list.filter((s) => s.stage !== "terdaftar");
+  const LIMIT = 300;
+  const opt = (s) => `<option value="${esc(s.id)}">${esc(s.name)}${s.wa ? `, ${esc(fmtWa(s.wa))}` : ""}</option>`;
+  const group = (label, items) => (items.length ? `<optgroup label="${label}">${items.slice(0, LIMIT).map(opt).join("")}</optgroup>` : "");
+  const sel = $("#cr-student");
+  sel.innerHTML = `<option value="">${list.length ? "Pilih siswa" : "Tidak ada siswa yang cocok"}</option>${group("Terdaftar", enrolled)}${group("Belum terdaftar", others)}`;
+  const shown = [...enrolled.slice(0, LIMIT), ...others.slice(0, LIMIT)];
+  // While searching, the first match is picked when the current choice is filtered out.
+  const keep = shown.some((s) => s.id === crState.studentId);
+  sel.value = keep ? crState.studentId : q && shown.length ? shown[0].id : "";
+  if (sel.value !== crState.studentId) applyCertStudent();
+}
+
+function applyCertStudent() {
+  const s = studentById($("#cr-student").value);
+  crState.studentId = s ? s.id : "";
+  if (!crState.nameDirty) $("#cr-name").value = s ? s.name : "";
+  const prefill = certPrefill(s);
+  renderCertFields(certTemplateOf(selectedCertType()?.template), mergeCertValues(certFieldValues(), prefill, crState.prefill));
+  crState.prefill = prefill;
+}
+
+function syncCertNumber() {
+  const note = $("#cr-number");
+  if (crState.certId) {
+    note.innerHTML = `Nomor <strong class="num-code">${esc(certById(crState.certId).number)}</strong>, jenis, dan tanggal terbit tidak berubah.`;
+    return;
+  }
+  const type = selectedCertType(), iso = $("#cr-date").value;
+  if (!type || !iso) { note.textContent = "Pilih jenis dan tanggal terbit untuk melihat nomornya."; return; }
+  note.innerHTML = `Perkiraan nomor: <strong class="num-code">${esc(nextCertNumber(type, iso))}</strong>. Nomor pastinya diberikan saat sertifikat disimpan.`;
+}
+
+function openCertDialog({ studentId = null, certId = null } = {}) {
+  const c = certId ? certById(certId) : null;
+  if (certId && !c) return;
+  if (c && c.revokedAt) { toast("Sertifikat yang dibatalkan tidak bisa diubah. Pulihkan dulu kalau masih dipakai."); return; }
+  const active = db.certs.types.filter((t) => t.status === "aktif");
+  if (!c && !active.length) {
+    toast("Belum ada jenis sertifikat yang aktif.", { label: "Buka Pengaturan", run: () => { location.hash = "#/sertifikat/pengaturan"; } });
+    return;
+  }
+  if (!c && !db.students.length) { toast("Belum ada siswa di Database Siswa."); return; }
+  const s = c ? (c.studentId ? studentById(c.studentId) : null) : studentId ? studentById(studentId) : null;
+  crState = { certId: c ? c.id : null, studentId: s ? s.id : "", nameDirty: false, prefill: {}, typed: {} };
+  const dlg = $("#dlg-cert");
+  clearErrors(dlg);
+  $("#cr-title").textContent = c ? "Ubah data sertifikat" : s ? `Terbitkan sertifikat untuk ${firstName(s.name)}` : "Terbitkan sertifikat";
+  $("#cr-sub").textContent = c ? `${certTypeName(c)}, terbit ${fmtDateLong(c.issuedAt)}` : "Nomor diberikan otomatis saat sertifikat disimpan.";
+  $("#cr-student-field").hidden = Boolean(c || s);
+  if (!c && !s) { $("#cr-student-q").value = ""; fillCertStudents(""); }
+  const type = c ? certTypeById(c.typeId) : active.find((t) => t.id === ui.certs.type) || active[0];
+  $("#cr-type").innerHTML = c ? options([[c.typeId, certTypeName(c)]], c.typeId) : options(active.map((t) => [t.id, t.name]), type.id);
+  $("#cr-type").disabled = Boolean(c);
+  $("#cr-date").value = c ? c.issuedOn : todayIso();
+  $("#cr-date").disabled = Boolean(c);
+  $("#cr-name").value = c ? c.recipient : s ? s.name : "";
+  if (c) renderCertFields(certTemplateOf(c.template), c.details);
+  else {
+    crState.prefill = certPrefill(s);
+    renderCertFields(certTemplateOf(type.template), crState.prefill);
+  }
+  syncCertNumber();
+  $("#cr-save").textContent = c ? "Simpan perubahan" : "Terbitkan";
+  dlg.showModal();
+  (c || s ? $("#cr-name") : $("#cr-student-q")).focus();
+}
+
+async function saveCert(form) {
+  clearErrors(form);
+  const editing = crState.certId ? certById(crState.certId) : null;
+  const type = selectedCertType();
+  const tpl = certTemplateOf(editing ? editing.template : type?.template);
+  const recipient = $("#cr-name").value.trim().replace(/\s+/g, " ");
+  const iso = $("#cr-date").value;
+  const details = certFieldValues();
+  let first = null;
+  const fail = (input, errId, msg) => { fieldError(input, errId, msg); if (!first) first = input; };
+  if (!editing && !studentById(crState.studentId)) fail($("#cr-student").closest("[hidden]") ? null : $("#cr-student"), "cr-student-err", "Pilih siswa penerima sertifikat.");
+  if (!editing && !type) fail($("#cr-type"), "cr-type-err", "Pilih jenis sertifikat.");
+  if (!editing && !iso) fail($("#cr-date"), "cr-date-err", "Pilih tanggal terbit.");
+  if (recipient.length < 2) fail($("#cr-name"), "cr-name-err", "Nama di sertifikat minimal 2 karakter.");
+  for (const f of tpl ? tpl.fields : []) if (!details[f.key]) fail($(`#cr-f-${f.key}`), `cr-f-${f.key}-err`, `${f.label} wajib diisi.`);
+  if (details.mulai && details.selesai && details.selesai < details.mulai) fail($("#cr-f-selesai"), "cr-f-selesai-err", "Selesai belajar tidak boleh lebih awal dari mulai belajar.");
+  if (first) { first.focus(); return; }
+  if (!editing && !studentById(crState.studentId)) { toast("Data siswa ini sudah tidak ada. Tutup dialog lalu pilih siswa lain."); return; }
+  const done = busy($("#cr-save"), editing ? "Menyimpan..." : "Menerbitkan...");
+  try {
+    const r = editing
+      ? await api(`/api/admin/certificates/${editing.id}`, { method: "PUT", body: { recipient, details } })
+      : await api("/api/admin/certificates", { method: "POST", body: { typeId: type.id, studentId: crState.studentId, recipient, issuedOn: iso, details } });
+    $("#dlg-cert").close();
+    await refresh();
+    const id = editing ? editing.id : r.id;
+    toast(editing ? `Data sertifikat ${r.number} tersimpan.` : `Sertifikat ${r.number} terbit.`, { label: "Cetak", run: () => openCertPage(id) });
+  } catch (error) {
+    if (sessionEnded(error)) return;
+    const key = error.field && !CR_FIELDS[error.field] && $(`#cr-f-${error.field}`) ? `cr-f-${error.field}` : CR_FIELDS[error.field];
+    showFieldError(error, key);
+  } finally {
+    done();
+  }
+}
+
+async function revokeCert(c) {
+  const r = await confirmDialog({
+    title: `Batalkan sertifikat ${c.number}?`,
+    message: "Nomornya tetap tercatat dan tidak dipakai lagi, dan halaman cetaknya bertanda DIBATALKAN. Pembatalan bisa dipulihkan kapan saja.",
+    confirmLabel: "Batalkan sertifikat",
+    reasonLabel: "Alasan pembatalan",
+    reasonPlaceholder: "Contoh: nama salah tulis, diganti sertifikat baru.",
+  });
+  if (!r.ok) return;
+  await mutate(() => api(`/api/admin/certificates/${c.id}/revoke`, { method: "POST", body: { reason: r.reason } }), `Sertifikat ${c.number} dibatalkan.`);
+}
+
 /* ===================== Submissions ===================== */
 function resendEmail(a, button) {
   if (!a) return null;
@@ -2064,8 +2560,10 @@ const ACTIONS = {
   },
   period: (el) => { ui.period = Number(el.dataset.value); render(); },
   page: (el) => {
-    const scope = el.dataset.scope;
-    if (scope === "students") { ui.students.page = Number(el.dataset.value); renderStudentsResults(); } else { ui.attempts[ui.test].page = Number(el.dataset.value); renderAttemptsResults(); }
+    const scope = el.dataset.scope, n = Number(el.dataset.value);
+    if (scope === "students") { ui.students.page = n; renderStudentsResults(); }
+    else if (scope === "certs") { ui.certs.page = n; renderCertsResults(); }
+    else { ui.attempts[ui.test].page = n; renderAttemptsResults(); }
     main.scrollIntoView({ block: "start" });
   },
   sort: (el) => {
@@ -2110,6 +2608,11 @@ const ACTIONS = {
   "new-class": () => openClassDialog(null),
   "edit-class": (el) => openClassDialog(el.dataset.id),
   "new-tutor": () => openTutorDialog(),
+  "certs-status": (el) => { ui.certs.status = el.dataset.value; ui.certs.page = 1; renderCertsResults(); $(`#certs-chips [data-value="${el.dataset.value}"]`)?.focus(); },
+  "new-cert": (el) => openCertDialog({ studentId: el.dataset.student || null }),
+  "new-cert-type": () => openCertTypeDialog(null),
+  "edit-cert-type": (el) => openCertTypeDialog(el.dataset.id),
+  "ct-token": (el) => insertCertToken(el.dataset.value),
   "apply-per-all": async (el) => {
     const v = Number($("#set-per").value);
     clearErrors($("#panel-time"));
@@ -2184,6 +2687,17 @@ const CHANGES = {
   "attempts-result": (el) => { const f = ui.attempts[ui.test]; f.result = el.value; f.page = 1; renderAttemptsResults(); },
   "classes-period": (el) => { ui.classes.period = el.value; renderClassTab(); },
   "classes-program": (el) => { ui.classes.program = el.value; renderClassTab(); },
+  "certs-type": (el) => { ui.certs.type = el.value; ui.certs.page = 1; renderCertsResults(); },
+  "ct-template": (el) => changeCertTemplate(el.value),
+  "ct-reset": () => changeCertReset(),
+  "cr-student": () => applyCertStudent(),
+  "cr-type": () => {
+    // Values typed for another template are kept, so switching back and forth loses nothing.
+    crState.typed = { ...crState.typed, ...certFieldValues() };
+    renderCertFields(certTemplateOf(selectedCertType()?.template), mergeCertValues(crState.typed, crState.prefill, crState.prefill));
+    syncCertNumber();
+  },
+  "cr-date": () => syncCertNumber(),
   "select-row": (el) => {
     const set = selectedSet(el.dataset.scope);
     if (el.checked) set.add(el.value); else set.delete(el.value);
@@ -2215,6 +2729,10 @@ const INPUTS = {
   "pass-dirty": () => syncPassForm(),
   "levels-dirty": () => { $("#levels-save").disabled = false; },
   "wa-text": () => syncWaForm(),
+  "certs-q": (el) => { clearTimeout(searchTimer); searchTimer = setTimeout(() => { ui.certs.q = el.value; ui.certs.page = 1; renderCertsResults(); }, 140); },
+  "ct-preview": (el) => { if (el.id === "ct-last") ctState.lastDirty = true; syncCertTypeForm(); },
+  "cr-student-q": (el) => { clearTimeout(searchTimer); searchTimer = setTimeout(() => fillCertStudents(el.value), 140); },
+  "cr-name": () => { crState.nameDirty = true; },
 };
 
 const FORMS = {
@@ -2222,6 +2740,8 @@ const FORMS = {
   student: (form) => saveStudent(form),
   program: (form) => saveProgram(form),
   wa: (form) => sendWa(form),
+  certtype: (form) => saveCertType(form),
+  certificate: (form) => saveCert(form),
   generic: async (form) => {
     clearErrors(form);
     const values = {};
@@ -2276,6 +2796,16 @@ document.addEventListener("change", (e) => { const el = e.target.closest("[data-
 document.addEventListener("input", (e) => { const el = e.target.closest("[data-input]"); if (el) INPUTS[el.dataset.input]?.(el, e); });
 document.addEventListener("submit", (e) => { const form = e.target.closest("form[data-form]"); if (form) { e.preventDefault(); FORMS[form.dataset.form]?.(form, e); } });
 document.addEventListener("toggle", (e) => { if (e.target.id === "notes-fold") ui.notesOpen = e.target.open; }, true);
+// In the certificate dialogs, editing a field clears its error, so a fixed field stops showing red.
+function clearOwnError(e) {
+  const input = e.target;
+  if (!input.classList?.contains("is-invalid")) return;
+  input.classList.remove("is-invalid");
+  input.removeAttribute("aria-invalid");
+  const err = document.getElementById(input.getAttribute("aria-describedby") || "");
+  if (err) { err.hidden = true; err.textContent = ""; }
+}
+for (const id of ["dlg-certtype", "dlg-cert"]) ["input", "change"].forEach((type) => $(`#${id}`).addEventListener(type, clearOwnError));
 document.addEventListener("keydown", (e) => {
   if (!menuState) return;
   const items = $$("#menu .menu__item:not([disabled])");

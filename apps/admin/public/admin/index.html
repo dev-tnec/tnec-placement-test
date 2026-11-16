@@ -6,8 +6,8 @@
   <meta name="robots" content="noindex, nofollow">
   <title>Dasbor Titik Nol</title>
   <link rel="icon" href="/favicon.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="/admin/assets/admin.css?v=2">
-  <script src="/admin/assets/admin.js?v=4" defer></script>
+  <link rel="stylesheet" href="/admin/assets/admin.css?v=3">
+  <script src="/admin/assets/admin.js?v=5" defer></script>
 </head>
 <body>
 <svg width="0" height="0" class="sr-only" aria-hidden="true" focusable="false">
@@ -51,6 +51,8 @@
   <symbol id="i-trend" viewBox="0 0 24 24"><path d="m22 7-8.5 8.5-5-5L2 17"/><path d="M16 7h6v6"/></symbol>
   <symbol id="i-logout" viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="m16 17 5-5-5-5"/><path d="M21 12H9"/></symbol>
   <symbol id="i-shuffle" viewBox="0 0 24 24"><path d="m16 3 4 4-4 4"/><path d="M20 7H4"/><path d="m8 21-4-4 4-4"/><path d="M4 17h16"/></symbol>
+  <symbol id="i-award" viewBox="0 0 24 24"><path d="m15.48 12.89 1.51 8.53a.5.5 0 0 1-.81.47l-3.58-2.69a1 1 0 0 0-1.2 0l-3.59 2.69a.5.5 0 0 1-.81-.47l1.51-8.53"/><circle cx="12" cy="8" r="6"/></symbol>
+  <symbol id="i-printer" viewBox="0 0 24 24"><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><path d="M6 9V3a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v6"/><rect x="6" y="14" width="12" height="8" rx="1"/></symbol>
 </svg>
 
 <a class="skip" href="#main">Langsung ke konten</a>
@@ -68,6 +70,7 @@
     <nav class="nav" id="main-nav" aria-label="Menu utama">
       <a class="nav__link" href="#/ringkasan" data-nav="ringkasan" title="Ringkasan"><svg class="icon" aria-hidden="true"><use href="#i-dashboard"></use></svg><span class="nav__label">Ringkasan</span></a>
       <a class="nav__link" href="#/siswa" data-nav="siswa" title="Database Siswa"><svg class="icon" aria-hidden="true"><use href="#i-users"></use></svg><span class="nav__label">Database Siswa</span><span class="nav__count" id="nav-new" title="Calon siswa baru yang belum dihubungi"></span></a>
+      <a class="nav__link" href="#/sertifikat" data-nav="sertifikat" title="Sertifikat"><svg class="icon" aria-hidden="true"><use href="#i-award"></use></svg><span class="nav__label">Sertifikat</span></a>
       <p class="nav__group">Tes</p><span class="nav__sep" aria-hidden="true"></span>
       <a class="nav__link" href="#/tes/placement/soal" data-nav="tes-placement" title="Placement Test"><svg class="icon" aria-hidden="true"><use href="#i-clipboard"></use></svg><span class="nav__label">Placement Test</span></a>
       <a class="nav__link" href="#/tes/pre/soal" data-nav="tes-pre" title="Pre-test"><svg class="icon" aria-hidden="true"><use href="#i-note"></use></svg><span class="nav__label">Pre-test</span></a>
@@ -253,6 +256,129 @@
       <div class="dialog__foot-end">
         <button class="btn btn--quiet" type="button" data-action="close-dialog">Batal</button>
         <button class="btn btn--primary" type="submit" id="pg-save">Simpan program</button>
+      </div>
+    </footer>
+  </form>
+</dialog>
+
+<dialog class="dialog" id="dlg-certtype" aria-labelledby="ct-title">
+  <form class="dialog__form" data-form="certtype" novalidate>
+    <header class="dialog__head">
+      <div><h2 class="dialog__title" id="ct-title">Tambah jenis sertifikat</h2><p class="dialog__sub" id="ct-sub"></p></div>
+      <button class="icon-btn" type="button" data-action="close-dialog" aria-label="Tutup"><svg class="icon" aria-hidden="true"><use href="#i-x"></use></svg></button>
+    </header>
+    <div class="dialog__body">
+      <div class="form-grid">
+        <div class="field span-all">
+          <label class="label" for="ct-name">Nama sertifikat</label>
+          <input class="input" id="ct-name" type="text" maxlength="80" autocomplete="off" placeholder="Contoh: TOEFL Prediction">
+          <p class="error" id="ct-name-err" hidden></p>
+        </div>
+        <div class="field">
+          <label class="label" for="ct-code">Kode</label>
+          <input class="input" id="ct-code" type="text" maxlength="20" autocomplete="off" spellcheck="false" placeholder="Contoh: TOEFL" data-input="ct-preview">
+          <p class="hint">Masuk ke nomor lewat isian {kode}.</p>
+          <p class="error" id="ct-code-err" hidden></p>
+        </div>
+        <div class="field">
+          <label class="label" for="ct-template">Template</label>
+          <select class="select" id="ct-template" data-change="ct-template"></select>
+          <p class="error" id="ct-template-err" hidden></p>
+        </div>
+        <p class="form-section span-all">Nomor sertifikat</p>
+        <div class="field span-all">
+          <label class="label" for="ct-format">Format nomor</label>
+          <input class="input" id="ct-format" type="text" maxlength="120" autocomplete="off" spellcheck="false" data-input="ct-preview">
+          <div class="chips token-chips" role="group" aria-label="Tambahkan isian ke format nomor">
+            <button class="chip" type="button" data-action="ct-token" data-value="{nomor}">{nomor}</button>
+            <button class="chip" type="button" data-action="ct-token" data-value="{nomor:3}">{nomor:3}</button>
+            <button class="chip" type="button" data-action="ct-token" data-value="{kode}">{kode}</button>
+            <button class="chip" type="button" data-action="ct-token" data-value="{bulan}">{bulan}</button>
+            <button class="chip" type="button" data-action="ct-token" data-value="{bulan_romawi}">{bulan_romawi}</button>
+            <button class="chip" type="button" data-action="ct-token" data-value="{tahun}">{tahun}</button>
+          </div>
+          <p class="hint">Klik isian untuk menambahkannya. Teks lain ditulis apa adanya, dan {nomor:3} menulis nomor tiga digit seperti 007.</p>
+          <p class="hint">Contoh: {nomor}/MoM/MKT/TNEC/{bulan_romawi}/{tahun} menjadi 146/MoM/MKT/TNEC/XI/2026.</p>
+          <p class="error" id="ct-format-err" hidden></p>
+        </div>
+        <div class="field">
+          <label class="label" for="ct-reset">Nomor kembali ke 1</label>
+          <select class="select" id="ct-reset" data-change="ct-reset"><option value="tahun">Setiap tahun</option><option value="bulan">Setiap bulan</option><option value="tidak">Tidak pernah</option></select>
+          <p class="error" id="ct-reset-err" hidden></p>
+        </div>
+        <div class="field">
+          <label class="label" for="ct-last">Nomor terakhir</label>
+          <input class="input tnum" id="ct-last" type="number" min="0" max="999999" step="1" inputmode="numeric" data-input="ct-preview">
+          <p class="hint" id="ct-last-hint"></p>
+          <p class="error" id="ct-last-err" hidden></p>
+        </div>
+        <p class="note span-all" id="ct-preview" aria-live="polite"></p>
+        <p class="form-section span-all">Penanda tangan</p>
+        <div class="field">
+          <label class="label" for="ct-signer">Nama</label>
+          <input class="input" id="ct-signer" type="text" maxlength="80" autocomplete="off">
+          <p class="error" id="ct-signer-err" hidden></p>
+        </div>
+        <div class="field">
+          <label class="label" for="ct-role">Jabatan</label>
+          <input class="input" id="ct-role" type="text" maxlength="80" autocomplete="off">
+          <p class="error" id="ct-role-err" hidden></p>
+        </div>
+        <div class="field span-all">
+          <label class="label" for="ct-status">Status</label>
+          <select class="select" id="ct-status"><option value="aktif">Aktif, bisa dipilih saat menerbitkan</option><option value="nonaktif">Nonaktif, tidak muncul saat menerbitkan</option></select>
+        </div>
+      </div>
+    </div>
+    <footer class="dialog__foot">
+      <div class="dialog__foot-end">
+        <button class="btn btn--quiet" type="button" data-action="close-dialog">Batal</button>
+        <button class="btn btn--primary" type="submit" id="ct-save">Simpan jenis</button>
+      </div>
+    </footer>
+  </form>
+</dialog>
+
+<dialog class="dialog" id="dlg-cert" aria-labelledby="cr-title">
+  <form class="dialog__form" data-form="certificate" novalidate>
+    <header class="dialog__head">
+      <div><h2 class="dialog__title" id="cr-title">Terbitkan sertifikat</h2><p class="dialog__sub" id="cr-sub"></p></div>
+      <button class="icon-btn" type="button" data-action="close-dialog" aria-label="Tutup"><svg class="icon" aria-hidden="true"><use href="#i-x"></use></svg></button>
+    </header>
+    <div class="dialog__body">
+      <div class="form-grid">
+        <div class="field span-all" id="cr-student-field">
+          <label class="label" for="cr-student-q">Siswa</label>
+          <input class="input" id="cr-student-q" type="search" autocomplete="off" placeholder="Cari nama, email, atau WhatsApp" data-input="cr-student-q">
+          <label class="sr-only" for="cr-student">Pilih siswa</label>
+          <select class="select" id="cr-student" data-change="cr-student"></select>
+          <p class="error" id="cr-student-err" hidden></p>
+        </div>
+        <div class="field">
+          <label class="label" for="cr-type">Jenis sertifikat</label>
+          <select class="select" id="cr-type" data-change="cr-type"></select>
+          <p class="error" id="cr-type-err" hidden></p>
+        </div>
+        <div class="field">
+          <label class="label" for="cr-date">Tanggal terbit</label>
+          <input class="input" id="cr-date" type="date" data-change="cr-date">
+          <p class="error" id="cr-date-err" hidden></p>
+        </div>
+        <div class="field span-all">
+          <label class="label" for="cr-name">Nama di sertifikat</label>
+          <input class="input" id="cr-name" type="text" maxlength="80" autocomplete="off" data-input="cr-name">
+          <p class="hint">Tertulis persis seperti ini di sertifikat.</p>
+          <p class="error" id="cr-name-err" hidden></p>
+        </div>
+        <p class="note span-all" id="cr-number" aria-live="polite"></p>
+        <p class="form-section span-all" id="cr-fields-title">Isi sertifikat</p>
+        <div class="form-grid span-all" id="cr-fields"></div>
+      </div>
+    </div>
+    <footer class="dialog__foot">
+      <div class="dialog__foot-end">
+        <button class="btn btn--quiet" type="button" data-action="close-dialog">Batal</button>
+        <button class="btn btn--primary" type="submit" id="cr-save">Terbitkan</button>
       </div>
     </footer>
   </form>

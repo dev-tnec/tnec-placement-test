@@ -29,6 +29,8 @@ Starting updates the database schema when needed, then runs both apps. The first
 | WhatsApp through AttCos | `ATTCOS_API_KEY`, `ATTCOS_CHANNEL_ID`, `ATTCOS_API_BASE` in `.env` |
 | Questions, timing, violation limit, pass score, levels | Dashboard, each test's Pengaturan and Soal & Jawaban |
 | Programs, periods, classes, tutors | Dashboard, Program & Kelas |
+| Certificate types, number formats, last numbers, signers | Dashboard, Sertifikat, Pengaturan |
+| Certificate designs | HTML templates in `apps/admin/certificates`, listed in `apps/admin/src/certificates.js` |
 | Consent version and legal text | `packages/core/src/legal.js` |
 
 Bump `CONSENT_VERSION` whenever the terms or privacy text changes, so each stored consent points to the exact version the user saw.

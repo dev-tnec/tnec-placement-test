@@ -630,6 +630,10 @@ body.nav-collapsed .account__out { margin-left: 0; }
 .copy-row .input { flex: 1 1 auto; min-width: 0; font-size: 13px; }
 .dialog__foot .link-btn { display: inline-flex; align-items: center; gap: 6px; }
 
+/* Certificates: numbers keep their digits aligned. Formats wrap only after a slash (a <wbr> from admin.js). */
+.num-code { font-variant-numeric: tabular-nums; overflow-wrap: break-word; }
+.token-chips .chip { height: 28px; padding: 0 10px; font-size: 12px; }
+
 /* Login page */
 .login-page { min-height: 100vh; background: var(--surface-100); }
 .login { min-height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 18px; padding: 32px 16px; }

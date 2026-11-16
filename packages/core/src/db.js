@@ -120,6 +120,30 @@ export class Database {
     }
   }
 
+  /**
+   * Runs work(tx) inside one transaction, for steps that need the result of an earlier step,
+   * such as taking the next certificate number and then saving the certificate. tx has the same
+   * prepare(sql).bind(...).first()/all()/run() API. A thrown error rolls everything back.
+   */
+  async transaction(work) {
+    const client = await this.pool.connect();
+    const tx = {
+      query: (sql, params) => client.query(sql, params),
+      prepare: (sql) => new Statement(tx, numberPlaceholders(sql)),
+    };
+    try {
+      await client.query("BEGIN");
+      const result = await work(tx);
+      await client.query("COMMIT");
+      return result;
+    } catch (error) {
+      await client.query("ROLLBACK").catch(() => {});
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
   /** Runs raw SQL that may hold several statements, for migrations only. */
   async exec(sql) {
     return this.pool.query(sql);

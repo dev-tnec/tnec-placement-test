@@ -1,0 +1,87 @@
+/* The bar above a certificate opened from the dashboard, and the mark on a cancelled one.
+   The certificate itself is styled by its own template CSS in apps/admin/certificates.
+   Nothing here is printed except the DIBATALKAN mark. */
+
+.cert-view { padding-top: 96px; }
+
+.cert-bar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 12px 24px;
+  background: #0A1B38;
+  color: #FFFFFF;
+  font: 500 14px/1.4 "Inter", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+}
+
+.cert-bar__back {
+  color: #C3CFE0;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.cert-bar__back:hover,
+.cert-bar__back:focus-visible { color: #FFFFFF; text-decoration: underline; }
+
+.cert-bar__info {
+  flex: 1 1 auto;
+  min-width: 0;
+  margin: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cert-bar__print {
+  flex: none;
+  padding: 9px 18px;
+  border: 0;
+  border-radius: 999px;
+  background: #FFFFFF;
+  color: #0A1B38;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.cert-bar__print:hover { background: #EEF2F7; }
+
+.cert-bar a:focus-visible,
+.cert-bar__print:focus-visible { outline: none; box-shadow: 0 0 0 3px rgba(195, 207, 224, .55); }
+
+.cert-note {
+  position: absolute;
+  top: 62px;
+  left: 0;
+  right: 0;
+  margin: 0;
+  padding: 0 24px;
+  text-align: center;
+  color: #5C6B7F;
+  font: 13px/1.5 "Inter", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+}
+
+.cert-void {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: rgba(227, 32, 31, .32);
+  font: 800 26mm/1 "Segoe UI", Arial, sans-serif;
+  letter-spacing: .08em;
+  transform: rotate(-24deg);
+  pointer-events: none;
+}
+
+@media print {
+  .cert-view { padding-top: 0; }
+  .cert-bar,
+  .cert-note { display: none; }
+}

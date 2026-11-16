@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sertifikat Certificate of Completion, Titik Nol English Course</title>
+<link rel="stylesheet" href="logo.css">
+<link rel="stylesheet" href="completion.css">
+</head>
+<body>
+
+<!-- Template Certificate of Completion untuk dasbor. Setiap {{isian}} diganti data sertifikat
+     saat dibuka dari menu Sertifikat; daftar isiannya ada di apps/admin/src/certificates.js.
+     Cetak dari browser: A4 potret, margin none, aktifkan background graphics. -->
+<div class="sheet">
+  <img class="bg" src="completion-bg.svg" alt="">
+
+  <div class="page">
+    <div class="logo logo--ink" role="img" aria-label="Titik Nol English Course"></div>
+
+    <div class="contact">
+      <p class="sk">SK DIKNAS NO. 421.9/985/418.20/2021</p>
+      <p>Jl. Brawijaya No.75, Mangunrejo, Tulungrejo,</p>
+      <p>Kec. Pare, Kabupaten Kediri, Jawa Timur</p>
+      <p>Mobile : 0823-3314-3544</p>
+      <p>E-mail : admin@titiknolenglish.com</p>
+      <p>Website: titiknolenglish.com</p>
+    </div>
+
+    <h1 class="title"><span class="l1">Certificate</span><span class="l2">of Completion</span></h1>
+    <p class="cert-no">Cert. Number: {{nomor}}</p>
+    <p class="certify">This is to certify that</p>
+    <div class="name-block"><span class="name">{{nama}}</span></div>
+
+    <p class="label studies-label">Completed the required studies for program:</p>
+    <p class="value studies-value">{{program}}</p>
+
+    <p class="label score-label">With overall score/grade:</p>
+    <p class="value score-value">{{nilai_akhir}}</p>
+
+    <p class="label grade-label">Grade score detail:</p>
+    <table class="grade">
+      <colgroup><col><col><col></colgroup>
+      <thead>
+        <tr><th>Component</th><th>Score</th><th>Grade</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>Listening</td><td>{{listening_nilai}}</td><td>{{listening_grade}}</td></tr>
+        <tr><td>Speaking</td><td>{{speaking_nilai}}</td><td>{{speaking_grade}}</td></tr>
+        <tr><td>Reading</td><td>{{reading_nilai}}</td><td>{{reading_grade}}</td></tr>
+        <tr><td>Writing</td><td>{{writing_nilai}}</td><td>{{writing_grade}}</td></tr>
+      </tbody>
+    </table>
+
+    <p class="label period">Periode of Study: <span>{{mulai}} to {{selesai}}</span></p>
+
+    <div class="photo">3 x 4</div>
+
+    <div class="sign">
+      <p class="awarded">awarded on</p>
+      <p class="sign-date">{{tanggal}}</p>
+      <p class="sign-name">{{penanda_tangan}}</p>
+      <p class="sign-role">{{jabatan}}</p>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>

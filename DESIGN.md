@@ -296,6 +296,8 @@ The internal dashboard at `/admin` follows the approved `dashboard-prototype.htm
 
 A page header is the title and its actions, with no description under the title. The owner rejected explanatory lines there on 16 November 2026. The only extra item allowed is a test page's Ditutup status when that test is closed. Record pages keep their single line of facts, such as a student's email and WhatsApp number or a submission's start time and device.
 
+The Sertifikat menu is one sidebar item with two tabs, Sertifikat terbit and Pengaturan, in the same segmented tabs as the tests. Certificate numbers wrap only after a slash, never inside a token such as `{bulan_romawi}`, and a number in a table row stays on one line. The printable certificate keeps the design of its own template in `apps/admin/certificates`, including its fonts, frame, and gold accents, because it is a printed document rather than a dashboard screen. The dashboard only adds a navy bar above it with the back link and the print button, and that bar is not printed. A cancelled certificate carries a translucent red DIBATALKAN mark, which does print.
+
 ## 18. Do not
 
 1. Do not add a gradient, glassmorphism, or a shadow outside the listed set.
