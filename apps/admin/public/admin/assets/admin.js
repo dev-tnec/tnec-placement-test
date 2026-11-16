@@ -932,7 +932,9 @@ function attemptRow(a) {
   const tail = `<td class="hide-lg nowrap">${esc(fmtDateTime(a.startedAt))}</td><td>${attemptStatusHtml(a)}</td><td class="is-action chev hide-xl">${icon("chevron-right")}</td>`;
   if (a.test === "placement") {
     const level = a.levelKey ? levelByKey(a.levelKey) : null;
-    const email = a.emailStatus === "sent" ? "Terkirim" : a.emailStatus === "failed" ? `<span class="is-wrong">Gagal</span>` : `<span class="muted">Tidak ada</span>`;
+    const email = a.emailStatus === "sent" ? "Terkirim"
+      : a.emailStatus === "pending" ? `<span class="muted">Sedang dikirim</span>`
+        : a.emailStatus === "failed" ? `<span class="is-wrong">Gagal</span>` : `<span class="muted">Tidak ada</span>`;
     return `<tr data-href="${href}" class="${sel ? "is-selected" : ""}">${check}<td>${person}</td>
       <td class="nowrap">${resultCell(a)}</td>
       <td class="hide-sm">${level ? esc(level.label) : `<span class="muted">Tidak ada</span>`}</td>

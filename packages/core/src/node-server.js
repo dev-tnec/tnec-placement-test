@@ -105,6 +105,14 @@ async function sendResponse(res, response, method) {
   res.end(body ?? undefined);
 }
 
+/** Stops taking new connections and waits up to timeoutMs for running requests to finish. */
+export function closeServers(servers, timeoutMs = 5000) {
+  const closed = Promise.all(servers.map((server) => new Promise((resolve) => server.close(() => resolve()))));
+  let timer;
+  const timeout = new Promise((resolve) => { timer = setTimeout(resolve, timeoutMs); });
+  return Promise.race([closed, timeout]).finally(() => clearTimeout(timer));
+}
+
 export function startServer({ name, port, host = "0.0.0.0", handler, env }) {
   const server = http.createServer(async (req, res) => {
     try {

@@ -122,8 +122,7 @@ const state = {
   ending: false,
   lastViolationAt: 0,
   contact: null,
-  emailSent: false,
-  whatsappSent: false,
+  delivery: null,
   restarting: false,
   toastTimer: null,
 };
@@ -419,8 +418,7 @@ function beginAttempt(data) {
   state.ending = false;
   state.lastViolationAt = 0;
   state.contact = null;
-  state.emailSent = false;
-  state.whatsappSent = false;
+  state.delivery = null;
 
   els.contactForm.reset();
   clearErrors();
@@ -767,8 +765,7 @@ async function saveContact(event) {
       body: { name, email, whatsapp },
     });
     state.contact = { name, email };
-    state.emailSent = Boolean(data.emailSent);
-    state.whatsappSent = Boolean(data.whatsappSent);
+    state.delivery = data.delivery || null;
     renderResult(data.result);
     showScreen("result");
   } catch (error) {
@@ -821,14 +818,22 @@ function renderResult(result) {
   const waText = `Halo Admin Titik Nol, saya ${contactName}. Saya baru selesai mengerjakan tes penempatan dengan hasil ${level.label} (${result.score} dari ${result.total}) dan ingin berkonsultasi tentang program yang sesuai.`;
   els.waBtn.href = `https://wa.me/${state.config.whatsapp}?text=${encodeURIComponent(waText)}`;
 
-  const emailTo = state.contact?.email || "email kamu";
-  els.emailNote.textContent = state.emailSent && state.whatsappSent
-    ? `Hasil juga sudah kami kirim ke ${emailTo} dan ke WhatsApp kamu. Kalau emailnya belum terlihat, periksa folder spam.`
-    : state.emailSent
-      ? `Hasil juga sudah kami kirim ke ${emailTo}. Silakan periksa kotak masuk atau folder spam.`
-      : state.whatsappSent
-        ? "Hasil sudah kami kirim ke WhatsApp kamu, tetapi email hasil belum berhasil dikirim."
-        : "Hasil belum berhasil dikirim ke email maupun WhatsApp kamu. Simpan halaman ini, atau hubungi admin melalui WhatsApp.";
+  els.emailNote.textContent = deliveryNote(state.delivery, state.contact?.email);
+}
+
+// The email and WhatsApp go out in the background after the result appears, so the note says
+// where the copy is going rather than whether it has arrived.
+function deliveryNote(delivery, email) {
+  const to = email || "email kamu";
+  const used = (channel) => channel === "sending" || channel === "sent";
+  const viaEmail = used(delivery?.email);
+  const viaWa = used(delivery?.whatsapp);
+  const done = (!viaEmail || delivery.email === "sent") && (!viaWa || delivery.whatsapp === "sent");
+  const verb = done ? "sudah kami kirim" : "sedang kami kirim";
+  if (viaEmail && viaWa) return `Salinan hasil ini ${verb} ke ${to} dan ke WhatsApp kamu. Kalau emailnya belum masuk dalam beberapa menit, periksa juga folder spam.`;
+  if (viaEmail) return `Salinan hasil ini ${verb} ke ${to}. Kalau belum masuk dalam beberapa menit, periksa juga folder spam.`;
+  if (viaWa) return `Salinan hasil ini ${verb} ke WhatsApp kamu.`;
+  return "Salinan hasil belum bisa kami kirim ke email maupun WhatsApp kamu, jadi simpan halaman ini atau hubungi admin melalui WhatsApp.";
 }
 
 // Pre-test and post-test results. The student is already known, so there is no contact step.

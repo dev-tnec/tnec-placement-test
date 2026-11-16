@@ -332,7 +332,7 @@ function mapAttempt(a, now) {
       duration = times.length ? Math.max(...times) - a.started_at : 0;
     } else duration = Math.max(0, Math.min(now, a.expires_at) - a.started_at);
   }
-  const email = a.email_status === "sent" ? "sent" : String(a.email_status || "").startsWith("failed") ? "failed" : null;
+  const email = a.email_status === "sent" ? "sent" : a.email_status === "pending" ? "pending" : String(a.email_status || "").startsWith("failed") ? "failed" : null;
   return {
     id: a.id, short: a.id.slice(0, 6).toUpperCase(), test: a.test_key || "placement", studentId: a.student_id, startedAt: ms(a.started_at),
     status, score: failed ? null : a.score, total: a.total, levelKey: a.level_key, violations: strikes, maxViolations: a.max_violations || 3,

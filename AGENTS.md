@@ -48,9 +48,11 @@ The full flow passes in a headless browser against the `dev` branch: first admin
 | `packages/core/src/env.js` | Loads `.env` (or `ENV_FILE`) and builds the shared `env` object |
 | `packages/core/src/node-server.js` | Node HTTP adapter for fetch-style handlers, static files, security headers |
 | `packages/core/src/migrate.js` | Applies pending `db/migrations` files in one transaction with an advisory lock |
+| `packages/core/src/delivery.js` | Sends the placement result email and WhatsApp in the background after the contact step. See Result delivery below |
 | `packages/core/src/store.js`, `http.js`, `crypto.js`, `whatsapp.js`, `email.js`, `legal.js`, `levels.js`, `questions.js` | Shared logic. `questions.js` is the original 25 questions and only documents the seed |
 | `db/migrations/0001_init.sql` | Full schema plus seeds: 3 tests, 6 levels, 25 placement questions, 12 draft questions each for pre-test and post-test |
 | `db/migrations/0002_result_whatsapp.sql` | Adds `wa_sent_at` and `wa_status` to `attempts` for the automatic result WhatsApp |
+| `db/migrations/0003_result_delivery.sql` | Adds `delivery_lease_until` to `attempts` for the background result delivery |
 | `start.cmd` | Double-click launcher for Windows: installs on first run, then runs `scripts/start.mjs` |
 | `scripts/start.mjs` | `npm start`: migrate, then run both apps in one process |
 | `scripts/migrate.mjs`, `scripts/create-admin.mjs` | `npm run db:migrate`, `npm run admin:create` |
@@ -75,7 +77,7 @@ To run against the `dev` branch, point `ENV_FILE` at a second env file with the 
 3. On start, the browser requests fullscreen, then `POST /api/attempts` creates a row and returns the active questions without the answer key, plus the time mode and the violation limit. The question order is stored on the attempt.
 4. In total mode the test runs for the configured duration. In per question mode every question has its own seconds, the next question opens when the time runs out, there is no going back, and the answers are sent automatically after the last question.
 5. Submitting sends only the answers. The server grades them against the questions stored on the attempt and stores the key used with each answer. For the placement test the response never includes the score.
-6. Placement only: the details screen collects name, email, and WhatsApp. `POST /api/attempts/:id/contact` links or creates the student, logs the activity, sends the result email and the result WhatsApp message at the same time, and returns the result. Nobody presses anything for either one. A repeated contact step does not send a channel again once it has delivered for that attempt.
+6. Placement only: the details screen collects name, email, and WhatsApp. `POST /api/attempts/:id/contact` links or creates the student, logs the activity, marks the result email and the result WhatsApp as pending, and returns the result right away. The server sends both in the background (see Result delivery), so the result page never waits for Cloudflare or AttCos. Nobody presses anything for either one. A repeated contact step does not send a channel again once it has delivered for that attempt.
 7. Pre-test and post-test: the student opens `/?undangan=<token>` from a dashboard message. There is no contact step, and the score out of 100 shows right away, with pass or not for the post-test. A link works until it is used for a submission or expires after 14 days.
 8. A failed attempt is never submitted. When the total timer reaches zero, or when the violation limit is reached, the test stops and a dialog offers a retry or a return to the start.
 
@@ -88,7 +90,7 @@ To run against the `dev` branch, point `ENV_FILE` at a second env file with the 
 | POST | `/api/attempts` | `{ attemptId, secondsLeft, total, timeMode, maxViolations, questions }`. 423 when closed |
 | POST | `/api/attempts/:id/violation` | `{ ok, counted }` |
 | POST | `/api/attempts/:id/submit` | `{ ok, total, timedOut }`, plus `result` for invite attempts |
-| POST | `/api/attempts/:id/contact` | `{ emailSent, whatsappSent, result }`. Placement only |
+| POST | `/api/attempts/:id/contact` | `{ delivery: { email, whatsapp }, result }`, where each channel is `sending`, `sent` (already delivered earlier), or `off` (not set up). Placement only |
 
 Every response is `no-store`. Bodies are capped at 16 KB. The consent version in the request must match `CONSENT_VERSION` in `packages/core/src/legal.js`; the current version is `2026-11-16c`.
 
@@ -117,7 +119,19 @@ Passwords use PBKDF2 SHA-256 at 600,000 iterations; each account stores its own 
 
 The TNEC channel in AttCos is a WhatsApp account linked through Baileys, not Meta's Cloud API. A message can go to any number at any time, with no 24 hour window and no template rule, so do not design around Cloud API limits.
 
-Two things send messages. The test app sends the placement result by itself right after the contact step, next to the email, and waits at most 15 seconds so the result screen is never held up. The dashboard sends when someone presses Kirim and waits at most 25 seconds. Every send is logged in `wa_messages` and in the student's activity (automatic sends show as Sistem), and AttCos errors come back in Indonesian. The 422 message and the "Buka di WhatsApp" fallback only matter if the channel ever moves to the Cloud API. The AttCos key was pasted in chat on 16 November 2026, so it should be rotated.
+Two things send messages. The test app sends the placement result by itself in the background after the contact step, next to the email, and gives AttCos at most 20 seconds. That message carries `source: "Placement Test"`, which AttCos stores on the contact as the lead source and shows on its pipeline card (an optional string of 1 to 80 characters in the AttCos API). The dashboard sends when someone presses Kirim, waits at most 25 seconds, and sends no source. Every send is logged in `wa_messages` and in the student's activity (automatic sends show as Sistem), and AttCos errors come back in Indonesian. The 422 message and the "Buka di WhatsApp" fallback only matter if the channel ever moves to the Cloud API. The AttCos key was pasted in chat on 16 November 2026, so it should be rotated.
+
+## Result delivery
+
+The owner asked on 16 November 2026 for the result page to open instantly, with the email and the WhatsApp sent in the background. `packages/core/src/delivery.js` does this with the attempt row as the outbox.
+
+1. The contact step sets `email_status` and `wa_status` to `pending` (or `skipped` when that channel is not set up), answers the student, then starts the delivery without waiting for it.
+2. The delivery claims the attempt by setting `delivery_lease_until` to 90 seconds ahead, but only while no other server holds a live lease. Two servers, such as the old and the new one during a deploy, therefore never send the same result.
+3. It sends the email and the WhatsApp side by side, each limited to 20 seconds, then records `sent` or `failed: ...` with the time, logs the activity and `wa_messages`, and clears the lease.
+4. When the test app starts, it sends every result still pending. A result held by a lease is checked again once the lease runs out, in case its server stopped mid-send.
+5. On SIGTERM the test app stops taking requests, waits up to 20 seconds for running sends, then exits, inside the 30 seconds Render allows. Render also keeps the old instance running for 60 seconds after a deploy switches traffic.
+
+A server that crashes in the middle of a send sends that result again after its lease runs out, so in that rare case one message can arrive twice. A failed send is not retried automatically. The dashboard shows a pending email as "Sedang dikirim" and can resend a failed email from the submission page.
 
 ## Data model
 
@@ -136,7 +150,7 @@ Times are Unix seconds in BIGINT columns, flags are 0 or 1 in INTEGER columns, a
 
 No full IP address is stored. `country` comes from the `CF-IPCountry` header when the app sits behind Cloudflare, otherwise it stays empty. `user_agent` is truncated to 300 characters. Deleting a student removes their activities, messages, invites, and pre-test and post-test attempts; their placement attempts stay for the statistics without contact details.
 
-To change the schema, add a new file such as `db/migrations/0003_something.sql`. Never edit a file that has already run on `main`.
+To change the schema, add a new file such as `db/migrations/0004_something.sql`. Never edit a file that has already run on `main`.
 
 ## Level thresholds
 
@@ -169,7 +183,7 @@ The legal copy follows `.opencode/skills/data-privacy-compliance/SKILL.md`. The 
 
 ## Email
 
-`packages/core/src/email.js` builds a 600px HTML email with inline styles and a plain text fallback, with a navy WhatsApp CTA. `mailer.js` sends it through the Cloudflare Email Sending API from `RESULT_FROM_EMAIL` (`placement@index-now.dev`, an onboarded sending domain). Without `CLOUDFLARE_EMAIL_TOKEN` the email is skipped and the result screen says so. The dashboard can resend from the submission page.
+`packages/core/src/email.js` builds a 600px HTML email with inline styles and a plain text fallback, with a navy WhatsApp CTA. `mailer.js` sends it through the Cloudflare Email Sending API from `RESULT_FROM_EMAIL` (`placement@index-now.dev`, an onboarded sending domain). The placement result email goes out in the background after the contact step (see Result delivery). Without `CLOUDFLARE_EMAIL_TOKEN` the email is skipped and the result screen leaves it out of its note. The dashboard can resend from the submission page.
 
 ## Design
 
@@ -192,6 +206,6 @@ Read `DESIGN.md` before touching CSS. Navy structure, navy buttons, white readin
 4. The email sender is on `index-now.dev`, not `titiknolenglish.com`.
 5. No automated retention job for the 24 month policy.
 6. The public WhatsApp number `6282333143544` comes from the TOEFL online page; confirm it.
-7. The result WhatsApp has no automatic retry. When it fails, the student's activity shows the error and the team can send the result by hand from the dashboard.
+7. A failed result email or WhatsApp is not retried automatically. The student's activity shows the error; the team can resend the email from the submission page and send the WhatsApp by hand from the student page. A crash in the middle of a send can make one message arrive twice.
 8. Both dashboard roles see everything.
 9. The apps run on their onrender.com addresses. A custom domain on `titiknolenglish.com` is not set up yet; adding one means changing `PUBLIC_WEB_URL` and `ADMIN_URL` on Render too.

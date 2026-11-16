@@ -22,7 +22,11 @@ export function whatsappConfigured(env) {
   return Boolean(env.ATTCOS_API_KEY && env.ATTCOS_CHANNEL_ID);
 }
 
-export async function sendWhatsApp(env, { to, text, timeoutMs = TIMEOUT_MS }) {
+// AttCos stores `source` on the contact as where the lead came from and shows it on the pipeline
+// card. Only the automatic placement result sends it; dashboard messages leave it out.
+export const PLACEMENT_LEAD_SOURCE = "Placement Test";
+
+export async function sendWhatsApp(env, { to, text, source, timeoutMs = TIMEOUT_MS }) {
   if (!whatsappConfigured(env)) {
     return { ok: false, status: "skipped", error: "Integrasi WhatsApp belum diatur. Isi ATTCOS_API_KEY dan ATTCOS_CHANNEL_ID di pengaturan server." };
   }
@@ -37,7 +41,12 @@ export async function sendWhatsApp(env, { to, text, timeoutMs = TIMEOUT_MS }) {
         "Content-Type": "application/json",
         Accept: "application/json",
       },
-      body: JSON.stringify({ to: String(to).replace(/^\+/, ""), channelId: env.ATTCOS_CHANNEL_ID, text }),
+      body: JSON.stringify({
+        to: String(to).replace(/^\+/, ""),
+        channelId: env.ATTCOS_CHANNEL_ID,
+        text,
+        ...(source ? { source: String(source).slice(0, 80) } : {}),
+      }),
       signal: controller.signal,
     });
     let body = null;

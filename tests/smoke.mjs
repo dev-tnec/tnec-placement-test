@@ -1,8 +1,8 @@
 // Small self-check for the rules that must not drift:
 // question integrity, the level boundaries, the answer key staying server side,
 // the seed migration, password hashing, attempt status, the database placeholders,
-// the email transport, the AttCos client, the result WhatsApp message, the hosted settings, and
-// the first admin setup code.
+// the email transport, the AttCos client, the result WhatsApp message, the hosted settings,
+// the first admin setup code, and the background result delivery.
 // Runs without a database.
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
@@ -17,7 +17,8 @@ import { hashPassword, verifyPassword, randomToken, sha256Hex } from "@tnec/core
 import { fillLegal, TERMS } from "@tnec/core/legal";
 import { attemptStatus, focusStrikes } from "@tnec/core/store";
 import { normalizeWhatsapp } from "@tnec/core/http";
-import { sendWhatsApp, whatsappConfigured, buildResultWhatsApp } from "@tnec/core/whatsapp";
+import { sendWhatsApp, whatsappConfigured, buildResultWhatsApp, PLACEMENT_LEAD_SOURCE } from "@tnec/core/whatsapp";
+import { runInBackground, drainDeliveries, deliverResult } from "@tnec/core/delivery";
 import { numberPlaceholders } from "@tnec/core/db";
 import { createMailer, parseAddress } from "@tnec/core/mailer";
 import { buildEnv } from "@tnec/core/env";
@@ -131,7 +132,9 @@ try {
   assert.deepEqual([ok.ok, ok.status, ok.messageId], [true, "sent", "msg_1"]);
   assert.equal(calls[0].url, "https://attcos.test/api/v1/messages");
   assert.equal(calls[0].init.headers.Authorization, "Bearer test-key");
-  assert.deepEqual(JSON.parse(calls[0].init.body), { to: "6281234567890", channelId: env.ATTCOS_CHANNEL_ID, text: "Halo" });
+  assert.deepEqual(JSON.parse(calls[0].init.body), { to: "6281234567890", channelId: env.ATTCOS_CHANNEL_ID, text: "Halo" }, "dashboard messages carry no lead source");
+  await sendWhatsApp(env, { to: "+6281234567890", text: "Hasil", source: PLACEMENT_LEAD_SOURCE });
+  assert.deepEqual(JSON.parse(calls.at(-1).init.body), { to: "6281234567890", channelId: env.ATTCOS_CHANNEL_ID, text: "Hasil", source: "Placement Test" }, "the result message names its lead source");
 
   globalThis.fetch = reply(422, { success: false, error: { code: "WINDOW_CLOSED", message: "window closed" } });
   const closed = await sendWhatsApp(env, { to: "6281234567890", text: "Halo" });
@@ -212,5 +215,20 @@ const adminHandler = createAdminHandler();
 const remote = { remoteAddress: "10.0.0.5" };
 assert.equal((await adminHandler(setupPost({ code: "WRONG2345", name: "A" }), noAdmins, remote)).status, 403, "a wrong setup code is refused");
 assert.equal((await adminHandler(setupPost({ code: "abcd2345efgh", name: "A" }), noAdmins, remote)).status, 400, "the fixed code passes, then the short name is refused");
+
+/* ---------- Background result delivery ---------- */
+const leaseHeld = { DB: { prepare: () => ({ bind: () => ({ first: async () => null }) }) } };
+assert.equal(await deliverResult(leaseHeld, "attempt"), null, "nothing is sent while another server holds the lease");
+let finished = false;
+runInBackground(() => new Promise((resolve) => setTimeout(() => { finished = true; resolve(); }, 150)));
+const loud = console.error;
+console.error = () => {};
+try {
+  await runInBackground(() => Promise.reject(new Error("provider down"))); // a failed send never throws
+} finally {
+  console.error = loud;
+}
+assert.equal(await drainDeliveries(2000), true, "a stopping server waits for running sends");
+assert.equal(finished, true);
 
 console.log("smoke ok");

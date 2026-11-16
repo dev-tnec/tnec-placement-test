@@ -54,7 +54,7 @@ Render pulls the code from the public repository URL, and Render only deploys on
 | `tnec-placement-test` | https://tnec-placement-test.onrender.com | `npm run start:web` |
 | `tnec-placement-admin` | https://tnec-placement-admin.onrender.com/admin | `npm run start:admin` |
 
-Both build with `npm ci --no-audit --no-fund` from `dev-tnec/tnec-placement-test`. Each app listens on the `PORT` that Render sets and applies pending migrations when it starts.
+Both build with `npm ci --no-audit --no-fund` from `dev-tnec/tnec-placement-test`. Each app listens on the `PORT` that Render sets and applies pending migrations when it starts. The test app also sends any result email or WhatsApp still waiting when it starts, and on SIGTERM it lets running sends finish before it exits.
 
 | Setting | Test service | Dashboard service |
 |---|---|---|
