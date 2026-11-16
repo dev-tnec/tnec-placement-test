@@ -1,7 +1,8 @@
 // Small self-check for the rules that must not drift:
 // question integrity, the level boundaries, the answer key staying server side,
 // the seed migration, password hashing, attempt status, the database placeholders,
-// the email transport, and the AttCos client. Runs without a database.
+// the email transport, the AttCos client, the hosted settings, and the first admin setup code.
+// Runs without a database.
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import {
@@ -18,6 +19,8 @@ import { normalizeWhatsapp } from "@tnec/core/http";
 import { sendWhatsApp, whatsappConfigured } from "@tnec/core/whatsapp";
 import { numberPlaceholders } from "@tnec/core/db";
 import { createMailer, parseAddress } from "@tnec/core/mailer";
+import { buildEnv } from "@tnec/core/env";
+import { announceSetup, createAdminHandler } from "../apps/admin/server.js";
 
 /* ---------- Questions and levels ---------- */
 assert.equal(TOTAL_QUESTIONS, 25);
@@ -161,5 +164,37 @@ assert.equal(sent[0].init.headers.Authorization, "Bearer t");
 assert.deepEqual(JSON.parse(sent[0].init.body).from, { address: "placement@index-now.dev", name: "TNEC" });
 const failing = createMailer({ CLOUDFLARE_EMAIL_TOKEN: "t", CLOUDFLARE_ACCOUNT_ID: "acc" }, async () => new Response(JSON.stringify({ success: false, errors: [{ message: "domain not verified" }] }), { status: 403 }));
 await assert.rejects(() => failing.send({ from: "a@b.co", to: "c@d.co", subject: "s", text: "t" }), /domain not verified/);
+
+/* ---------- Hosted settings (no connection is opened) ---------- */
+const hosted = buildEnv({
+  DATABASE_URL: "postgresql://u:p@db.example.test/x?sslmode=require",
+  ADMIN_SETUP_CODE: " abcd2345efgh ",
+  TRUST_PROXY: "1",
+  PUBLIC_WEB_URL: "https://tes.example.test/",
+});
+assert.equal(hosted.ADMIN_SETUP_CODE, "ABCD2345EFGH");
+assert.equal(hosted.TRUST_PROXY, true);
+assert.equal(hosted.PUBLIC_WEB_URL, "https://tes.example.test");
+await hosted.DB.close();
+
+/* ---------- First admin setup code from ADMIN_SETUP_CODE, from a non-local address ---------- */
+const noAdmins = {
+  DB: { prepare: () => ({ first: async () => ({ n: 0 }) }) },
+  ADMIN_SETUP_CODE: hosted.ADMIN_SETUP_CODE,
+  ADMIN_URL: "https://admin.example.test",
+};
+const quiet = console.log;
+console.log = () => {};
+try { await announceSetup(noAdmins); } finally { console.log = quiet; }
+const setupPost = (body) => ({
+  method: "POST",
+  url: "https://admin.example.test/api/admin/setup",
+  headers: new Headers({ origin: "https://admin.example.test", "content-type": "application/json" }),
+  async text() { return JSON.stringify(body); },
+});
+const adminHandler = createAdminHandler();
+const remote = { remoteAddress: "10.0.0.5" };
+assert.equal((await adminHandler(setupPost({ code: "WRONG2345", name: "A" }), noAdmins, remote)).status, 403, "a wrong setup code is refused");
+assert.equal((await adminHandler(setupPost({ code: "abcd2345efgh", name: "A" }), noAdmins, remote)).status, 400, "the fixed code passes, then the short name is refused");
 
 console.log("smoke ok");

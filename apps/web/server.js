@@ -27,5 +27,6 @@ if (isMain) {
   loadEnvFile();
   const env = buildEnv();
   await migrate(env.DB);
-  startServer({ name: "Tes (web)", port: env.WEB_PORT, handler: createWebHandler(), env });
+  // A host such as Render tells a single app its port through PORT.
+  startServer({ name: "Tes (web)", port: Number(process.env.PORT) || env.WEB_PORT, handler: createWebHandler(), env });
 }

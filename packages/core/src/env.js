@@ -27,6 +27,8 @@ export function buildEnv(source = process.env) {
     PUBLIC_WEB_URL: trim(source.PUBLIC_WEB_URL) || `http://localhost:${webPort}`,
     ADMIN_URL: trim(source.ADMIN_URL) || `http://localhost:${adminPort}`,
     TRUST_PROXY: source.TRUST_PROXY === "1" || source.TRUST_PROXY === "true",
+    // Optional fixed code for the first admin account, for hosts that restart the app often.
+    ADMIN_SETUP_CODE: String(source.ADMIN_SETUP_CODE || "").trim().toUpperCase(),
     WEB_PORT: webPort,
     ADMIN_PORT: adminPort,
   };

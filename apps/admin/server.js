@@ -20,7 +20,11 @@ export function createAdminHandler() {
 /** Prints how to create the first account when the database has no admin yet. */
 export async function announceSetup(env) {
   if ((await adminCount(env)) > 0) return;
-  const code = randomToken(6).replace(/[^A-Za-z0-9]/g, "").slice(0, 8).toUpperCase();
+  // A host such as Render restarts the app on every deploy. ADMIN_SETUP_CODE keeps the code the
+  // same across restarts; without it, every start makes a new random code.
+  const fixed = env.ADMIN_SETUP_CODE || "";
+  if (fixed && fixed.length < 8) console.warn("ADMIN_SETUP_CODE kurang dari 8 karakter, jadi dipakai kode acak.");
+  const code = fixed.length >= 8 ? fixed : randomToken(6).replace(/[^A-Za-z0-9]/g, "").slice(0, 8).toUpperCase();
   setSetupCode(code);
   console.log(`Belum ada akun admin. Buka ${env.ADMIN_URL}/admin/login untuk membuat akun pertama.`);
   console.log(`Dari komputer lain, isi kode setup ini di halaman tersebut: ${code}`);
@@ -31,6 +35,7 @@ if (isMain) {
   loadEnvFile();
   const env = buildEnv();
   await migrate(env.DB);
-  startServer({ name: "Dasbor (admin)", port: env.ADMIN_PORT, handler: createAdminHandler(), env });
+  // A host such as Render tells a single app its port through PORT.
+  startServer({ name: "Dasbor (admin)", port: Number(process.env.PORT) || env.ADMIN_PORT, handler: createAdminHandler(), env });
   await announceSetup(env);
 }
