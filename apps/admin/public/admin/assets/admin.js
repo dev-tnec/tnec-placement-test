@@ -116,9 +116,9 @@ const LOG_TEXT = {
   restored: "Hasil dipulihkan",
 };
 const TEST_META = {
-  placement: { name: "Placement Test", nav: "tes-placement", who: "calon siswa", purpose: "Tes untuk calon siswa. Hasilnya dipakai untuk merekomendasikan level dan program yang paling cocok." },
-  pre: { name: "Pre-test", nav: "tes-pre", who: "siswa terdaftar", purpose: "Tes untuk siswa terdaftar sebelum kelas dimulai. Nilainya menjadi titik awal untuk melihat perkembangan siswa selama program." },
-  post: { name: "Post-test", nav: "tes-post", who: "siswa terdaftar", purpose: "Tes di akhir program. Hasilnya menentukan apakah siswa bisa lanjut ke level berikutnya atau perlu mengulang level yang sama." },
+  placement: { name: "Placement Test", nav: "tes-placement", who: "calon siswa" },
+  pre: { name: "Pre-test", nav: "tes-pre", who: "siswa terdaftar" },
+  post: { name: "Post-test", nav: "tes-post", who: "siswa terdaftar" },
 };
 const TEST_KEYS = ["placement", "pre", "post"];
 
@@ -349,7 +349,6 @@ function viewOverview() {
   main.innerHTML = `
     ${pageHead({
       title: "Ringkasan",
-      desc: `<p class="page-desc">Kondisi placement test dan calon siswa yang perlu ditindaklanjuti dalam ${P} hari terakhir, sampai ${esc(fmtDateLong(NOW))}.</p>`,
       actions: `<div class="seg seg--sm" role="group" aria-label="Periode data">
         <button class="seg__item" type="button" data-action="period" data-value="7" aria-pressed="${P === 7}">7 hari</button>
         <button class="seg__item" type="button" data-action="period" data-value="30" aria-pressed="${P === 30}">30 hari</button>
@@ -447,7 +446,6 @@ function viewStudents(params) {
   main.innerHTML = `
     ${pageHead({
       title: "Database Siswa",
-      desc: `<p class="page-desc">Semua calon siswa dan siswa terdaftar. Peserta placement test masuk otomatis setelah mengisi kontak, sedangkan yang datang lewat WhatsApp, Instagram, atau langsung ke kantor bisa ditambahkan manual.</p>`,
       actions: `<button class="btn btn--quiet" type="button" data-action="export-students">${icon("download")}Ekspor CSV</button>
         <button class="btn btn--primary" type="button" data-action="new-student">${icon("plus")}Tambah siswa</button>`,
     })}
@@ -657,7 +655,7 @@ function viewPrograms(tab) {
       ? `<button class="btn btn--primary" type="button" data-action="new-period">${icon("plus")}Tambah periode</button>`
       : `<button class="btn btn--quiet" type="button" data-action="new-tutor">${icon("user")}Tambah tutor</button><button class="btn btn--primary" type="button" data-action="new-class">${icon("plus")}Tambah kelas</button>`;
   main.innerHTML = `
-    ${pageHead({ title: "Program & Kelas", desc: `<p class="page-desc">Daftar program, durasi, periode, kelas, dan tutor. Isi daftar ini muncul sebagai pilihan saat menambah atau mengubah data siswa.</p>`, actions })}
+    ${pageHead({ title: "Program & Kelas", actions })}
     <nav class="seg tabs" aria-label="Bagian program dan kelas">
       ${tabs.map(([key, label, n]) => `<a class="seg__item" href="#/program/${key}"${key === tab ? ' aria-current="page"' : ""}>${esc(label)} <span class="seg__n">${n}</span></a>`).join("")}
     </nav>
@@ -774,13 +772,10 @@ function renderClassTab() {
 }
 
 /* ===================== View: tests (Placement, Pre-test, Post-test) ===================== */
-function testSummary(t) {
-  const n = activeQuestions(t).length;
-  const time = t.settings.timeMode === "total" ? `waktu total ${fmtSpan(t.settings.totalSeconds)}` : `waktu per soal dengan total ${fmtSpan(testSeconds(t))}`;
-  const who = TEST_META[t.key].who;
-  const open = t.settings.open ? `${statusHtml("Dibuka", "navy")} untuk ${who}` : `${statusHtml("Ditutup", "ring", true)} sementara`;
-  const pass = t.key === "post" ? ` Nilai kelulusan ${t.settings.passScore}.` : "";
-  return `<p class="page-desc">${esc(TEST_META[t.key].purpose)}</p><p class="page-desc">${n} soal aktif dengan ${esc(time)}.${pass} Tes sedang ${open}.</p>`;
+// The header is only the title and the tabs. A closed test is the one exception worth showing
+// there, because students cannot take it until someone opens it again in Pengaturan.
+function testStatus(t) {
+  return t.settings.open ? "" : `<p class="page-desc">${statusHtml("Ditutup", "ring", true)}</p>`;
 }
 
 function viewTest(key, tab) {
@@ -793,7 +788,7 @@ function viewTest(key, tab) {
     ? `<button class="btn btn--primary" type="button" data-action="new-question">${icon("plus")}Tambah soal</button>`
     : tab === "submission" ? `<button class="btn btn--quiet" type="button" data-action="export-attempts">${icon("download")}Ekspor CSV</button>` : "";
   main.innerHTML = `
-    ${pageHead({ title: meta.name, desc: testSummary(t), actions })}
+    ${pageHead({ title: meta.name, desc: testStatus(t), actions })}
     <nav class="seg tabs" aria-label="Bagian ${esc(meta.name)}">
       ${tabs.map(([k, label, n]) => `<a class="seg__item" href="#/tes/${key}/${k}"${k === tab ? ' aria-current="page"' : ""}>${esc(label)}${n === null ? "" : ` <span class="seg__n">${n}</span>`}</a>`).join("")}
     </nav>

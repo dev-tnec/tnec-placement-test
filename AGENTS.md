@@ -178,7 +178,7 @@ Read `DESIGN.md` before touching CSS. Navy structure, navy buttons, white readin
 3. Commits are authored as Aldo `<354270602+dev-tnec@users.noreply.github.com>` only. No AI attribution, no Co-Authored-By trailers.
 4. Use conventional subjects (`feat:`, `fix:`, `docs:`, `chore:`), imperative and one line. Review `git status` and `git diff --staged` before every push.
 5. Never commit `.env`, `node_modules/`, the session export `tikno-english-placement-test-setup.json`, or any secret. Pushing from this machine works with the GitHub CLI login: `git -c credential.helper= -c "credential.helper=!gh auth git-credential" push origin main`.
-6. After a push, deploy both Render services (`srv-dbt6h3tg1s2s738toue0` and `srv-dbt6h3tg1s2s738touf0`) with the Render MCP `trigger_deploy` tool or Manual Deploy in the dashboard, then check that both reach `live`.
+6. After a push, deploy the Render services the change touches, with the Render MCP `trigger_deploy` tool or Manual Deploy in the dashboard: `srv-dbt6h3tg1s2s738toue0` for `apps/web`, `srv-dbt6h3tg1s2s738touf0` for `apps/admin`, and both for `packages`, `db`, or the root package files. Then check that each one reaches `live`.
 
 ## Known limits and next steps
 

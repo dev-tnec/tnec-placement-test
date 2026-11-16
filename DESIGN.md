@@ -294,6 +294,8 @@ A pre-test or post-test opens from a personal link, `/?undangan=<token>`, that t
 
 The internal dashboard at `/admin` follows the approved `dashboard-prototype.html`. Its CSS is `apps/admin/public/admin/assets/admin.css`, and the dashboard copies of the logos live in `apps/admin/public/assets/`. It uses the same tokens with the same color rule: primary and destructive buttons are navy, red is only for status dots, error text, and low accuracy bars, and focus rings are navy. Status is a dot plus a text label. There are no colored edge stripes.
 
+A page header is the title and its actions, with no description under the title. The owner rejected explanatory lines there on 16 November 2026. The only extra item allowed is a test page's Ditutup status when that test is closed. Record pages keep their single line of facts, such as a student's email and WhatsApp number or a submission's start time and device.
+
 ## 18. Do not
 
 1. Do not add a gradient, glassmorphism, or a shadow outside the listed set.
