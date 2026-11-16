@@ -1,7 +1,7 @@
 // Legal copy and public config. Bump CONSENT_VERSION whenever the text changes,
 // so every stored consent record points to the exact version the user saw.
 
-export const CONSENT_VERSION = "2026-11-16b";
+export const CONSENT_VERSION = "2026-11-16c";
 export const WHATSAPP = "6282333143544";
 // Fills the {{total}}, {{duration}}, and {{strikes}} tokens with the live test settings,
 // so the legal text always matches what the dashboard has configured.
@@ -82,7 +82,7 @@ export const PRIVACY = {
     {
       heading: "3. Tujuan dan dasar pemrosesan",
       paragraphs: [
-        "Kami memakai data kamu untuk menghitung skor, menentukan level, mengirim hasil tes ke email kamu, menghubungi kamu lewat WhatsApp untuk konsultasi, jadwal kelas, atau tautan tes, mengelola pendaftaran kelas, dan menjaga integritas tes.",
+        "Kami memakai data kamu untuk menghitung skor, menentukan level, mengirim hasil tes ke email dan WhatsApp kamu, menghubungi kamu lewat WhatsApp untuk konsultasi, jadwal kelas, atau tautan tes, mengelola pendaftaran kelas, dan menjaga integritas tes.",
         "Dasar pemrosesan adalah persetujuan yang kamu berikan saat mencentang kotak persetujuan di halaman ini, dan kamu bisa menarik persetujuan itu kapan saja.",
         "Kami tidak memakai data kamu untuk iklan pihak ketiga dan tidak menjual data kamu.",
       ],
@@ -99,7 +99,7 @@ export const PRIVACY = {
       paragraphs: [
         "Data hanya diakses oleh tim Titik Nol yang membutuhkan, yaitu tim akademik dan admin penerimaan siswa.",
         "Neon bertindak sebagai prosesor untuk basis data, dan Cloudflare untuk pengiriman email hasil tes. Kami tidak membagikan data kamu kepada pihak lain untuk tujuan pemasaran.",
-        "Pesan WhatsApp dari tim kami dikirim melalui AttCos, layanan pesan yang kami pakai sebagai prosesor, lalu diteruskan lewat WhatsApp Business Platform milik Meta. Keduanya hanya menerima nomor WhatsApp dan isi pesan yang diperlukan untuk mengirimkannya.",
+        "Pesan WhatsApp dari kami, termasuk hasil tes, dikirim melalui AttCos, layanan pesan yang kami pakai sebagai prosesor, dari nomor WhatsApp Titik Nol, lalu sampai ke kamu lewat layanan WhatsApp milik Meta. Keduanya hanya menerima nomor WhatsApp dan isi pesan yang diperlukan untuk mengirimkannya.",
       ],
     },
     {

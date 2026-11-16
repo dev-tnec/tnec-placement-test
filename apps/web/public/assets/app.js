@@ -123,6 +123,7 @@ const state = {
   lastViolationAt: 0,
   contact: null,
   emailSent: false,
+  whatsappSent: false,
   restarting: false,
   toastTimer: null,
 };
@@ -419,6 +420,7 @@ function beginAttempt(data) {
   state.lastViolationAt = 0;
   state.contact = null;
   state.emailSent = false;
+  state.whatsappSent = false;
 
   els.contactForm.reset();
   clearErrors();
@@ -766,6 +768,7 @@ async function saveContact(event) {
     });
     state.contact = { name, email };
     state.emailSent = Boolean(data.emailSent);
+    state.whatsappSent = Boolean(data.whatsappSent);
     renderResult(data.result);
     showScreen("result");
   } catch (error) {
@@ -818,9 +821,14 @@ function renderResult(result) {
   const waText = `Halo Admin Titik Nol, saya ${contactName}. Saya baru selesai mengerjakan tes penempatan dengan hasil ${level.label} (${result.score} dari ${result.total}) dan ingin berkonsultasi tentang program yang sesuai.`;
   els.waBtn.href = `https://wa.me/${state.config.whatsapp}?text=${encodeURIComponent(waText)}`;
 
-  els.emailNote.textContent = state.emailSent
-    ? `Hasil juga sudah kami kirim ke ${state.contact?.email || "email kamu"}. Silakan periksa kotak masuk atau folder spam.`
-    : "Email hasil belum berhasil dikirim. Simpan halaman ini, atau hubungi admin melalui WhatsApp.";
+  const emailTo = state.contact?.email || "email kamu";
+  els.emailNote.textContent = state.emailSent && state.whatsappSent
+    ? `Hasil juga sudah kami kirim ke ${emailTo} dan ke WhatsApp kamu. Kalau emailnya belum terlihat, periksa folder spam.`
+    : state.emailSent
+      ? `Hasil juga sudah kami kirim ke ${emailTo}. Silakan periksa kotak masuk atau folder spam.`
+      : state.whatsappSent
+        ? "Hasil sudah kami kirim ke WhatsApp kamu, tetapi email hasil belum berhasil dikirim."
+        : "Hasil belum berhasil dikirim ke email maupun WhatsApp kamu. Simpan halaman ini, atau hubungi admin melalui WhatsApp.";
 }
 
 // Pre-test and post-test results. The student is already known, so there is no contact step.

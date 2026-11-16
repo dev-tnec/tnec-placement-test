@@ -155,7 +155,7 @@ A 1000px column with the stepper at the top, step 3 active. Below it a two-colum
 
 The result card carries the result eyebrow, a large ghost level index in the top right, the level name, one sentence summary, the score in yellow, and a six row level ladder. The ladder shows every level with a dot, a label, and a "Kamu di sini" pill on the current level. Done levels use a yellow dot, the current level uses a red dot with a soft ring, and upcoming levels use a muted dot.
 
-The recommendation panel carries the program name, the level description, the WhatsApp CTA, the retry button, the email delivery note, and the indikatif disclaimer.
+The recommendation panel carries the program name, the level description, the WhatsApp CTA, the retry button, the delivery note for the email and the WhatsApp message, and the indikatif disclaimer.
 
 ## 8. Components
 

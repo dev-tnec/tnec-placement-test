@@ -30,7 +30,7 @@ The full flow passes in a headless browser against the `dev` branch: first admin
 | Runtime | Node.js 21.7 or newer. Plain `node:http`, no framework |
 | Database | Neon PostgreSQL through `pg`, the only runtime dependency |
 | Email | Cloudflare Email Sending REST API, `packages/core/src/mailer.js` |
-| WhatsApp | AttCos (CSQ API), `POST {ATTCOS_API_BASE}/messages` |
+| WhatsApp | AttCos (CSQ API), `POST {ATTCOS_API_BASE}/messages`, on a WhatsApp account linked through Baileys |
 | Front end | Plain HTML, CSS, and JavaScript. No build step |
 | Monorepo | npm workspaces: `apps/*` and `packages/*` |
 
@@ -50,6 +50,7 @@ The full flow passes in a headless browser against the `dev` branch: first admin
 | `packages/core/src/migrate.js` | Applies pending `db/migrations` files in one transaction with an advisory lock |
 | `packages/core/src/store.js`, `http.js`, `crypto.js`, `whatsapp.js`, `email.js`, `legal.js`, `levels.js`, `questions.js` | Shared logic. `questions.js` is the original 25 questions and only documents the seed |
 | `db/migrations/0001_init.sql` | Full schema plus seeds: 3 tests, 6 levels, 25 placement questions, 12 draft questions each for pre-test and post-test |
+| `db/migrations/0002_result_whatsapp.sql` | Adds `wa_sent_at` and `wa_status` to `attempts` for the automatic result WhatsApp |
 | `start.cmd` | Double-click launcher for Windows: installs on first run, then runs `scripts/start.mjs` |
 | `scripts/start.mjs` | `npm start`: migrate, then run both apps in one process |
 | `scripts/migrate.mjs`, `scripts/create-admin.mjs` | `npm run db:migrate`, `npm run admin:create` |
@@ -74,7 +75,7 @@ To run against the `dev` branch, point `ENV_FILE` at a second env file with the 
 3. On start, the browser requests fullscreen, then `POST /api/attempts` creates a row and returns the active questions without the answer key, plus the time mode and the violation limit. The question order is stored on the attempt.
 4. In total mode the test runs for the configured duration. In per question mode every question has its own seconds, the next question opens when the time runs out, there is no going back, and the answers are sent automatically after the last question.
 5. Submitting sends only the answers. The server grades them against the questions stored on the attempt and stores the key used with each answer. For the placement test the response never includes the score.
-6. Placement only: the details screen collects name, email, and WhatsApp. `POST /api/attempts/:id/contact` links or creates the student, logs the activity, sends the result email, and returns the result.
+6. Placement only: the details screen collects name, email, and WhatsApp. `POST /api/attempts/:id/contact` links or creates the student, logs the activity, sends the result email and the result WhatsApp message at the same time, and returns the result. Nobody presses anything for either one. A repeated contact step does not send a channel again once it has delivered for that attempt.
 7. Pre-test and post-test: the student opens `/?undangan=<token>` from a dashboard message. There is no contact step, and the score out of 100 shows right away, with pass or not for the post-test. A link works until it is used for a submission or expires after 14 days.
 8. A failed attempt is never submitted. When the total timer reaches zero, or when the violation limit is reached, the test stops and a dialog offers a retry or a return to the start.
 
@@ -87,9 +88,9 @@ To run against the `dev` branch, point `ENV_FILE` at a second env file with the 
 | POST | `/api/attempts` | `{ attemptId, secondsLeft, total, timeMode, maxViolations, questions }`. 423 when closed |
 | POST | `/api/attempts/:id/violation` | `{ ok, counted }` |
 | POST | `/api/attempts/:id/submit` | `{ ok, total, timedOut }`, plus `result` for invite attempts |
-| POST | `/api/attempts/:id/contact` | `{ emailSent, result }`. Placement only |
+| POST | `/api/attempts/:id/contact` | `{ emailSent, whatsappSent, result }`. Placement only |
 
-Every response is `no-store`. Bodies are capped at 16 KB. The consent version in the request must match `CONSENT_VERSION` in `packages/core/src/legal.js`; the current version is `2026-11-16b`.
+Every response is `no-store`. Bodies are capped at 16 KB. The consent version in the request must match `CONSENT_VERSION` in `packages/core/src/legal.js`; the current version is `2026-11-16c`.
 
 ## Dashboard (admin app)
 
@@ -114,7 +115,9 @@ Passwords use PBKDF2 SHA-256 at 600,000 iterations; each account stores its own 
 
 ## WhatsApp through AttCos
 
-Messages go out only when someone presses Kirim. The server calls AttCos with the key from `.env`, waits up to 25 seconds because AttCos on Render can be waking up, logs every attempt in `wa_messages` and in the student's activity, and returns AttCos errors in Indonesian. WhatsApp only delivers free text within 24 hours of the student messaging the business number; AttCos answers 422 otherwise, and the dialog offers "Buka di WhatsApp" for first contact. The AttCos key in `.env` was pasted in chat on 16 November 2026, so it should be rotated.
+The TNEC channel in AttCos is a WhatsApp account linked through Baileys, not Meta's Cloud API. A message can go to any number at any time, with no 24 hour window and no template rule, so do not design around Cloud API limits.
+
+Two things send messages. The test app sends the placement result by itself right after the contact step, next to the email, and waits at most 15 seconds so the result screen is never held up. The dashboard sends when someone presses Kirim and waits at most 25 seconds. Every send is logged in `wa_messages` and in the student's activity (automatic sends show as Sistem), and AttCos errors come back in Indonesian. The 422 message and the "Buka di WhatsApp" fallback only matter if the channel ever moves to the Cloud API. The AttCos key was pasted in chat on 16 November 2026, so it should be rotated.
 
 ## Data model
 
@@ -133,7 +136,7 @@ Times are Unix seconds in BIGINT columns, flags are 0 or 1 in INTEGER columns, a
 
 No full IP address is stored. `country` comes from the `CF-IPCountry` header when the app sits behind Cloudflare, otherwise it stays empty. `user_agent` is truncated to 300 characters. Deleting a student removes their activities, messages, invites, and pre-test and post-test attempts; their placement attempts stay for the statistics without contact details.
 
-To change the schema, add a new file such as `db/migrations/0002_something.sql`. Never edit a file that has already run on `main`.
+To change the schema, add a new file such as `db/migrations/0003_something.sql`. Never edit a file that has already run on `main`.
 
 ## Level thresholds
 
@@ -161,7 +164,7 @@ What it cannot do, and must not claim: stop a second device, a camera, or a help
 
 ## Privacy and consent
 
-The legal copy follows `.opencode/skills/data-privacy-compliance/SKILL.md`. The privacy policy names Neon (database, Singapore), Cloudflare (result email), AttCos, and Meta's WhatsApp Business Platform as processors. Consent is recorded per attempt with the text version and timestamp; bump `CONSENT_VERSION` when the wording or the data use changes. Retention is stated as 24 months and there is no deletion job yet. The public test sets no cookies; the dashboard sets one session cookie for staff.
+The legal copy follows `.opencode/skills/data-privacy-compliance/SKILL.md`. The privacy policy names Neon (database, Singapore), Cloudflare (result email), and AttCos (WhatsApp, delivered through Meta's WhatsApp service) as processors, and says the result goes to the student's email and WhatsApp. Consent is recorded per attempt with the text version and timestamp; bump `CONSENT_VERSION` when the wording or the data use changes. Retention is stated as 24 months and there is no deletion job yet. The public test sets no cookies; the dashboard sets one session cookie for staff.
 
 ## Email
 
@@ -188,6 +191,6 @@ Read `DESIGN.md` before touching CSS. Navy structure, navy buttons, white readin
 4. The email sender is on `index-now.dev`, not `titiknolenglish.com`.
 5. No automated retention job for the 24 month policy.
 6. The public WhatsApp number `6282333143544` comes from the TOEFL online page; confirm it.
-7. WhatsApp templates are not supported by AttCos yet, so first contact goes through the `wa.me` fallback.
+7. The result WhatsApp has no automatic retry. When it fails, the student's activity shows the error and the team can send the result by hand from the dashboard.
 8. Both dashboard roles see everything.
 9. The apps run on their onrender.com addresses. A custom domain on `titiknolenglish.com` is not set up yet; adding one means changing `PUBLIC_WEB_URL` and `ADMIN_URL` on Render too.

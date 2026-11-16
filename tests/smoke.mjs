@@ -1,7 +1,8 @@
 // Small self-check for the rules that must not drift:
 // question integrity, the level boundaries, the answer key staying server side,
 // the seed migration, password hashing, attempt status, the database placeholders,
-// the email transport, the AttCos client, the hosted settings, and the first admin setup code.
+// the email transport, the AttCos client, the result WhatsApp message, the hosted settings, and
+// the first admin setup code.
 // Runs without a database.
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
@@ -16,7 +17,7 @@ import { hashPassword, verifyPassword, randomToken, sha256Hex } from "@tnec/core
 import { fillLegal, TERMS } from "@tnec/core/legal";
 import { attemptStatus, focusStrikes } from "@tnec/core/store";
 import { normalizeWhatsapp } from "@tnec/core/http";
-import { sendWhatsApp, whatsappConfigured } from "@tnec/core/whatsapp";
+import { sendWhatsApp, whatsappConfigured, buildResultWhatsApp } from "@tnec/core/whatsapp";
 import { numberPlaceholders } from "@tnec/core/db";
 import { createMailer, parseAddress } from "@tnec/core/mailer";
 import { buildEnv } from "@tnec/core/env";
@@ -141,9 +142,24 @@ try {
   globalThis.fetch = async () => { throw new TypeError("network down"); };
   const down = await sendWhatsApp(env, { to: "6281234567890", text: "Halo" });
   assert.equal(down.status, "failed");
+
+  // The automatic result message uses a shorter wait, so a slow AttCos cannot hold the result screen.
+  globalThis.fetch = (url, init) => new Promise((resolve, reject) => {
+    init.signal.addEventListener("abort", () => reject(Object.assign(new Error("aborted"), { name: "AbortError" })));
+  });
+  const slow = await sendWhatsApp(env, { to: "6281234567890", text: "Halo", timeoutMs: 300 });
+  assert.equal(slow.status, "failed");
+  assert.ok(slow.error.includes("belum merespons"));
 } finally {
   globalThis.fetch = realFetch;
 }
+
+/* ---------- Result message for WhatsApp ---------- */
+const waResult = buildResultWhatsApp({ name: "Rani Putri Lestari", score: 18, total: 25, level: levelForScore(18) });
+assert.ok(waResult.startsWith("Halo Rani,"), "greets by first name");
+assert.ok(waResult.includes("Skor kamu 18 dari 25") && waResult.includes(`*${levelForScore(18).label}*`) && waResult.includes(`*${levelForScore(18).program}*`));
+assert.ok(waResult.includes("bukan sertifikat resmi"), "carries the no certificate line");
+assert.equal(/[\u2013\u2014]/.test(waResult), false, "no en or em dash");
 
 /* ---------- Database placeholders ---------- */
 assert.equal(numberPlaceholders("SELECT ? AS a WHERE b = '?' AND c = ? AND d = 'it''s ?'"), "SELECT $1 AS a WHERE b = '?' AND c = $2 AND d = 'it''s ?'");

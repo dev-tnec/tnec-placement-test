@@ -1,6 +1,8 @@
 // WhatsApp sending through AttCos (CSQ API).
-// POST {ATTCOS_API_BASE}/messages with a tenant API key. The key lives in the server's .env,
-// never part of the code or the repository.
+// POST {ATTCOS_API_BASE}/messages with a tenant API key. The key lives in the server's environment,
+// never in the code or the repository. The TNEC channel is a WhatsApp account linked through
+// Baileys, so a message can go to any number at any time. The 422 text below only applies if the
+// channel ever moves to Meta's Cloud API.
 
 const DEFAULT_BASE = "https://csq-api.onrender.com/api/v1";
 const TIMEOUT_MS = 25000;
@@ -8,7 +10,7 @@ const TIMEOUT_MS = 25000;
 // Messages for each provider response, written for the admin who pressed Kirim.
 const ERROR_TEXT = {
   400: "AttCos menolak isi pesan. Periksa nomor tujuan dan teks pesannya.",
-  401: "Kunci API AttCos tidak diterima. Periksa ATTCOS_API_KEY di file .env server.",
+  401: "Kunci API AttCos tidak diterima. Periksa ATTCOS_API_KEY di pengaturan server.",
   403: "Channel WhatsApp ini bukan milik akun AttCos yang dipakai.",
   409: "Belum ada channel WhatsApp yang tersambung di AttCos.",
   422: "Jendela 24 jam WhatsApp untuk nomor ini sudah tertutup, jadi pesan biasa tidak bisa dikirim lewat AttCos. Minta siswa mengirim pesan dulu ke nomor Titik Nol, atau kirim dari aplikasi lewat tombol Buka di WhatsApp.",
@@ -20,13 +22,13 @@ export function whatsappConfigured(env) {
   return Boolean(env.ATTCOS_API_KEY && env.ATTCOS_CHANNEL_ID);
 }
 
-export async function sendWhatsApp(env, { to, text }) {
+export async function sendWhatsApp(env, { to, text, timeoutMs = TIMEOUT_MS }) {
   if (!whatsappConfigured(env)) {
-    return { ok: false, status: "skipped", error: "Integrasi WhatsApp belum diatur. Isi ATTCOS_API_KEY dan ATTCOS_CHANNEL_ID di file .env server." };
+    return { ok: false, status: "skipped", error: "Integrasi WhatsApp belum diatur. Isi ATTCOS_API_KEY dan ATTCOS_CHANNEL_ID di pengaturan server." };
   }
   const base = (env.ATTCOS_API_BASE || DEFAULT_BASE).replace(/\/+$/, "");
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
     const response = await fetch(`${base}/messages`, {
       method: "POST",
@@ -48,10 +50,26 @@ export async function sendWhatsApp(env, { to, text }) {
     return { ok: false, status: "failed", httpStatus: response.status, error: `${message}${code}` };
   } catch (error) {
     if (error?.name === "AbortError") {
-      return { ok: false, status: "failed", error: "AttCos belum merespons dalam 25 detik. Server AttCos mungkin sedang bangun dari mode tidur, jadi coba kirim lagi sebentar lagi." };
+      return { ok: false, status: "failed", error: `AttCos belum merespons dalam ${Math.round(timeoutMs / 1000)} detik. Coba kirim lagi sebentar lagi.` };
     }
     return { ok: false, status: "failed", error: `Tidak bisa menghubungi AttCos: ${String(error).slice(0, 160)}` };
   } finally {
     clearTimeout(timer);
   }
+}
+
+/** The placement result as a WhatsApp message, sent automatically after the contact step. */
+export function buildResultWhatsApp({ name, score, total, level }) {
+  const first = String(name || "").trim().split(/\s+/)[0];
+  return [
+    `Halo ${first}, terima kasih sudah mengerjakan tes penempatan Titik Nol English Course.`,
+    "",
+    `Skor kamu ${score} dari ${total}, jadi level kamu *${level.label}*.`,
+    `Program yang kami sarankan: *${level.program}*.`,
+    ...(level.description ? ["", level.description] : []),
+    "",
+    "Kalau ingin konsultasi program atau menanyakan jadwal kelas, balas saja pesan ini.",
+    "",
+    "_Hasil ini dipakai untuk penempatan kelas dan bukan sertifikat resmi._",
+  ].join("\n");
 }

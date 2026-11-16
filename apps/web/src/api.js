@@ -8,9 +8,12 @@ import {
 } from "@tnec/core/store";
 import { CONSENT_VERSION, PRIVACY, TERMS, WHATSAPP, fillLegal } from "@tnec/core/legal";
 import { buildResultEmail } from "@tnec/core/email";
+import { sendWhatsApp, buildResultWhatsApp } from "@tnec/core/whatsapp";
 import { sha256Hex } from "@tnec/core/crypto";
 
 const PUBLIC_BODY_LIMIT = 16 * 1024;
+// The student waits on the result screen while the message goes out, so cap the wait.
+const RESULT_WA_TIMEOUT_MS = 15_000;
 const SUBMIT_GRACE_SECONDS = 15;
 const ATTEMPT_ID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 const CHOICES = new Set(["A", "B", "C", "D"]);
@@ -276,27 +279,47 @@ async function saveContact(request, env, attemptId) {
 
   const levels = await loadLevels(env);
   const level = levels.find((l) => l.key === attempt.level_key) || levelFor(levels, attempt.score ?? 0);
+  const shown = publicLevel(level);
+  const score = attempt.score ?? 0;
   const now = nowSeconds();
   const alreadySent = Boolean(attempt.email_sent_at);
-  let emailSent = alreadySent;
-  let emailStatus = attempt.email_status || null;
-  if (!alreadySent) {
-    ({ emailSent, emailStatus } = await sendResultEmail(env, { name, email, score: attempt.score ?? 0, total: attempt.total, level: publicLevel(level) }));
-  }
+  const waAlreadySent = Boolean(attempt.wa_sent_at);
+  const waText = buildResultWhatsApp({ name, score, total: attempt.total, level: shown });
+
+  // The result goes to the email and to WhatsApp at the same time, so the student only waits for
+  // the slower of the two. A channel that already delivered for this attempt is not sent again.
+  const [mail, wa] = await Promise.all([
+    alreadySent
+      ? { emailSent: true, emailStatus: attempt.email_status || null }
+      : sendResultEmail(env, { name, email, score, total: attempt.total, level: shown }),
+    waAlreadySent ? null : sendWhatsApp(env, { to: whatsapp, text: waText, timeoutMs: RESULT_WA_TIMEOUT_MS }),
+  ]);
+  const { emailSent, emailStatus } = mail;
+  const whatsappSent = waAlreadySent || Boolean(wa?.ok);
+  const waStatus = waAlreadySent ? attempt.wa_status : wa.ok ? "sent" : wa.status === "skipped" ? "skipped" : `failed: ${String(wa.error).slice(0, 180)}`;
 
   const student = attempt.student_id ? { id: attempt.student_id, created: false } : await upsertStudentFromContact(env, { name, email, whatsapp });
   const statements = [
-    env.DB.prepare(`UPDATE attempts SET name = ?, email = ?, whatsapp = ?, student_id = ?, email_sent_at = ?, email_status = ? WHERE id = ?`)
-      .bind(name, email, whatsapp, student.id, alreadySent ? attempt.email_sent_at : emailSent ? now : null, emailStatus, attemptId),
+    env.DB.prepare(`UPDATE attempts SET name = ?, email = ?, whatsapp = ?, student_id = ?, email_sent_at = ?, email_status = ?, wa_sent_at = ?, wa_status = ? WHERE id = ?`)
+      .bind(name, email, whatsapp, student.id, alreadySent ? attempt.email_sent_at : emailSent ? now : null, emailStatus,
+        waAlreadySent ? attempt.wa_sent_at : wa.ok ? now : null, waStatus, attemptId),
   ];
   if (!attempt.student_id) {
-    statements.push(addActivity(env, student.id, "test", `Mengerjakan placement test dengan skor ${attempt.score ?? 0} dari ${attempt.total} dan masuk level ${level.label}.`, null, { attemptId }, now));
+    statements.push(addActivity(env, student.id, "test", `Mengerjakan placement test dengan skor ${score} dari ${attempt.total} dan masuk level ${level.label}.`, null, { attemptId }, now));
     statements.push(addActivity(env, student.id, "email", emailSent ? `Email hasil terkirim ke ${email}.` : `Email hasil gagal terkirim ke ${email}. Periksa alamatnya sebelum mengirim ulang.`, null, null, now));
+  }
+  if (wa && wa.status !== "skipped") {
+    statements.push(env.DB.prepare("INSERT INTO wa_messages (student_id, to_number, text, status, provider_message_id, error, created_at, created_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?)")
+      .bind(student.id, whatsapp, waText, wa.status, wa.messageId || null, wa.error || null, now, "Sistem"));
+    statements.push(addActivity(env, student.id, "wa", wa.ok
+      ? `Hasil placement terkirim otomatis lewat WhatsApp:\n${waText}`
+      : `Hasil placement gagal terkirim lewat WhatsApp. ${wa.error}`, null, { attemptId }, now));
   }
   await env.DB.batch(statements);
 
   return json({
     emailSent,
+    whatsappSent,
     result: {
       score: attempt.score ?? 0,
       total: attempt.total,
