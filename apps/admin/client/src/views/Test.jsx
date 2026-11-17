@@ -925,6 +925,12 @@ export function AttemptDetail({ testKey, id }) {
   }
   cells.push(cell("Durasi", fmtClock(a.durationSec), `dari batas ${fmtClock(a.limitSec)}`));
   cells.push(cell("Pelanggaran fokus", String(a.violations), `batas ${a.maxViolations || t.settings.maxViolations} kali sebelum tes berhenti`));
+  // Pick a column count that divides the cells, so no row ends with empty blocks.
+  const statsClass = cells.length === 2 ? "stats stats--2"
+    : cells.length === 3 ? "stats stats--3"
+      : cells.length === 5 ? "stats stats--5"
+        : cells.length % 3 === 0 && cells.length <= 9 ? "stats stats--3"
+          : "stats stats--4";
 
   return <>
     <PageHead
@@ -939,7 +945,7 @@ export function AttemptDetail({ testKey, id }) {
     <div className="stack">
       {notice}
       <section className="panel" aria-label="Ringkasan submission">
-        <div className="stats">{cells}</div>
+        <div className={statsClass}>{cells}</div>
         {skillRows.length ? <div className="skills">{skillRows.map((r) => (
           <div className="skill" key={r.k}>
             <div className="skill__top"><span className="skill__name">{r.k}</span><span className="skill__val">{r.ok} dari {r.n} benar</span></div>

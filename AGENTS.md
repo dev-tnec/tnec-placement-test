@@ -32,6 +32,7 @@ The owner keeps having to repeat these. Check every row before touching the app.
 | Listening showed 40 flat questions | Part 1 to Part 4 headings in the navigator, and the count reads 40 soal, 4 bagian | `navGroups` in `screens.jsx` |
 | HTML files and Vite | The app is React only, bundled by Node with esbuild, and the servers generate the document shells. No HTML file in the app source or build. Certificates may stay HTML | `scripts/build-react.mjs`, `apps/web/server.js`, `apps/admin/src/api.js` |
 | Speaking missing from the Bagian tab | The three speaking parts are sections of Paket Demo A and appear in the main Bagian table with the other nine, counted in the Paket tab | `0014_speaking_sections.sql`, `SectionsTab` in `Test.jsx` |
+| The submission summary left two empty blocks | The summary grid picks a column count that divides the cells, so no row ends with an empty block | `statsClass` in `Test.jsx`, `.stats--2/3/4/5` in `admin.css` |
 
 ## What this folder is
 
