@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { CHECK_SECONDS, formatTime, spanText } from "./lib.js";
+import { VoiceNote } from "./voice-note.jsx";
 
 const Arrow = () => (
   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
@@ -37,12 +38,6 @@ const Check = () => (
     <path d="M20 6 9 17l-5-5" />
   </svg>
 );
-const Play = () => (
-  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
-    <path d="M8 5v14l11-7z" />
-  </svg>
-);
-
 export function Footer() {
   return (
     <footer className="footer">
@@ -333,6 +328,7 @@ export function TestScreen({ attempt, index, answers, flagged, perMode, timeLeft
   const [audioTime, setAudioTime] = useState(0);
   const [audioLength, setAudioLength] = useState(0);
   const [audioRunning, setAudioRunning] = useState(false);
+  const [audioFailed, setAudioFailed] = useState(false);
 
   return (
     <section className="screen" id="screen-test" aria-labelledby="question-prompt">
@@ -366,21 +362,22 @@ export function TestScreen({ attempt, index, answers, flagged, perMode, timeLeft
             <div className="audio-card" id="audio-card">
               <p className="audio-card__label">Audio Listening</p>
               <p className="audio-card__note" id="audio-note">{audioNote}</p>
-              {audioPlayedNow ? (
-                <div className="audio-playback" id="audio-playback">
-                  <progress className="audio-playback__bar" max={audioLength || 1} value={audioTime} aria-label="Kemajuan audio Listening" />
-                  <p className="audio-playback__time" id="audio-time">
-                    {formatTime(Math.round(audioTime))} / {audioLength ? formatTime(Math.round(audioLength)) : "--:--"}
-                    {audioRunning ? " · sedang diputar" : audioLength && audioTime >= audioLength - 1 ? " · selesai" : ""}
-                  </p>
-                </div>
-              ) : null}
-              <button className="btn btn--primary btn--lg" id="audio-play" type="button" onClick={onPlayAudio} hidden={audioPlayedNow}><Play /> Putar audio sekali ini</button>
-              <audio ref={audioRef} id="listening-audio" preload="none" src={audioSection.audio}
+              <VoiceNote
+                label="Audio Listening"
+                current={audioTime}
+                duration={audioLength}
+                paused={!audioRunning}
+                finished={audioPlayedNow && audioLength > 0 && audioTime >= audioLength - 0.5}
+                seekable={false}
+                onToggle={onPlayAudio}
+                failed={audioFailed}
+              />
+              <audio ref={audioRef} id="listening-audio" preload="metadata" src={audioSection.audio}
                 onLoadedMetadata={(event) => setAudioLength(Number(event.currentTarget.duration) || 0)}
                 onTimeUpdate={(event) => setAudioTime(event.currentTarget.currentTime)}
                 onPlay={() => setAudioRunning(true)}
                 onPause={() => setAudioRunning(false)}
+                onError={() => setAudioFailed(true)}
                 onEnded={() => { setAudioRunning(false); onAudioEnded(); }} />
             </div>
           ) : null}

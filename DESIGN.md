@@ -169,7 +169,7 @@ A keyboard hint sits below the grid on desktop only. It is removed on mobile bec
 
 ### Audio card
 
-The Listening audio sits in a white card above the question: 24px padding, a 1px gray border, a 16px radius, and the card shadow. A 12px gap separates the uppercase label, the note at 14px with 1.6 line height, and the navy play button, which is left aligned. After the student starts it, the play button is replaced by a 6px progress bar and an elapsed over total time that reads sedang diputar, then selesai. The native player stays hidden, with no scrubber and no download. The card disappears outside Listening.
+The Listening audio sits in a white card above the question: 24px padding, a 1px gray border, a 16px radius, and the card shadow. A 12px gap separates the uppercase label, the note at 14px with 1.6 line height, and the Voice Note player. The player is the 21st.dev Voice Note component by ebnsina (MIT), ported with the app's navy tokens: a light pill, a 56px navy circle with play or pause, a 6px range track with a 20px navy thumb, and a 20px tabular time. The slider is read-only for the listening audio, so the audio still plays once and cannot be scrubbed. The native player stays hidden. The card disappears outside Listening.
 
 ### Details
 

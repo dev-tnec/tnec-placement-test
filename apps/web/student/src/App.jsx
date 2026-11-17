@@ -739,6 +739,18 @@ export default function App() {
 
   async function playListeningAudio() {
     if (!audioSection || !attempt) return;
+    const audio = audioRef.current;
+    // The first click marks the play on the server. After that the same button pauses and resumes,
+    // but never seeks and never starts over once the audio has ended.
+    if (audioPlayed.has(audioSection.id)) {
+      if (!audio || audio.ended) return;
+      if (audio.paused) {
+        try { await audio.play(); } catch { setAudioNote("Browser kamu memblokir suara. Periksa izin suara di address bar, lalu muat ulang halaman."); }
+      } else {
+        audio.pause();
+      }
+      return;
+    }
     try {
       await api(`/api/attempts/${attempt.id}/audio-played`, { method: "POST", body: { sectionId: audioSection.id } });
     } catch (error) {
@@ -748,7 +760,7 @@ export default function App() {
     }
     setAudioPlayed((current) => new Set(current).add(audioSection.id));
     try {
-      await audioRef.current?.play();
+      await audio?.play();
     } catch {
       setAudioNote("Browser kamu memblokir suara. Periksa izin suara di address bar, lalu muat ulang halaman.");
     }

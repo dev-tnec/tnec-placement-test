@@ -972,19 +972,78 @@ progress::-moz-progress-bar { background: var(--navy-900); border-radius: var(--
 
 .audio-card audio { display: none; }
 
-/* The played-once audio stays visible as a progress bar, so the student can see that it is
-   running and how far it has gone. The native player stays hidden: no scrubber, no download. */
-.audio-playback {
+/* The Voice Note player, ported from 21st.dev/@ebnsina/components/voice-note (MIT).
+   The pill, circle button, slider, and time follow the source component with the app's tokens. */
+.voice-note {
   display: flex;
-  flex-direction: column;
-  gap: 6px;
+  align-items: center;
+  gap: var(--space-3);
+  width: 100%;
+  padding: 8px 20px 8px 8px;
+  border-radius: var(--radius-pill);
+  background: var(--surface-50);
 }
 
-.audio-playback__time {
-  margin: 0;
-  font-size: 12px;
+.voice-note__play {
+  flex: none;
+  width: 56px;
+  height: 56px;
+  border: 0;
+  border-radius: 50%;
+  background: var(--navy-900);
+  color: var(--white);
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  transition: background-color var(--duration-fast) var(--ease-standard);
+}
+
+.voice-note__play:hover:not(:disabled) { background: var(--navy-800); }
+.voice-note__play:disabled { cursor: default; opacity: .55; }
+
+.voice-note__range {
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 6px;
+  appearance: none;
+  border-radius: var(--radius-pill);
+  background: var(--gray-200);
+  cursor: pointer;
+}
+
+.voice-note__range:disabled { cursor: default; }
+
+.voice-note__range::-webkit-slider-thumb {
+  appearance: none;
+  width: 20px;
+  height: 20px;
+  border: 0;
+  border-radius: 50%;
+  background: var(--navy-900);
+}
+
+.voice-note__range::-moz-range-thumb {
+  width: 20px;
+  height: 20px;
+  border: 0;
+  border-radius: 50%;
+  background: var(--navy-900);
+}
+
+.voice-note__time {
+  flex: none;
+  min-width: 64px;
+  text-align: right;
+  font-size: 20px;
+  font-weight: 600;
   font-variant-numeric: tabular-nums;
   color: var(--text-secondary);
+}
+
+.voice-note__failed {
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--red-600);
 }
 
 .nav-btn:disabled { cursor: default; }

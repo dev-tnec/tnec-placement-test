@@ -13,6 +13,7 @@ These come from the owner and outrank convenience.
 5. Treat design defects as defects, not taste. A feedback widget floating away from the control that triggered it, an unaligned row, cramped spacing, a card inside a card, or a colored stripe on one side of an element are bugs. When the intended look is unclear, copy the established reference component instead of inventing a new one.
 6. Both apps declare the global `[hidden] { display: none !important; }` rule. A component class that sets `display` otherwise beats the hidden attribute and leaves widgets that should be hidden on screen.
 7. When the owner names one screen, check every screen that shows the same data before replying. The owner should never have to point out the second place.
+8. Search the 21st MCP (`mcp.21st` in the OpenCode config) before building a UI component. Port the real component with its license and source link instead of approximating it by hand. The listening player is the 21st.dev Voice Note by ebnsina, ported in `apps/web/student/src/voice-note.jsx`.
 
 ## Owner complaints and the standing fixes
 
@@ -27,7 +28,7 @@ The owner keeps having to repeat these. Check every row before touching the app.
 | All questions in one navigator | The student navigator shows only the current section, grouped by part or passage | `navGroups` in `apps/web/student/src/screens.jsx` |
 | The speaking notice touched the text above | 24px above the mic-failure notice and 16px to the button | `.speak-error` in `src/app.css` |
 | The question card was in the sidebar | The audio card and question card share the main column, and the navigator is the right sidebar | `.test-main` and `.test-grid` in `src/app.css` |
-| No view of the audio after it started | A progress bar and elapsed over total time replace the play button | `.audio-playback` in `src/app.css` |
+| No view of the audio after it started | The Voice Note player from 21st.dev shows play or pause, a progress slider, and the time | `src/voice-note.jsx`, `.voice-note` in `src/app.css` |
 | Listening showed 40 flat questions | Part 1 to Part 4 headings in the navigator, and the count reads 40 soal, 4 bagian | `navGroups` in `screens.jsx` |
 | HTML files and Vite | The app is React only, bundled by Node with esbuild, and the servers generate the document shells. No HTML file in the app source or build. Certificates may stay HTML | `scripts/build-react.mjs`, `apps/web/server.js`, `apps/admin/src/api.js` |
 | Speaking missing from the Bagian tab | The Bagian tab lists the nine question sections plus a read-only Bagian speaking panel with the three interview parts | `SectionsTab` in `Test.jsx` |
