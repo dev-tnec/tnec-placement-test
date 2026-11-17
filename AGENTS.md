@@ -15,7 +15,7 @@ These come from the owner and outrank convenience.
 
 ## What this folder is
 
-The online placement test, pre-test, and post-test for Titik Nol English Course, plus the internal dashboard for the admin and education team. It is not an Elementor page and it is not part of the WordPress install. It is a Node.js monorepo with two apps that share one PostgreSQL database on Neon.
+The online placement test, pre-test, and post-test for Titik Nol English Course, plus the internal dashboard for the admin and education team. It is not part of the WordPress install. It is a Node.js monorepo with two apps that share one PostgreSQL database on Neon.
 
 The source material is in this folder: `placement-test-questions.md`, `placement-test-questions.txt`, `placement-test.xlsx`, and the UI reference `assets/code.html`. The original question set and the level thresholds come from JotForm form 252018413812044.
 
