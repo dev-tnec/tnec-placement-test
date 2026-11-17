@@ -42,16 +42,17 @@ export function TestPage({ testKey, tab }) {
   ui.test = testKey;
   const t = db.tests[testKey], meta = TEST_META[testKey];
   const own = db.attempts.filter((a) => a.test === testKey);
-  const tabs = [["soal", "Soal & Jawaban", packageQuestions(t).length], ["submission", "Submission", own.length]];
+  const speakingBank = testKey === "ielts-mockup" && t.mockupSpeaking ? t.mockupSpeaking : null;
+  const tabs = [["soal", "Soal & Jawaban", packageQuestions(t).length + (speakingBank ? speakingBank.total : 0)], ["submission", "Submission", own.length]];
   if (testKey === "placement") tabs.push(["lead", "Lead", leads().length]);
   if (testKey === "ielts-mockup") {
-    tabs.push(["bagian", "Bagian", packageSections(t).length]);
+    tabs.push(["bagian", "Bagian", packageSections(t).length + (speakingBank ? speakingBank.parts.length : 0)]);
     tabs.push(["paket", "Paket", t.packages.length]);
   }
   tabs.push(["pengaturan", "Pengaturan", null]);
   if (!tabs.some((x) => x[0] === tab)) tab = "soal";
-  const speakingBank = testKey === "ielts-mockup" && ui.questions[testKey]?.skill === "Speaking";
-  const actions = tab === "soal" && !speakingBank
+  const speakingView = testKey === "ielts-mockup" && ui.questions[testKey]?.skill === "Speaking";
+  const actions = tab === "soal" && !speakingView
     ? <button className="btn btn--primary" type="button" onClick={() => openQuestionEditor(null)}><Icon name="plus" />Tambah soal</button>
     : tab === "submission" ? <button className="btn btn--quiet" type="button" onClick={() => exportAttempts(db.attempts.filter((a) => attemptMatches(a, ui.attempts[testKey], false)))}><Icon name="download" />Ekspor CSV</button>
       : tab === "bagian" ? <button className="btn btn--primary" type="button" onClick={() => openSectionEditor(null)}><Icon name="plus" />Tambah bagian</button>
@@ -238,6 +239,26 @@ function SectionsTab() {
       </table></div>
         : <Empty title="Belum ada bagian." desc="Tambahkan bagian untuk mengikat bacaan dan audio ke satu rentang soal." />}
     </section>
+    {t.mockupSpeaking ? <section className="panel">
+      <header className="panel__head"><div>
+        <h2 className="panel__title">Bagian speaking</h2>
+        <p className="panel__desc">Wawancara speaking memakai rencana tetap 18 pertanyaan dan tidak memakai rentang soal di bank, jadi tidak bisa diubah dari sini. Waktunya diatur di Pengaturan.</p>
+      </div></header>
+      <div className="table-wrap"><table className="table">
+        <caption className="sr-only">Bagian speaking {TEST_META[ui.test].name}</caption>
+        <thead><tr>
+          <th scope="col">Bagian</th><th scope="col">Pertanyaan</th><th scope="col">Persiapan</th><th scope="col">Waktu jawab</th>
+        </tr></thead>
+        <tbody>{t.mockupSpeaking.parts.map((p) => (
+          <tr key={p.part}>
+            <td><p className="q-prompt">{p.title}</p></td>
+            <td className="tnum">{p.questions.length} pertanyaan</td>
+            <td>{p.prepSeconds ? `${p.prepSeconds} detik` : <span className="muted">Tidak ada</span>}</td>
+            <td className="tnum">{p.speakSeconds} detik per pertanyaan</td>
+          </tr>
+        ))}</tbody>
+      </table></div>
+    </section> : null}
   </div>;
 }
 
@@ -254,7 +275,7 @@ function PackagesTab() {
   return <div className="stack">
     <section className="panel">
       <div className="toolbar toolbar--last">
-        <p className="toolbar__meta">Setiap paket punya soal dan bagian sendiri. Siswa mendapat paket yang dipilih saat tautan dikirim, atau paket aktif yang dipilih acak.</p>
+        <p className="toolbar__meta">Setiap paket punya soal dan bagian sendiri. Siswa mendapat paket yang dipilih saat tautan dikirim, atau paket aktif yang dipilih acak. Wawancara speaking 18 pertanyaan dipakai semua paket dan tidak dihitung di kolom Bagian.</p>
       </div>
       {rows.length ? <div className="table-wrap"><table className="table">
         <caption className="sr-only">Paket soal {TEST_META[ui.test].name}</caption>

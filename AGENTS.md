@@ -12,6 +12,25 @@ These come from the owner and outrank convenience.
 4. Verify what the user sees, not what the DOM claims. Measure rendered geometry (bounding rects, computed styles, canvas pixels) instead of trusting attributes, hidden flags, or booleans.
 5. Treat design defects as defects, not taste. A feedback widget floating away from the control that triggered it, an unaligned row, cramped spacing, a card inside a card, or a colored stripe on one side of an element are bugs. When the intended look is unclear, copy the established reference component instead of inventing a new one.
 6. Both apps declare the global `[hidden] { display: none !important; }` rule. A component class that sets `display` otherwise beats the hidden attribute and leaves widgets that should be hidden on screen.
+7. When the owner names one screen, check every screen that shows the same data before replying. The owner should never have to point out the second place.
+
+## Owner complaints and the standing fixes
+
+The owner keeps having to repeat these. Check every row before touching the app.
+
+| Complaint | What it means | Where it is handled |
+|---|---|---|
+| The listening audio only covered Q1-10 | One file for Part 1 to Part 4, played once, and it keeps playing while the student jumps between parts | `apps/web/student/src/App.jsx` audio section, `.audio-card` in `src/app.css` |
+| One total timer for the mockup | Listening, Reading, Writing, and Speaking each have their own timer, and a section locks when its time ends | `time_mode='sections'`, `sectionPlan` in `apps/web/src/api.js`, `db/migrations/0013_section_times.sql` |
+| Speaking missing from the dashboard | Speaking is visible in Soal & Jawaban, Bagian, Pengaturan, and Submission, not only in the code | `apps/admin/client/src/views/Test.jsx` (`SpeakingBank`, `SectionsTab`, `SettingsTab`, `MockupSpeakingPanel`) |
+| The Kunci text was cut | The badge fits the word Kunci and the accepted answers wrap instead of ellipsis | `.opt__key--word` and `.opt__text` in `apps/admin/client/src/admin.css` |
+| All questions in one navigator | The student navigator shows only the current section, grouped by part or passage | `navGroups` in `apps/web/student/src/screens.jsx` |
+| The speaking notice touched the text above | 24px above the mic-failure notice and 16px to the button | `.speak-error` in `src/app.css` |
+| The question card was in the sidebar | The audio card and question card share the main column, and the navigator is the right sidebar | `.test-main` and `.test-grid` in `src/app.css` |
+| No view of the audio after it started | A progress bar and elapsed over total time replace the play button | `.audio-playback` in `src/app.css` |
+| Listening showed 40 flat questions | Part 1 to Part 4 headings in the navigator, and the count reads 40 soal, 4 bagian | `navGroups` in `screens.jsx` |
+| HTML files and Vite | The app is React only, bundled by Node with esbuild, and the servers generate the document shells. No HTML file in the app source or build. Certificates may stay HTML | `scripts/build-react.mjs`, `apps/web/server.js`, `apps/admin/src/api.js` |
+| Speaking missing from the Bagian tab | The Bagian tab lists the nine question sections plus a read-only Bagian speaking panel with the three interview parts | `SectionsTab` in `Test.jsx` |
 
 ## What this folder is
 
