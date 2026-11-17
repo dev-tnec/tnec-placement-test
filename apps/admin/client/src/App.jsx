@@ -6,6 +6,7 @@ import { dataReady, db, notify, reload, route, ui, useRoute, useVersion, TEST_KE
 import { clearBootstrapCache } from "./bootstrap-cache.js";
 import { isColdLead, leads, exportStudents, exportAttempts, TEST_META } from "./lib.js";
 import { Icon, PageHead, Empty } from "./ui.jsx";
+import { IconSprite } from "./icons.jsx";
 import { closeMenu } from "./menus.jsx"; // also registers the menu listeners
 import { deleteStudents, deleteAttempts } from "./actions.js";
 import { toast } from "./dom.js";
@@ -193,6 +194,7 @@ export default function App() {
 
   if (error) {
     return <>
+      <IconSprite />
       <PageHead title="Data belum bisa dimuat" />
       <section className="panel"><Empty title={error} desc="Periksa koneksi internet, lalu coba lagi. Kalau masalahnya berlanjut, hubungi admin teknis."
         action={<button className="btn btn--primary btn--sm" type="button" onClick={() => { setError(""); reload().catch((e) => setError(e.message)); }}>Coba lagi</button>} /></section>
@@ -202,6 +204,7 @@ export default function App() {
 
   const { view, nav, title } = currentView(parts, params);
   return <>
+    <IconSprite />
     <a className="skip" href="#main">Langsung ke konten</a>
     <div className="app">
       <Sidebar nav={nav} />

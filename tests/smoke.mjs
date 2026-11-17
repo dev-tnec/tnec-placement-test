@@ -5,7 +5,7 @@
 // the first admin setup code, the background result delivery, and the certificate numbers and templates.
 // Runs without a database.
 import assert from "node:assert/strict";
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync } from "node:fs";
 import {
   QUESTIONS,
   TOTAL_QUESTIONS,
@@ -495,13 +495,14 @@ for (const [format, reset] of formatCases) {
   }
 }
 
-// The React dashboard build output is committed, so Render needs no build command. The smoke check
-// guards against pushing a source change without rebuilding, and keeps the strict CSP possible.
-const builtIndex = readFileSync(new URL("../apps/admin/public/admin/index.html", import.meta.url), "utf8");
-const entry = builtIndex.match(/src="(\/admin\/assets\/[^"]+\.js)"/);
-assert.ok(entry, "the dashboard build output exists");
-assert.ok(existsSync(new URL(`../apps/admin/public${entry[1]}`, import.meta.url)), "the dashboard entry bundle exists on disk");
-assert.equal(/<script(?![^>]*\bsrc=)/i.test(builtIndex), false, "the built dashboard uses no inline script");
+// The React dashboard build output is committed, so Render needs no build command. The Node build
+// writes admin-manifest.json instead of an HTML file, and the server builds the shell from it.
+const adminManifest = JSON.parse(readFileSync(new URL("../apps/admin/public/admin/admin-manifest.json", import.meta.url), "utf8"));
+for (const key of ["app", "login"]) {
+  assert.ok(adminManifest[key]?.js, `the dashboard ${key} bundle is in the manifest`);
+  assert.ok(existsSync(new URL(`../apps/admin/public${adminManifest[key].js}`, import.meta.url)), `the dashboard ${key} entry bundle exists on disk`);
+  assert.ok(adminManifest[key].css && existsSync(new URL(`../apps/admin/public${adminManifest[key].css}`, import.meta.url)), `the dashboard ${key} stylesheet exists on disk`);
+}
 
 // Every {{placeholder}} in a template is a built-in value or one of its fields, and every field shows up.
 for (const [key, template] of Object.entries(TEMPLATES)) {
@@ -527,19 +528,28 @@ assert.ok(certHtml.includes('href="logo.css"'), "the template keeps its relative
 assert.equal(/\{\{\w+\}\}/.test(certHtml), false, "no placeholder is left on the page");
 
 // The React test runner build output is committed too, so Render needs no build command.
-const runnerIndex = readFileSync(new URL("../apps/web/public/index.html", import.meta.url), "utf8");
-const runnerEntry = runnerIndex.match(/src="(\/assets\/index-[^"]+\.js)"/);
-assert.ok(runnerEntry, "the test runner build output exists");
-assert.ok(existsSync(new URL(`../apps/web/public${runnerEntry[1]}`, import.meta.url)), "the test runner entry bundle exists on disk");
-assert.equal(/<script(?![^>]*\bsrc=)/i.test(runnerIndex), false, "the built runner uses no inline script");
-assert.equal(runnerIndex.includes("/assets/app.js"), false, "the old plain runner script is gone");
+// The Node build writes runner-manifest.json, and the web server builds the shell from it.
+const runnerManifest = JSON.parse(readFileSync(new URL("../apps/web/public/runner-manifest.json", import.meta.url), "utf8"));
+assert.ok(runnerManifest.js, "the test runner entry is in the manifest");
+assert.ok(existsSync(new URL(`../apps/web/public${runnerManifest.js}`, import.meta.url)), "the test runner entry bundle exists on disk");
+assert.ok(runnerManifest.css && existsSync(new URL(`../apps/web/public${runnerManifest.css}`, import.meta.url)), "the test runner stylesheet exists on disk");
 
 // The React result report build output is committed too, so Render needs no build command.
-const reportIndex = readFileSync(new URL("../apps/web/public/hasil/index.html", import.meta.url), "utf8");
-const reportEntry = reportIndex.match(/src="(\/hasil\/assets\/[^"]+\.js)"/);
-assert.ok(reportEntry, "the result report build output exists");
-assert.ok(existsSync(new URL(`../apps/web/public${reportEntry[1]}`, import.meta.url)), "the result report entry bundle exists on disk");
-assert.equal(/<script(?![^>]*\bsrc=)/i.test(reportIndex), false, "the built report uses no inline script");
+const reportManifest = JSON.parse(readFileSync(new URL("../apps/web/public/hasil/report-manifest.json", import.meta.url), "utf8"));
+assert.ok(reportManifest.js, "the result report entry is in the manifest");
+assert.ok(existsSync(new URL(`../apps/web/public${reportManifest.js}`, import.meta.url)), "the result report entry bundle exists on disk");
+assert.ok(reportManifest.css && existsSync(new URL(`../apps/web/public${reportManifest.css}`, import.meta.url)), "the result report stylesheet exists on disk");
+
+// The app source and build output carry no HTML files. Only the certificate print templates keep
+// their HTML, as the owner allowed.
+function htmlFiles(dir) {
+  return readdirSync(dir, { withFileTypes: true }).flatMap((entry) => entry.isDirectory()
+    ? htmlFiles(new URL(`${entry.name}/`, dir))
+    : (entry.name.endsWith(".html") ? [new URL(entry.name, dir).pathname] : []));
+}
+for (const dir of ["../apps/web/student/", "../apps/web/result/", "../apps/web/public/", "../apps/admin/client/", "../apps/admin/public/admin/"]) {
+  assert.deepEqual(htmlFiles(new URL(dir, import.meta.url)), [], `${dir} has no HTML files`);
+}
 
 // One report view model for the four tests: placement, pre-test, post-test, and IELTS mockup.
 const { buildReport } = await import("../apps/web/result/src/report.js");

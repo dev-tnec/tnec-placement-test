@@ -1,6 +1,9 @@
 // Public test server: the test pages and the public API.
 // Start alone with `npm run start -w @tnec/web`, or together with the admin app via `npm start`.
+// The two React apps have no HTML files. Their document shells are built here from the hashed
+// file names that the Node esbuild build writes into runner-manifest.json and report-manifest.json.
 
+import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { loadEnvFile, buildEnv } from "@tnec/core/env";
@@ -14,16 +17,63 @@ import { handlePublic, SPEAKING_ROUTE, SPEAKING_BODY_LIMIT } from "./src/api.js"
 const PUBLIC_DIR = resolve(dirname(fileURLToPath(import.meta.url)), "public");
 // The speaking section records from this page's own origin. Camera and location stay off.
 const PAGE_HEADERS = { ...BASE_HEADERS, "Permissions-Policy": "camera=(), microphone=(self), geolocation=()", "Content-Security-Policy": STRICT_CSP };
+const runner = JSON.parse(readFileSync(resolve(PUBLIC_DIR, "runner-manifest.json"), "utf8"));
+const report = JSON.parse(readFileSync(resolve(PUBLIC_DIR, "hasil/report-manifest.json"), "utf8"));
+
+const htmlResponse = (body) => new Response(body, {
+  status: 200,
+  headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store", ...PAGE_HEADERS },
+});
+const styleTag = (href) => (href ? `<link rel="stylesheet" crossorigin href="${href}">` : "");
+const scriptTag = (src) => `<script type="module" crossorigin src="${src}"></script>`;
+
+function runnerShell() {
+  return `<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Tes penempatan online Titik Nol English Course, lengkap dengan level, skor, dan rekomendasi program.">
+  <meta name="theme-color" content="#0A1B38">
+  <title>Tes Penempatan Online - Titik Nol English Course</title>
+  <link rel="icon" href="/favicon.png" type="image/png">
+  ${styleTag(runner.css)}
+  ${scriptTag(runner.js)}
+</head>
+<body data-screen="intro">
+  <div id="root"></div>
+  <noscript><p class="noscript">Aktifkan JavaScript di browser kamu untuk mengerjakan tes ini.</p></noscript>
+</body>
+</html>`;
+}
+
+function reportShell() {
+  return `<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex">
+  <link rel="icon" href="/favicon.png" type="image/png">
+  <title>Hasil Tes, Titik Nol English Course</title>
+  ${styleTag(report.css)}
+  ${scriptTag(report.js)}
+</head>
+<body>
+  <div id="root"></div>
+</body>
+</html>`;
+}
 
 export function createWebHandler() {
   const handler = async (request, env) => {
     const url = new URL(request.url);
     if (url.pathname.startsWith("/api/")) return handlePublic(request, env, url);
     if (request.method !== "GET" && request.method !== "HEAD") return textResponse(405, "Metode tidak diizinkan.");
+    if (url.pathname === "/" || url.pathname === "/index.html") return htmlResponse(runnerShell());
+    if (url.pathname === "/hasil" || url.pathname === "/hasil/" || url.pathname === "/hasil/index.html") return htmlResponse(reportShell());
     const cacheControl = url.pathname === "/favicon.png" ? "public, max-age=86400" : undefined;
-    // The React report is one page: /hasil and /hasil/ serve the same built index.html.
-    const pathname = url.pathname === "/hasil" ? "/hasil/" : url.pathname;
-    const file = await staticResponse(PUBLIC_DIR, pathname, { headers: PAGE_HEADERS, cacheControl });
+    const file = await staticResponse(PUBLIC_DIR, url.pathname, { headers: PAGE_HEADERS, cacheControl });
     return file || textResponse(404, "Halaman tidak ditemukan.");
   };
   // Only the speaking upload may send more than the usual 256 KB.

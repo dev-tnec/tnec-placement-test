@@ -1,5 +1,4 @@
-// Dashboard entry: the page shell in index.html carries the icon sprite, the menu host, and the
-// toast stack; everything inside #root is React.
+// Dashboard entry: React renders the icon sprite, the menu host, and the toast stack.
 import "./admin.css";
 import { createRoot } from "react-dom/client";
 import App from "./App.jsx";

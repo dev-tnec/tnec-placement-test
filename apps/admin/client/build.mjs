@@ -1,19 +1,17 @@
-// Runs the Vite build directly with node, so it works without npm.cmd on PowerShell.
-import { spawnSync } from "node:child_process";
-import { existsSync } from "node:fs";
+// Builds the React dashboard with Node and esbuild, then writes the manifest the admin server
+// reads to build the /admin and /admin/login shells. No Vite and no HTML entry file.
+import { writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { buildReact } from "../../../scripts/build-react.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
-const candidates = [
-  resolve(here, "../../../node_modules/vite/bin/vite.js"),
-  resolve(here, "../../node_modules/vite/bin/vite.js"),
-  resolve(here, "node_modules/vite/bin/vite.js"),
-];
-const viteBin = candidates.find(existsSync);
-if (!viteBin) {
-  console.error("Vite belum terpasang. Jalankan npm install dulu.");
-  process.exit(1);
-}
-const result = spawnSync(process.execPath, [viteBin, "build"], { cwd: here, stdio: "inherit" });
-process.exit(result.status ?? 1);
+const manifest = await buildReact({
+  entries: {
+    app: "apps/admin/client/src/main.jsx",
+    login: "apps/admin/client/src/login-main.jsx",
+  },
+  outdir: "apps/admin/public/admin/assets",
+  urlBase: "/admin/assets/",
+});
+writeFileSync(resolve(here, "../public/admin/admin-manifest.json"), JSON.stringify(manifest, null, 2));

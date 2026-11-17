@@ -1,6 +1,7 @@
 // Admin dashboard: protected pages under /admin and the JSON API under /api/admin.
 // Sessions are random tokens in an HttpOnly cookie; only their SHA-256 hash is stored in the database.
 
+import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { HttpError, json, readJson, nowSeconds, normalizeWhatsapp, isEmail, text, multiline, int } from "@tnec/core/http";
@@ -25,6 +26,31 @@ import {
 } from "./certificates.js";
 
 const PUBLIC_DIR = resolve(dirname(fileURLToPath(import.meta.url)), "../public");
+const ADMIN_MANIFEST = JSON.parse(readFileSync(resolve(PUBLIC_DIR, "admin/admin-manifest.json"), "utf8"));
+
+/* The dashboard and login shells are built here from the hashed files the Node build wrote into
+   admin-manifest.json. No HTML file is stored or served from disk. */
+function adminShell(entry) {
+  const { js, css } = ADMIN_MANIFEST[entry];
+  const title = entry === "login" ? "Masuk | Dasbor Titik Nol" : "Dasbor Titik Nol";
+  const bodyClass = entry === "login" ? ' class="login-page"' : "";
+  return `<!doctype html>
+<html lang="id">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex, nofollow">
+  <title>${title}</title>
+  <link rel="icon" href="/favicon.png" type="image/png">
+  ${css ? `<link rel="stylesheet" crossorigin href="${css}">` : ""}
+  <script type="module" crossorigin src="${js}"></script>
+</head>
+<body${bodyClass}>
+  <div id="root"></div>
+  ${entry === "app" ? '<div class="menu" id="menu" role="menu" hidden></div>\n  <div class="toasts" id="toasts" role="status" aria-live="polite"></div>' : ""}
+</body>
+</html>`;
+}
 
 const SESSION_COOKIE = "tnec_admin";
 const SESSION_TTL = 60 * 60 * 12;
@@ -73,11 +99,11 @@ export async function serveAdminPage(request, env, url) {
   }
   if (path === "/admin/login" || path === "/admin/login/") {
     if (user) return Response.redirect(new URL("/admin/", url), 302);
-    return withHeaders(await staticResponse(PUBLIC_DIR, "/admin/login.html"));
+    return withHeaders(new Response(adminShell("login"), { headers: { "Content-Type": "text/html; charset=utf-8" } }));
   }
   if (path === "/admin/" || path === "/admin/index.html") {
     if (!user) return Response.redirect(new URL("/admin/login", url), 302);
-    return withHeaders(await staticResponse(PUBLIC_DIR, "/admin/index.html"));
+    return withHeaders(new Response(adminShell("app"), { headers: { "Content-Type": "text/html; charset=utf-8" } }));
   }
   return withHeaders(textResponse(404, "Halaman tidak ditemukan."));
 }

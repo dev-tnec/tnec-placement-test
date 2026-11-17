@@ -318,13 +318,13 @@ The email uses the same hex values as this file. It cannot use CSS variables, so
 
 ## 16. Implementation
 
-The test site is React, built by Vite from `apps/web/student` into `apps/web/public`, and served by a small Node.js server. The result report at `/hasil` is React too, built from `apps/web/result` into `apps/web/public/hasil`, and the dashboard is React, built from `apps/admin/client` into `apps/admin/public/admin`. All three build outputs are committed, so the servers only serve files. Tailwind is not used in any of them, even though the reference mock uses it, because the production page needs a strict content security policy and a small payload. The student runner keeps the approved `app.css`, and the report has its own `hasil.css` with the same tokens, not a utility framework.
+The test site is React, bundled with Node and esbuild from `apps/web/student` into `apps/web/public`, and served by a small Node.js server. The result report at `/hasil` is React too, built from `apps/web/result` into `apps/web/public/hasil`, and the dashboard is React, built from `apps/admin/client` into `apps/admin/public/admin`. The Node servers generate the document shells from the build manifests, so no HTML file is stored in the app source or build. All three build outputs are committed, so the servers only serve files. Tailwind is not used in any of them, even though the reference mock uses it, because the production page needs a strict content security policy and a small payload. The student runner keeps the approved `app.css`, and the report has its own `hasil.css` with the same tokens, not a utility framework.
 
 The speaking wave lives in `apps/web/student/src/live-waveform.js`, the ElevenLabs UI LiveWaveform port with its MIT notice and source link at the top; keep both when touching it.
 
 Both apps declare the same globals once: `[hidden] { display: none !important; }`, `box-sizing: border-box` on everything, the `.sr-only` helper, and the `.tnum` tabular numerals helper. Without the hidden rule, a component class that sets `display` beats the hidden attribute and leaves widgets that should be hidden on screen.
 
-The CSS lives in `apps/web/student/src/app.css` and is imported by the React entry, so Vite hashes it. Tokens are declared once at the top. Component classes are prefixed by block name (`option`, `nav-btn`, `dialog`, `stepper`, `ladder`) rather than utility names. State classes use `is-` (`is-selected`, `is-current`, `is-answered`, `is-flagged`, `is-warning`, `is-active`, `is-done`).
+The CSS lives in `apps/web/student/src/app.css` and is imported by the React entry, so esbuild hashes it. Tokens are declared once at the top. Component classes are prefixed by block name (`option`, `nav-btn`, `dialog`, `stepper`, `ladder`) rather than utility names. State classes use `is-` (`is-selected`, `is-current`, `is-answered`, `is-flagged`, `is-warning`, `is-active`, `is-done`).
 
 The brand logo is `apps/web/public/assets/logo-titik-nol.png` (black lockup, 502 by 85 pixels) and `apps/web/public/assets/logo-titik-nol-white.png` (white lockup, 501 by 84 pixels), copied from the TNEC asset folder. The white lockup renders at 140px in the hero, the black lockup at 110px in the footer and at 150px in the result header. Do not redraw or recolor either file.
 
@@ -340,7 +340,7 @@ A pre-test or post-test opens from a personal link, `/?undangan=<token>`, that t
 
 ## 18. Dashboard
 
-The internal dashboard at `/admin` is React, built by Vite from `apps/admin/client`, and its CSS is `apps/admin/client/src/admin.css`; the build output is committed to `apps/admin/public/admin` so the server only serves files. It uses the same tokens with the same color rule: primary and destructive buttons are navy, red is only for status dots, error text, and low accuracy bars, and focus rings are navy. Status is a dot plus a text label. There are no colored edge stripes.
+The internal dashboard at `/admin` is React, bundled with Node and esbuild from `apps/admin/client`, and its CSS is `apps/admin/client/src/admin.css`; the build output is committed to `apps/admin/public/admin` so the server only serves files. The dashboard server generates the shell from `admin-manifest.json`, so there is no HTML file. It uses the same tokens with the same color rule: primary and destructive buttons are navy, red is only for status dots, error text, and low accuracy bars, and focus rings are navy. Status is a dot plus a text label. There are no colored edge stripes.
 
 A page header is the title and its actions, with no description under the title. The owner rejected explanatory lines there on 16 November 2026. The only extra item allowed is a test page's Ditutup status when that test is closed. Record pages keep their single line of facts, such as a student's email and WhatsApp number or a submission's start time and device.
 
