@@ -20,7 +20,7 @@ export function createWebHandler() {
     const url = new URL(request.url);
     if (url.pathname.startsWith("/api/")) return handlePublic(request, env, url);
     if (request.method !== "GET" && request.method !== "HEAD") return textResponse(405, "Metode tidak diizinkan.");
-    const cacheControl = url.pathname === "/favicon.svg" ? "public, max-age=86400" : undefined;
+    const cacheControl = url.pathname === "/favicon.png" ? "public, max-age=86400" : undefined;
     // The React report is one page: /hasil and /hasil/ serve the same built index.html.
     const pathname = url.pathname === "/hasil" ? "/hasil/" : url.pathname;
     const file = await staticResponse(PUBLIC_DIR, pathname, { headers: PAGE_HEADERS, cacheControl });
