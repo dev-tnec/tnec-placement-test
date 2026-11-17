@@ -95,7 +95,18 @@ function speakingText(sp) {
   return lines;
 }
 
-export function buildResultEmail({ name, email, score, total, level, speaking = null }) {
+/** The panel with the private link to the full result page. Empty when the link is missing. */
+function resultLinkHtml(url) {
+  if (!url) return "";
+  return `<div style="margin:0 0 24px;border:1px solid ${BORDER};border-radius:12px;padding:20px 24px;text-align:center;">
+    <div style="font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:${GRAY};font-weight:700;">Halaman hasil lengkap</div>
+    <p style="margin:8px 0 14px;font-size:14px;line-height:1.6;color:${NAVY};">Simpan tautan ini, karena kamu bisa membukanya kapan saja untuk melihat hasil dan rekomendasi program kamu.</p>
+    <a href="${escapeHtml(url)}" style="display:block;background:${NAVY_700};color:#FFFFFF;text-decoration:none;text-align:center;font-size:15px;font-weight:700;padding:14px 24px;border-radius:999px;">Buka hasil lengkap di web</a>
+    <p style="margin:12px 0 0;font-size:12px;line-height:1.5;color:${GRAY};word-break:break-all;">${escapeHtml(url)}</p>
+  </div>`;
+}
+
+export function buildResultEmail({ name, email, score, total, level, speaking = null, resultUrl = null }) {
   const safeName = escapeHtml(name);
   const waLink = `https://wa.me/${WHATSAPP}?text=${encodeURIComponent(
     `Halo Admin Titik Nol, saya ${name}. Saya baru selesai mengerjakan tes penempatan dengan hasil ${level.label} (${score} dari ${total}) dan ingin berkonsultasi tentang program yang sesuai.`,
@@ -131,6 +142,7 @@ export function buildResultEmail({ name, email, score, total, level, speaking = 
       </div>
 
       ${speakingHtml(speaking)}
+      ${resultLinkHtml(resultUrl)}
       <p style="margin:0 0 20px;font-size:16px;line-height:1.65;">${escapeHtml(level.description)}</p>
 
       <div style="border-left:4px solid ${YELLOW};padding:4px 0 4px 16px;margin:0 0 28px;">
@@ -164,6 +176,7 @@ export function buildResultEmail({ name, email, score, total, level, speaking = 
     `Level kamu: ${level.label}`,
     `Skor: ${score} dari ${total}`,
     ...speakingText(speaking),
+    ...(resultUrl ? ["", `Hasil lengkap kamu: ${resultUrl}`] : []),
     "",
     level.description,
     "",

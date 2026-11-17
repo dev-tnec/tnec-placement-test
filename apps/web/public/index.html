@@ -333,20 +333,27 @@
   <section class="screen" id="screen-speaking" aria-labelledby="speaking-title" hidden>
     <div class="wrap wrap--details">
       <div class="speaking-grid">
-        <div class="question-card">
+
+        <!-- Step 1: the voice check -->
+        <div class="question-card" id="speak-check-card">
           <div class="question-card__top">
             <span class="badge">Bagian speaking</span>
-            <span class="question-card__meta" id="speaking-step">Bagian terakhir sebelum hasil</span>
+            <span class="question-card__meta">Langkah 1 dari 2</span>
           </div>
-
           <div class="question-card__body">
-            <h1 class="speaking-title" id="speaking-title" tabindex="-1">Jawab pertanyaan ini dengan berbicara.</h1>
-            <div class="prompt-canvas">
-              <span class="prompt-canvas__corner" aria-hidden="true">Pertanyaan speaking</span>
-              <p class="question__prompt" id="speaking-prompt"></p>
-            </div>
+            <p class="eyebrow">Sebelum mulai</p>
+            <h1 class="speaking-title" id="speaking-title" tabindex="-1">Cek dulu suara kamu</h1>
+            <p class="speaking-lead" id="speak-check-lead">
+              Rekam sebentar saja, lalu dengarkan hasilnya. Kalau suara kamu terdengar jelas,
+              kamu siap menjawab pertanyaan speaking.
+            </p>
 
-            <p class="speak-note" id="speak-note"></p>
+            <ol class="speak-steps">
+              <li>Tekan <strong>Rekam percobaan</strong> dan izinkan mikrofonnya.</li>
+              <li>Bicara apa saja selama 5 sampai 10 detik, misalnya kenalan singkat kamu.</li>
+              <li>Dengarkan rekamannya. Jelas? Lanjut. Kurang jelas? Cek ulang.</li>
+            </ol>
+
             <p class="banner banner--warning" id="speak-error" hidden></p>
 
             <div class="speak-meter" id="speak-meter" hidden>
@@ -355,20 +362,65 @@
             <p class="speak-timer" id="speak-timer" role="timer" aria-live="off" hidden>00:00</p>
 
             <div class="speak-actions">
+              <button class="btn btn--primary btn--lg" id="speak-check-start" type="button">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                  <circle cx="12" cy="12" r="5"></circle>
+                  <path d="M12 1v3M12 20v3M4.2 4.2l2.1 2.1M17.7 17.7l2.1 2.1M1 12h3M20 12h3M4.2 19.8l2.1-2.1M17.7 6.3l2.1-2.1"></path>
+                </svg>
+                Rekam percobaan
+              </button>
+              <button class="btn btn--navy btn--lg" id="speak-check-stop" type="button" hidden>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                  <rect x="6" y="6" width="12" height="12" rx="2"></rect>
+                </svg>
+                Selesai
+              </button>
+              <button class="btn btn--secondary" id="speak-skip" type="button" hidden>Lanjut tanpa rekaman</button>
+            </div>
+
+            <div class="speak-review" id="speak-check-review" hidden>
+              <audio id="speak-check-audio" controls preload="metadata"></audio>
+              <div class="speak-review__actions">
+                <button class="btn btn--secondary" id="speak-check-retry" type="button">Cek ulang</button>
+                <button class="btn btn--primary" id="speak-check-ok" type="button">
+                  Suaraku jelas, lanjut
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                    <path d="M5 12h14M13 6l6 6-6 6"></path>
+                  </svg>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Step 2: the answer -->
+        <div class="question-card" id="speak-answer-card" hidden>
+          <div class="question-card__top">
+            <span class="badge">Bagian speaking</span>
+            <span class="question-card__meta" id="speaking-step">Langkah 2 dari 2</span>
+          </div>
+          <div class="question-card__body">
+            <p class="eyebrow">Pertanyaan speaking</p>
+            <div class="prompt-canvas">
+              <p class="question__prompt" id="speaking-prompt"></p>
+            </div>
+
+            <p class="speaking-lead" id="speak-note"></p>
+
+            <div class="speak-actions">
               <button class="btn btn--primary btn--lg" id="speak-start" type="button" hidden>
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
                   <circle cx="12" cy="12" r="5"></circle>
                   <path d="M12 1v3M12 20v3M4.2 4.2l2.1 2.1M17.7 17.7l2.1 2.1M1 12h3M20 12h3M4.2 19.8l2.1-2.1M17.7 6.3l2.1-2.1"></path>
                 </svg>
-                Mulai rekam
+                Mulai jawab
               </button>
               <button class="btn btn--navy btn--lg" id="speak-stop" type="button" hidden>
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
                   <rect x="6" y="6" width="12" height="12" rx="2"></rect>
                 </svg>
-                Selesai merekam
+                Selesai menjawab
               </button>
-              <button class="btn btn--secondary" id="speak-skip" type="button" hidden>Lanjut tanpa rekaman</button>
             </div>
 
             <div class="speak-review" id="speak-review" hidden>
@@ -390,6 +442,7 @@
             </p>
           </div>
         </div>
+
       </div>
     </div>
   </section>
@@ -532,10 +585,24 @@
         </div>
 
         <div class="result-body panel">
+          <div class="speaking-result" id="result-speaking" hidden>
+            <p class="eyebrow">Nilai speaking kamu</p>
+            <div class="speaking-result__head">
+              <p class="speaking-result__cefr" id="speaking-result-cefr">B2</p>
+              <p class="speaking-result__band">
+                <strong id="speaking-result-ielts">6.0</strong>
+                <span id="speaking-result-source">dinilai otomatis oleh Speechace</span>
+              </p>
+            </div>
+            <ul class="speaking-result__aspects" id="speaking-result-aspects"></ul>
+            <p class="speaking-result__note" id="speaking-result-note" hidden></p>
+          </div>
+
           <div class="result-block">
             <p class="eyebrow">Rekomendasi program</p>
             <p class="result-program" id="result-program"></p>
           </div>
+          <div class="program-grid" id="program-grid"></div>
           <p class="result-description" id="result-description"></p>
 
           <a class="btn btn--primary btn--lg btn--block" id="wa-btn" href="#" target="_blank" rel="noopener">
@@ -591,6 +658,9 @@
           </p>
           <p class="pending-note">
             Halaman ini boleh ditutup. Hasilnya tetap terkirim tanpa perlu halaman ini terbuka.
+          </p>
+          <p class="pending-note pending-note--auto" id="pending-waiting">
+            Halaman ini juga menampilkan hasil kamu sendiri setelah penilaian selesai, jadi tunggu sebentar saja.
           </p>
         </div>
 

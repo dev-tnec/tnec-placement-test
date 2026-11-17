@@ -56,6 +56,11 @@ The full flow passes in a headless browser against the `dev` branch: first admin
 | `db/migrations/0002_result_whatsapp.sql` | Adds `wa_sent_at` and `wa_status` to `attempts` for the automatic result WhatsApp |
 | `db/migrations/0003_result_delivery.sql` | Adds `delivery_lease_until` to `attempts` for the background result delivery |
 | `db/migrations/0004_certificates.sql` | Adds `certificate_types`, `certificate_counters`, and `certificates`, and seeds the Certificate of Completion, TOEFL Prediction, and IELTS Prediction types |
+| `db/migrations/0005_speaking.sql` | Adds the speaking settings on `tests` and the `speaking_submissions` queue |
+| `db/migrations/0006_program_link.sql` | Adds `program_url` and `program_image` on `levels`, seeds the real product pages, and adds `result_token` on `attempts` for the private result link |
+| `packages/core/src/speaking.js` | The scoring worker: claims a recording with a lease, calls Speechace, stores the five scores, retries, purges old audio, and sweeps expired attempts |
+| `packages/core/src/speaking-result.js` | Pure scoring rules: reading a Speechace response, failure classification, retry math, and the speaking facts the email, WhatsApp, and dashboard read |
+| `tools/speechace/` | A local mic test page with a key proxy, and `preview-result.mjs` which prints the exact WhatsApp and email copy |
 | `start.cmd` | Double-click launcher for Windows: installs on first run, then runs `scripts/start.mjs` |
 | `scripts/start.mjs` | `npm start`: migrate, then run both apps in one process |
 | `scripts/migrate.mjs`, `scripts/create-admin.mjs` | `npm run db:migrate`, `npm run admin:create` |
@@ -80,22 +85,27 @@ To run against the `dev` branch, point `ENV_FILE` at a second env file with the 
 3. On start, the browser requests fullscreen, then `POST /api/attempts` creates a row and returns the active questions without the answer key, plus the time mode and the violation limit. The question order is stored on the attempt.
 4. In total mode the test runs for the configured duration. In per question mode every question has its own seconds, the next question opens when the time runs out, there is no going back, and the answers are sent automatically after the last question.
 5. Submitting sends only the answers. The server grades them against the questions stored on the attempt and stores the key used with each answer. For the placement test the response never includes the score.
-6. Placement only: the details screen collects name, email, and WhatsApp. `POST /api/attempts/:id/contact` links or creates the student, logs the activity, marks the result email and the result WhatsApp as pending, and returns the result right away. The server sends both in the background (see Result delivery), so the result page never waits for Cloudflare or AttCos. Nobody presses anything for either one. A repeated contact step does not send a channel again once it has delivered for that attempt.
-7. Pre-test and post-test: the student opens `/?undangan=<token>` from a dashboard message. There is no contact step, and the score out of 100 shows right away, with pass or not for the post-test. A link works until it is used for a submission or expires after 14 days.
-8. A failed attempt is never submitted. When the total timer reaches zero, or when the violation limit is reached, the test stops and a dialog offers a retry or a return to the start. Neither failure leaves a row: the last strike deletes the attempt right away, and an attempt that ran out of time is deleted by the next sweep, which runs when a new test starts and in the six-hourly safety scan. Answers and recordings go with the row.
+6. Placement with speaking on: after the multiple choice part the student checks the microphone first with a 3 to 10 second test recording that is never uploaded, listens to it, and either retries or continues. Then the student records the answer, between the configured minimum and maximum seconds, can listen and re-record, and sends it once. A student whose microphone fails can skip the part and the result goes out without speaking.
+7. Placement only: the details screen collects name, email, and WhatsApp. `POST /api/attempts/:id/contact` links or creates the student, logs the activity, creates the private result link, marks the result email and the result WhatsApp as pending, and returns the result right away when there is no recording waiting. The server sends both channels in the background (see Result delivery), so the result page never waits for Cloudflare or AttCos. Nobody presses anything for either one. A repeated contact step does not send a channel again once it has delivered for that attempt.
+8. With a recording waiting, the contact step returns `result: null` and the page shows the waiting screen, which polls the result link every six seconds and shows the full result as soon as the recording is scored. The same link, `/?hasil=<token>`, goes out in the email and the WhatsApp message and opens the same result page without a session, including the speaking block and the program cards.
+9. Pre-test and post-test: the student opens `/?undangan=<token>` from a dashboard message. There is no contact step, and the score out of 100 shows right away, with pass or not for the post-test. A link works until it is used for a submission or expires after 14 days.
+10. A failed attempt is never submitted. When the total timer reaches zero, or when the violation limit is reached, the test stops and a dialog offers a retry or a return to the start. Neither failure leaves a row: the last strike deletes the attempt right away, and an attempt that ran out of time is deleted by the next sweep, which runs when a new test starts and in the six-hourly safety scan. Answers and recordings go with the row.
 
 ## Public API (web app)
 
 | Method | Path | Returns |
 |---|---|---|
-| GET | `/api/config` | Consent version, open, time mode, duration, total, violation limit, WhatsApp, terms, privacy |
+| GET | `/api/config` | Consent version, open, time mode, duration, total, violation limit, WhatsApp, speaking settings, terms, privacy |
 | GET | `/api/invites/:token` | Same as config for the invited test, plus `invite: { test, testName, firstName }`. 404 or 410 when unusable |
 | POST | `/api/attempts` | `{ attemptId, secondsLeft, total, timeMode, maxViolations, questions }`. 423 when closed |
-| POST | `/api/attempts/:id/violation` | `{ ok, counted }` |
+| POST | `/api/attempts/:id/violation` | `{ ok, counted }`, plus `ended: true` when the limit deleted the attempt |
 | POST | `/api/attempts/:id/submit` | `{ ok, total, timedOut }`, plus `result` for invite attempts |
-| POST | `/api/attempts/:id/contact` | `{ delivery: { email, whatsapp }, result }`, where each channel is `sending`, `sent` (already delivered earlier), or `off` (not set up). Placement only |
+| POST | `/api/attempts/:id/speaking` | Raw audio body, up to 3 MB, `x-duration` header. `{ ok, status }`. Placement only, within 2 hours of submitting |
+| POST | `/api/attempts/:id/speaking-skip` | `{ ok }`. Records that the student could not record |
+| POST | `/api/attempts/:id/contact` | `{ delivery: { email, whatsapp }, resultToken, programs, result }`. With a recording waiting it returns `result: null` and `speaking: { status }` instead. Placement only |
+| GET | `/api/results/:token` | `{ ready, name, result: { score, total, level, speaking }, programs }` behind the private link. `ready: false` while the recording is still being scored |
 
-Every response is `no-store`. Bodies are capped at 16 KB. The consent version in the request must match `CONSENT_VERSION` in `packages/core/src/legal.js`; the current version is `2026-11-16c`.
+Every response is `no-store`. JSON bodies are capped at 16 KB and the speaking upload at 3 MB. The consent version in the request must match `CONSENT_VERSION` in `packages/core/src/legal.js`; the current version is `2026-11-17a`.
 
 ## Dashboard (admin app)
 
@@ -113,7 +123,18 @@ The user rejected five earlier versions. Rejected patterns: a generic stat card 
 
 The client loads everything from `GET /api/admin/bootstrap`, then loads a student's activities and a submission's answers when those pages open. Every change goes through the API, then the client reloads. Test links point at `PUBLIC_WEB_URL`.
 
-Admin routes, all under `/api/admin`, need a session except `login` and `setup`, and reject writes whose `Origin` is not the admin app's own origin: `bootstrap`, `logout`, `students` (create, bulk, get, patch, delete, notes, whatsapp, invite), `tests/:key` (settings, questions, reorder, duplicate, toggle, apply-seconds), `levels`, `attempts/:id` (detail, void, restore, resend-email, delete, bulk-delete), the catalog (`programs`, `periods`, `classes`, `tutors`), and certificates (`certificate-types` create, update, delete; `certificates` issue, update, revoke, restore). The printable page `/admin/certificates/<id>` needs a session too; only the template CSS and SVG files next to it are served without one.
+Admin routes, all under `/api/admin`, need a session except `login` and `setup`, and reject writes whose `Origin` is not the admin app's own origin: `bootstrap`, `logout`, `students` (create, bulk, get, patch, delete, notes, whatsapp, invite), `tests/:key` (settings, questions, reorder, duplicate, toggle, apply-seconds), `levels`, `attempts/:id` (detail, void, restore, resend-email, delete, bulk-delete), `speaking/:id` (audio, grade, retry, skip, reviewed), the catalog (`programs`, `periods`, `classes`, `tutors`), and certificates (`certificate-types` create, update, delete; `certificates` issue, update, revoke, restore). The printable page `/admin/certificates/<id>` needs a session too; only the template CSS and SVG files next to it are served without one.
+
+## Speaking, scored by Speechace
+
+Speaking is part of the placement test only, switched on in Placement Test, Pengaturan. The flow, the scoring queue, and the manual fallback live in `docs/prd-speaking-section.md`; the parts the code settled on:
+
+1. The student checks the microphone with a 3 to 10 second recording that is never uploaded, then answers the one configured question within the configured seconds. One upload per attempt, within 2 hours of submitting.
+2. `packages/core/src/speaking.js` claims each recording with a 120 second lease and calls Speechace `score/speech` with `include_ielts_feedback=1`, `relevance_context`, and `enforce_dialect=1`. Server errors and timeouts retry after 60 and 300 seconds; after the third try, or right away on a refused key, an empty quota, no speech, or another language, the row waits for the team.
+3. The five scores (pronunciation, fluency, grammar, vocabulary, coherence) are stored as Speechace sends them, on CEFR, IELTS, and 0 to 100. No conversion of our own. A `response_too_short` warning still sends the result but flags the row for review.
+4. The result email, the WhatsApp message, and the result page all wait until the recording is `graded`, `manual`, or `skipped`. The dashboard's Submission page plays the audio, shows the transcript and scores, and can re-run Speechace, grade by hand, skip with a reason, or mark a warning as checked.
+5. The Ringkasan view shows an alert when recordings wait for the team or when Speechace failed more than five times in the last hour.
+6. Recordings are deleted 30 days after the test; scores and transcripts stay. Without `SPEECHACE_KEY` on the server, every recording goes straight to the manual queue.
 
 ## Accounts and sessions
 
@@ -143,8 +164,9 @@ Times are Unix seconds in BIGINT columns, flags are 0 or 1 in INTEGER columns, a
 
 | Table | Purpose |
 |---|---|
-| `attempts`, `answers` | One row per attempt for all three tests; one row per question with the key used at grading time |
-| `tests`, `questions`, `levels` | Settings, question banks (status `aktif` or `draf`), placement thresholds |
+| `attempts`, `answers` | One row per attempt for all three tests; one row per question with the key used at grading time. `result_token` is the private result link |
+| `tests`, `questions`, `levels` | Settings, question banks (status `aktif` or `draf`), placement thresholds with `program_url` and `program_image` for the result page cards |
+| `speaking_submissions` | One recording per placement attempt: the audio as `bytea`, its work queue status, the five scores, the transcript, and the Speechace response |
 | `students`, `activities` | The student database and its history |
 | `programs`, `program_durations`, `program_tutors`, `tutors`, `periods`, `classes` | The catalog |
 | `invites` | Personal pre-test and post-test links; only the token hash is stored |
@@ -185,11 +207,11 @@ What it cannot do, and must not claim: stop a second device, a camera, or a help
 
 ## Privacy and consent
 
-The legal copy follows `.opencode/skills/data-privacy-compliance/SKILL.md`. The privacy policy names Neon (database, Singapore), Cloudflare (result email), and AttCos (WhatsApp, delivered through Meta's WhatsApp service) as processors, and says the result goes to the student's email and WhatsApp. Consent is recorded per attempt with the text version and timestamp; bump `CONSENT_VERSION` when the wording or the data use changes. Retention is stated as 24 months and there is no deletion job yet. The public test sets no cookies; the dashboard sets one session cookie for staff.
+The legal copy follows `.opencode/skills/data-privacy-compliance/SKILL.md`. The privacy policy names Neon (database, Singapore), Cloudflare (result email), Speechace (speaking scoring, Singapore), and AttCos (WhatsApp, delivered through Meta's WhatsApp service) as processors, and says the result goes to the student's email and WhatsApp. It also states that recordings are deleted after 30 days while the transcript and scores keep the 24 month retention, and that Speechace receives only the recording, the question, and a random id, never the student's name or contact. Consent is recorded per attempt with the text version and timestamp; bump `CONSENT_VERSION` when the wording or the data use changes. Retention is stated as 24 months and there is no deletion job yet. The public test sets no cookies; the dashboard sets one session cookie for staff.
 
 ## Email
 
-`packages/core/src/email.js` builds a 600px HTML email with inline styles and a plain text fallback, with a navy WhatsApp CTA. `mailer.js` sends it through the Cloudflare Email Sending API from `RESULT_FROM_EMAIL` (`placement@index-now.dev`, an onboarded sending domain). The placement result email goes out in the background after the contact step (see Result delivery). Without `CLOUDFLARE_EMAIL_TOKEN` the email is skipped and the result screen leaves it out of its note. The dashboard can resend from the submission page.
+`packages/core/src/email.js` builds a 600px HTML email with inline styles and a plain text fallback, with a navy WhatsApp CTA. With a graded recording it also carries the speaking card, the transcript, up to three notes, and the panel with the private result link; without speaking it is the original email plus the result link. `mailer.js` sends it through the Cloudflare Email Sending API from `RESULT_FROM_EMAIL` (`placement@index-now.dev`, an onboarded sending domain). The placement result email goes out in the background after the contact step (see Result delivery). Without `CLOUDFLARE_EMAIL_TOKEN` the email is skipped and the result screen leaves it out of its note. The dashboard can resend from the submission page. `node tools/speechace/preview-result.mjs` prints the exact WhatsApp and email copy for both the Speechace and the manual case.
 
 ## Certificates
 
@@ -225,7 +247,7 @@ A new type that reuses an existing design needs no code, because the team adds i
 
 ## Design
 
-Read `DESIGN.md` before touching CSS. Navy structure, navy buttons, white reading surface, red only for errors and urgent state, one yellow emphasis. No gradients, no third-party fonts, and no inline scripts or styles, because both apps send a strict CSP.
+Read `DESIGN.md` before touching CSS. Navy structure, navy buttons, white reading surface, red only for errors and urgent state, one yellow emphasis. No gradients, no third-party fonts, and no inline scripts or styles, because both apps send a strict CSP. The CSP allows images from `https://titiknolenglish.com` only, for the program cards on the result page, and `blob:` media for the recording playback.
 
 ## Git and push rules
 

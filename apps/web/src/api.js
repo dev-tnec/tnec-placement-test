@@ -3,15 +3,15 @@
 
 import { HttpError, json, readJson, nowSeconds, normalizeWhatsapp, isEmail } from "@tnec/core/http";
 import {
-  TEST_NAMES, PER_MODE_GRACE_SECONDS, loadTest, loadQuestions, loadLevels, levelFor, publicLevel,
+  TEST_NAMES, PER_MODE_GRACE_SECONDS, loadTest, loadQuestions, loadLevels, levelFor, publicLevel, programCards,
   focusStrikes, addActivity, upsertStudentFromContact, newId,
 } from "@tnec/core/store";
 import { CONSENT_VERSION, PRIVACY, TERMS, WHATSAPP, fillLegal } from "@tnec/core/legal";
 import { whatsappConfigured } from "@tnec/core/whatsapp";
 import { deliverInBackground, runInBackground, EMAIL_SKIPPED } from "@tnec/core/delivery";
-import { sha256Hex } from "@tnec/core/crypto";
+import { sha256Hex, randomToken } from "@tnec/core/crypto";
 import { SPEAKING_MAX_BYTES, speakingType, speechaceConfigured, gradeInBackground, purgeExpiredAttempts } from "@tnec/core/speaking";
-import { isFinalStatus } from "@tnec/core/speaking-result";
+import { isFinalStatus, speakingFacts } from "@tnec/core/speaking-result";
 
 const PUBLIC_BODY_LIMIT = 16 * 1024;
 // The recording comes as the raw request body. The cap is 3 MB plus room for nothing else.
@@ -45,6 +45,9 @@ async function handleApi(request, env, url) {
 
   const invite = path.match(/^\/api\/invites\/([A-Za-z0-9_-]{20,80})$/);
   if (invite && request.method === "GET") return getInvite(env, invite[1]);
+
+  const result = path.match(/^\/api\/results\/([A-Za-z0-9_-]{20,80})$/);
+  if (result && request.method === "GET") return getResultLink(env, result[1]);
 
   if (path === "/api/attempts" && request.method === "POST") return createAttempt(request, env);
 
@@ -314,12 +317,14 @@ async function saveContact(request, env, attemptId) {
   // delivered for this attempt keeps its status, so a repeated contact step never sends it twice;
   // the check sits in SQL so a send finishing at the same moment cannot be overwritten.
   const student = attempt.student_id ? { id: attempt.student_id, created: false } : await upsertStudentFromContact(env, { name, email, whatsapp });
+  // The private link to this result, sent by email and WhatsApp and used by the waiting screen.
+  const resultToken = attempt.result_token || randomToken(24);
   const statements = [
-    env.DB.prepare(`UPDATE attempts SET name = ?, email = ?, whatsapp = ?, student_id = ?,
+    env.DB.prepare(`UPDATE attempts SET name = ?, email = ?, whatsapp = ?, student_id = ?, result_token = COALESCE(result_token, ?),
         email_status = CASE WHEN email_sent_at IS NOT NULL THEN email_status ELSE ? END,
         wa_status = CASE WHEN wa_sent_at IS NOT NULL THEN wa_status ELSE ? END
       WHERE id = ? RETURNING email_status, wa_status`)
-      .bind(name, email, whatsapp, student.id, env.SEND_EMAIL ? "pending" : EMAIL_SKIPPED, whatsappConfigured(env) ? "pending" : "skipped", attemptId),
+      .bind(name, email, whatsapp, student.id, resultToken, env.SEND_EMAIL ? "pending" : EMAIL_SKIPPED, whatsappConfigured(env) ? "pending" : "skipped", attemptId),
   ];
   if (!attempt.student_id) {
     statements.push(addActivity(env, student.id, "test", `Mengerjakan placement test dengan skor ${score} dari ${attempt.total} dan masuk level ${level.label}.`, null, { attemptId }, now));
@@ -337,10 +342,12 @@ async function saveContact(request, env, attemptId) {
   // With a recording, the full result goes out by email and WhatsApp after it is scored, and the
   // page only says so. A student who skipped speaking sees the result right away, as before.
   if (speaking && speaking.status !== "skipped") {
-    return json({ delivery, result: null, speaking: { status: speaking.status } });
+    return json({ delivery, result: null, speaking: { status: speaking.status }, resultToken, name });
   }
   return json({
     delivery,
+    resultToken,
+    programs: programCards(levels, level.key),
     result: {
       score: attempt.score ?? 0,
       total: attempt.total,
@@ -416,6 +423,46 @@ async function skipSpeaking(request, env, attemptId) {
      VALUES (?, ?, ?, ?, 'skipped', ?, ?, ?, ?) ON CONFLICT (attempt_id) DO NOTHING`,
   ).bind(newId("spk"), attemptId, attempt.student_id, test.speakingPrompt || "", SKIP_REASONS[reason], JSON.stringify({ source: "student", reason }), now, now).run();
   return json({ ok: true });
+}
+
+/* ---------- The private result link ---------- */
+
+/**
+ * The result behind the link from the email and the WhatsApp message. While the recording is still
+ * being scored, it answers not ready, so the page can keep checking. The link carries no session,
+ * so it only ever returns this one result and no contact details.
+ */
+async function getResultLink(env, token) {
+  const attempt = await env.DB.prepare(
+    "SELECT id, test_key, status, name, score, total, level_key, timed_out, violations FROM attempts WHERE result_token = ?",
+  ).bind(token).first();
+  if (!attempt) throw new HttpError(404, "Tautan hasil ini tidak ditemukan. Periksa kembali tautan yang kami kirim ke email dan WhatsApp kamu.");
+  if ((attempt.test_key || "placement") !== "placement" || attempt.status !== "submitted") {
+    throw new HttpError(410, "Hasil tautan ini belum siap. Buka kembali tautannya setelah tes selesai.");
+  }
+
+  const speaking = await env.DB.prepare(
+    "SELECT status, cefr_overall, ielts_overall, scores, transcript FROM speaking_submissions WHERE attempt_id = ?",
+  ).bind(attempt.id).first();
+  const levels = await loadLevels(env);
+  const level = levels.find((l) => l.key === attempt.level_key) || levelFor(levels, attempt.score ?? 0);
+
+  if (speaking && !isFinalStatus(speaking.status)) {
+    return json({ ready: false, name: attempt.name || "" });
+  }
+  return json({
+    ready: true,
+    name: attempt.name || "",
+    result: {
+      score: attempt.score ?? 0,
+      total: attempt.total,
+      level: publicLevel(level),
+      timedOut: Boolean(attempt.timed_out),
+      violations: attempt.violations,
+      speaking: speakingFacts(speaking),
+    },
+    programs: programCards(levels, level.key),
+  });
 }
 
 // What the result page says about each channel: already delivered, on its way, or not used.

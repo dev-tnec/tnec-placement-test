@@ -29,7 +29,7 @@ export const BASE_HEADERS = {
   "Permissions-Policy": "camera=(), microphone=(), geolocation=()",
 };
 
-export const STRICT_CSP = "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; media-src 'self' blob:; connect-src 'self'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'";
+export const STRICT_CSP = "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data: https://titiknolenglish.com; font-src 'self'; media-src 'self' blob:; connect-src 'self'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'";
 
 /** Returns a Response for a file under `root`, or null when there is no such file. */
 export async function staticResponse(root, pathname, { headers = {}, cacheControl } = {}) {

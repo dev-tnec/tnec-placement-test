@@ -249,8 +249,7 @@ function speakingStub(row) {
 assert.equal(await deliverResult(speakingStub({ status: "pending" }), "attempt"), null, "the result waits for the speaking score");
 assert.equal(await deliverResult(speakingStub({ status: "graded", cefr_overall: "B2", ielts_overall: 6, scores: "{}", transcript: "" }), "attempt"), null, "a graded recording no longer blocks the claim, which finds nothing waiting");
 
-/* ---------- Speaking: reading a Speechace response ---------- */
-const speechaceOk = {
+/* ---------- Speaking: reading a Speechace response ---------- */const speechaceOk = {
   status: "success",
   request_id: "req_1",
   version: "9.17",
@@ -326,13 +325,40 @@ assert.equal(emailSpeaking.html.includes("<b>Bali</b>"), false, "the transcript 
 const emailManual = buildResultEmail({ name: "Rani", email: "rani@example.com", score: 13, total: 25, level: levelForScore(13), speaking: manualFacts });
 assert.ok(emailManual.text.includes("dinilai oleh tim Titik Nol"));
 
-const waSpeaking = buildResultWhatsApp({ name: "Rani Putri Lestari", score: 13, total: 25, level: levelForScore(13), speaking: facts });
+const waSpeaking = buildResultWhatsApp({ name: "Rani Putri Lestari", score: 13, total: 25, level: levelForScore(13), speaking: facts, resultUrl: "https://tes.example.test/?hasil=token123" });
 assert.ok(waSpeaking.includes("Speaking (Speechace):"));
 assert.ok(waSpeaking.includes("CEFR B2, IELTS 6.0"));
 assert.ok(waSpeaking.includes("Pronunciation 78 (B2)"));
+assert.ok(waSpeaking.includes("Hasil lengkap: https://tes.example.test/?hasil=token123"));
 assert.ok(waSpeaking.includes("bukan sertifikat resmi"));
 assert.ok(waSpeaking.length <= 1000, "the WhatsApp result stays under 1,000 characters");
 assert.equal(/[\u2013\u2014]/.test(waSpeaking), false, "no en or em dash");
+const waPlainLink = buildResultWhatsApp({ name: "Rani", score: 13, total: 25, level: levelForScore(13), resultUrl: "https://tes.example.test/?hasil=token123" });
+assert.ok(waPlainLink.includes("Hasil lengkap: https://tes.example.test/?hasil=token123"), "the result link reaches a student without speaking too");
+
+/* ---------- The program cards and the result link ---------- */
+import { programCards, publicLevel } from "@tnec/core/store";
+const levelRows = [
+  { key: "starter", label: "Starter", min: 0, max: 5, program: "Program Starter", programUrl: "https://titiknolenglish.com/product/general-english-offline/", programImage: "general.webp" },
+  { key: "basic", label: "Basic", min: 6, max: 10, program: "Program Basic", programUrl: "https://titiknolenglish.com/product/general-english-offline/", programImage: "general.webp" },
+  { key: "toefl-prep", label: "TOEFL/IELTS Preparation", min: 20, max: 23, program: "Kelas TOEFL/IELTS Preparation", programUrl: "https://titiknolenglish.com/product/toefl-preparation-itp-offline/", programImage: "toefl.webp" },
+];
+const cards = programCards(levelRows, "basic");
+assert.equal(cards.length, 2, "one card per distinct product page");
+assert.equal(cards[0].url, "https://titiknolenglish.com/product/general-english-offline/", "the recommended card comes first");
+assert.equal(cards[0].recommended, true);
+assert.equal(cards[0].levelLabel, "Basic");
+assert.equal(cards[0].levels.join(","), "Starter,Basic");
+assert.equal(cards[1].recommended, undefined);
+assert.equal(programCards([{ key: "x", label: "X", program: "P", programUrl: "", programImage: "" }], "x").length, 0, "levels without a url render no cards");
+const publicIntermediate = publicLevel({ key: "intermediate", label: "Intermediate", program: "Program Intermediate", programUrl: "https://titiknolenglish.com/product/general-english-offline/", programImage: "general.webp" });
+assert.equal(publicIntermediate.programUrl, "https://titiknolenglish.com/product/general-english-offline/");
+const emailWithLink = buildResultEmail({ name: "Rani", email: "rani@example.com", score: 13, total: 25, level: levelForScore(13), speaking: facts, resultUrl: "https://tes.example.test/?hasil=token123" });
+assert.ok(emailWithLink.html.includes("https://tes.example.test/?hasil=token123"), "the email links to the result page");
+assert.ok(emailWithLink.text.includes("Hasil lengkap kamu: https://tes.example.test/?hasil=token123"));
+assert.ok(emailWithLink.html.includes("Buka hasil lengkap di web"));
+const emailNoLink = buildResultEmail({ name: "Rani", email: "rani@example.com", score: 13, total: 25, level: levelForScore(13) });
+assert.equal(emailNoLink.html.includes("Halaman hasil lengkap"), false, "without a token the panel stays away");
 
 /* ---------- Speaking: the upload the browser sends ---------- */
 assert.equal(SPEAKING_MAX_BYTES, 3 * 1024 * 1024);

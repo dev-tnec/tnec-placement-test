@@ -93,6 +93,15 @@ const els = {
   submitTotal: $("#submit-total"),
   submitCancel: $("#submit-cancel"),
   submitConfirm: $("#submit-confirm"),
+  speakCheckCard: $("#speak-check-card"),
+  speakAnswerCard: $("#speak-answer-card"),
+  speakCheckLead: $("#speak-check-lead"),
+  speakCheckStart: $("#speak-check-start"),
+  speakCheckStop: $("#speak-check-stop"),
+  speakCheckReview: $("#speak-check-review"),
+  speakCheckAudio: $("#speak-check-audio"),
+  speakCheckRetry: $("#speak-check-retry"),
+  speakCheckOk: $("#speak-check-ok"),
   speakingPrompt: $("#speaking-prompt"),
   speakNote: $("#speak-note"),
   speakError: $("#speak-error"),
@@ -108,6 +117,13 @@ const els = {
   speakSend: $("#speak-send"),
   pendingWa: $("#pending-wa"),
   pendingEmailNote: $("#pending-email-note"),
+  resultSpeaking: $("#result-speaking"),
+  resultSpeakingCefr: $("#speaking-result-cefr"),
+  resultSpeakingIelts: $("#speaking-result-ielts"),
+  resultSpeakingSource: $("#speaking-result-source"),
+  resultSpeakingAspects: $("#speaking-result-aspects"),
+  resultSpeakingNote: $("#speaking-result-note"),
+  programGrid: $("#program-grid"),
   detailsLead: $("#details-lead"),
   detailsBenefit: $("#details-benefit-score"),
   timeupDialog: $("#timeup-dialog"),
@@ -154,7 +170,11 @@ const state = {
   recBlob: null,
   recBlobUrl: null,
   recDuration: 0,
+  recMode: "check",
+  checkBlobUrl: null,
   speakBusy: false,
+  resultToken: null,
+  pollId: null,
 };
 
 let pendingConsent = null;
@@ -162,8 +182,14 @@ let pendingConsent = null;
 init();
 
 async function init() {
-  const token = new URLSearchParams(window.location.search).get("undangan");
+  const params = new URLSearchParams(window.location.search);
+  const token = params.get("undangan");
   if (token) state.invite = token.trim();
+  const resultLink = params.get("hasil");
+  if (resultLink) {
+    openResultLink(resultLink.trim());
+    return;
+  }
 
   try {
     state.config = state.invite
@@ -207,7 +233,11 @@ async function init() {
   els.finishBtn.addEventListener("click", openSubmit);
   els.submitCancel.addEventListener("click", () => els.submitDialog.close());
   els.submitConfirm.addEventListener("click", submitAnswers);
-  els.speakStart.addEventListener("click", startRecording);
+  els.speakCheckStart.addEventListener("click", () => startRecording("check"));
+  els.speakCheckStop.addEventListener("click", stopRecording);
+  els.speakCheckRetry.addEventListener("click", retryVoiceCheck);
+  els.speakCheckOk.addEventListener("click", voiceCheckPassed);
+  els.speakStart.addEventListener("click", () => startRecording("answer"));
   els.speakStop.addEventListener("click", stopRecording);
   els.speakRetake.addEventListener("click", retakeRecording);
   els.speakSend.addEventListener("click", sendRecording);
@@ -819,11 +849,12 @@ async function saveContact(event) {
     state.contact = { name, email };
     state.delivery = data.delivery || null;
     if (data.result) {
-      renderResult(data.result);
+      renderResult(data.result, { programs: data.programs });
       showScreen("result");
     } else {
       renderPending();
       showScreen("pending");
+      if (data.resultToken) pollResult(data.resultToken);
     }
   } catch (error) {
     toast(error.message || "Data gagal disimpan. Silakan coba lagi.");
@@ -838,25 +869,14 @@ async function saveContact(event) {
 // Chrome and Edge record webm, Firefox ogg, and Safari mp4. The server accepts all of them.
 const REC_MIMES = ["audio/webm;codecs=opus", "audio/webm", "audio/ogg;codecs=opus", "audio/ogg", "audio/mp4"];
 
+// The voice check records a few seconds and is never uploaded. The answer recording is the one sent.
+const CHECK_SECONDS = { min: 3, max: 10 };
+
 const recordingSupported = () => Boolean(window.MediaRecorder && navigator.mediaDevices?.getUserMedia);
 
-function speakInstruction() {
+function answerInstruction() {
   const sp = state.speaking;
-  return `Jawab dalam bahasa Inggris selama ${sp.minSeconds} sampai ${sp.seconds} detik. Tekan Mulai rekam, izinkan mikrofonnya, bicara dalam satu tarikan, lalu tekan Selesai merekam.`;
-}
-
-function resetSpeakUi() {
-  els.speakError.hidden = true;
-  els.speakMeter.hidden = true;
-  els.speakTimer.hidden = true;
-  els.speakStart.hidden = false;
-  els.speakStart.disabled = false;
-  els.speakStop.hidden = true;
-  els.speakSkip.hidden = true;
-  els.speakReview.hidden = true;
-  els.speakSend.disabled = false;
-  els.speakRetake.disabled = false;
-  $("#speak-send-label").textContent = "Kirim rekaman";
+  return `Jawab dalam bahasa Inggris selama ${sp.minSeconds} sampai ${sp.seconds} detik, dalam satu tarikan tanpa membaca teks. Tekan Mulai jawab saat kamu siap.`;
 }
 
 function enterSpeaking() {
@@ -866,36 +886,61 @@ function enterSpeaking() {
     return;
   }
   clearRecording();
+  clearCheckRecording();
   els.speakingPrompt.textContent = sp.prompt;
-  resetSpeakUi();
-  els.speakNote.textContent = speakInstruction();
+  els.speakNote.textContent = answerInstruction();
+  els.speakCheckCard.hidden = false;
+  els.speakAnswerCard.hidden = true;
+  resetCheckUi();
   showScreen("speaking");
   if (!recordingSupported()) {
     speakUnavailable("Browser ini tidak bisa merekam suara, jadi bagian speaking dilewati. Tes kamu tetap bisa dilanjutkan.");
   }
 }
 
+function resetCheckUi() {
+  els.speakError.hidden = true;
+  els.speakMeter.hidden = true;
+  els.speakTimer.hidden = true;
+  els.speakCheckStart.hidden = false;
+  els.speakCheckStart.disabled = false;
+  els.speakCheckStop.hidden = true;
+  els.speakSkip.hidden = true;
+  els.speakCheckReview.hidden = true;
+}
+
 function speakUnavailable(message) {
   els.speakError.textContent = message;
   els.speakError.hidden = false;
-  els.speakStart.hidden = true;
-  els.speakStop.hidden = true;
+  els.speakCheckStart.hidden = true;
+  els.speakCheckStop.hidden = true;
   els.speakMeter.hidden = true;
   els.speakTimer.hidden = true;
   els.speakSkip.hidden = false;
 }
 
-async function startRecording() {
+async function ensureMicStream() {
+  if (state.recStream) return state.recStream;
+  state.recStream = await navigator.mediaDevices.getUserMedia({
+    audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
+  });
+  return state.recStream;
+}
+
+/** Records either the voice check or the answer. The limits differ per mode. */
+async function startRecording(mode) {
   if (state.speakBusy || state.recorder) return;
+  const limits = mode === "check" ? CHECK_SECONDS : state.speaking;
   state.speakBusy = true;
-  els.speakStart.disabled = true;
+  state.recMode = mode;
+  const startBtn = mode === "check" ? els.speakCheckStart : els.speakStart;
+  const stopBtn = mode === "check" ? els.speakCheckStop : els.speakStop;
+  startBtn.disabled = true;
   try {
-    state.recStream = await navigator.mediaDevices.getUserMedia({
-      audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
-    });
+    await ensureMicStream();
   } catch {
     state.speakBusy = false;
-    els.speakStart.disabled = false;
+    startBtn.disabled = false;
     speakUnavailable("Mikrofon tidak bisa dipakai. Periksa izin mikrofon di browser kamu, atau lanjutkan tanpa rekaman.");
     return;
   }
@@ -912,23 +957,23 @@ async function startRecording() {
   recorder.start();
 
   state.recStart = Date.now();
-  els.speakStart.hidden = true;
+  startBtn.hidden = true;
   els.speakError.hidden = true;
   els.speakMeter.hidden = false;
   els.speakTimer.hidden = false;
-  els.speakStop.hidden = false;
-  els.speakStop.disabled = state.speaking.minSeconds > 1;
+  stopBtn.hidden = false;
+  stopBtn.disabled = limits.min > 1;
   startMeter();
   announce("Perekaman dimulai.");
 
   state.recTimerId = setInterval(() => {
     const elapsed = Math.floor((Date.now() - state.recStart) / 1000);
     els.speakTimer.textContent = formatTime(elapsed);
-    if (els.speakStop.disabled && elapsed >= state.speaking.minSeconds) {
-      els.speakStop.disabled = false;
-      els.speakStop.focus();
+    if (stopBtn.disabled && elapsed >= limits.min) {
+      stopBtn.disabled = false;
+      stopBtn.focus();
     }
-    if (elapsed >= state.speaking.seconds) stopRecording();
+    if (elapsed >= limits.max) stopRecording();
   }, 250);
 }
 
@@ -942,23 +987,58 @@ function stopRecording() {
 function finishRecording() {
   const recorder = state.recorder;
   state.recorder = null;
-  if (state.recStream) state.recStream.getTracks().forEach((track) => track.stop());
-  state.recStream = null;
   state.recDuration = Math.max(1, Math.round((Date.now() - state.recStart) / 1000));
   const type = (recorder?.mimeType || REC_MIMES[0]).split(";")[0];
   state.recBlob = new Blob(state.recChunks, { type });
   state.recChunks = [];
 
+  els.speakCheckStop.hidden = true;
   els.speakStop.hidden = true;
   els.speakMeter.hidden = true;
   els.speakTimer.hidden = true;
+
+  if (state.recMode === "check") {
+    if (state.checkBlobUrl) URL.revokeObjectURL(state.checkBlobUrl);
+    state.checkBlobUrl = URL.createObjectURL(state.recBlob);
+    els.speakCheckAudio.src = state.checkBlobUrl;
+    els.speakCheckReview.hidden = false;
+    announce("Rekaman percobaan siap didengarkan.");
+    els.speakCheckOk.focus();
+    return;
+  }
+
   if (state.recBlobUrl) URL.revokeObjectURL(state.recBlobUrl);
   state.recBlobUrl = URL.createObjectURL(state.recBlob);
   els.speakAudio.src = state.recBlobUrl;
   els.speakReview.hidden = false;
-  els.speakNote.textContent = "Dengarkan rekaman kamu. Kalau ada yang kurang jelas, rekam ulang. Kalau sudah pas, kirim rekamannya.";
-  announce("Rekaman selesai, dan siap untuk didengarkan.");
+  els.speakNote.textContent = "Dengarkan jawaban kamu. Kalau ada yang kurang jelas, rekam ulang. Kalau sudah pas, kirim rekamannya.";
+  announce("Jawaban selesai direkam, dan siap untuk didengarkan.");
   els.speakSend.focus();
+}
+
+/** Wipes the voice check recording so the student can try again. */
+function clearCheckRecording() {
+  if (state.checkBlobUrl) URL.revokeObjectURL(state.checkBlobUrl);
+  state.checkBlobUrl = null;
+  if (els.speakCheckAudio.getAttribute("src")) {
+    els.speakCheckAudio.removeAttribute("src");
+    els.speakCheckAudio.load();
+  }
+  els.speakCheckReview.hidden = true;
+}
+
+function retryVoiceCheck() {
+  clearCheckRecording();
+  resetCheckUi();
+  els.speakCheckStart.focus();
+}
+
+/** The voice is clear, so the answer phase begins. The microphone stays on meanwhile. */
+function voiceCheckPassed() {
+  clearCheckRecording();
+  els.speakCheckCard.hidden = true;
+  els.speakAnswerCard.hidden = false;
+  els.speakStart.focus();
 }
 
 function clearRecording() {
@@ -972,12 +1052,24 @@ function clearRecording() {
     els.speakAudio.load();
   }
   els.speakReview.hidden = true;
+  els.speakStart.hidden = false;
+  els.speakStart.disabled = false;
+  els.speakStop.hidden = true;
+  els.speakSend.disabled = false;
+  els.speakRetake.disabled = false;
+  $("#speak-send-label").textContent = "Kirim rekaman";
+}
+
+/** Releases the microphone once the speaking part is over. */
+function releaseMic() {
+  stopMeter();
+  if (state.recStream) state.recStream.getTracks().forEach((track) => track.stop());
+  state.recStream = null;
 }
 
 function retakeRecording() {
   clearRecording();
-  resetSpeakUi();
-  els.speakNote.textContent = speakInstruction();
+  els.speakNote.textContent = answerInstruction();
   els.speakStart.focus();
 }
 
@@ -994,10 +1086,12 @@ async function sendRecording() {
       body: state.recBlob,
     });
     clearRecording();
+    releaseMic();
     showScreen("details");
   } catch (error) {
     if (error.code === "speaking_closed" || error.code === "speaking_off" || error.code === "speaking_done") {
       toast(error.message);
+      releaseMic();
       showScreen("details");
       return;
     }
@@ -1021,6 +1115,7 @@ async function skipSpeaking() {
       body: { reason: "mic" },
     });
     clearRecording();
+    releaseMic();
     showScreen("details");
   } catch (error) {
     toast(error.message || "Bagian ini belum bisa dilewati. Coba lagi.");
@@ -1069,6 +1164,39 @@ function stopMeter() {
   els.speakMeter.classList.remove("is-loud");
 }
 
+/* ---------- Waiting for the score, and the result behind a private link ---------- */
+
+// The waiting screen checks the result every few seconds, so a student who stays on the page sees
+// the full result without waiting for the email. The link from the email uses the same endpoint.
+const RESULT_POLL_MS = 6000;
+
+function stopResultPoll() {
+  clearInterval(state.pollId);
+  state.pollId = null;
+}
+
+async function pollResult(token, { publicView = false } = {}) {
+  stopResultPoll();
+  state.resultToken = token;
+  const check = async () => {
+    if (document.hidden) return;
+    let data;
+    try {
+      data = await api(`/api/results/${encodeURIComponent(token)}`);
+    } catch {
+      return; // a network blip should not end the wait; the next tick tries again
+    }
+    if (!data.ready) return;
+    stopResultPoll();
+    renderResult(data.result, { programs: data.programs, publicView });
+    showScreen("result");
+  };
+  await check();
+  if (state.pollId === null && document.body.dataset.screen !== "result") {
+    state.pollId = setInterval(check, RESULT_POLL_MS);
+  }
+}
+
 /* The waiting screen, shown when the recording is still being scored. */
 function renderPending() {
   const name = state.contact?.name || "";
@@ -1086,7 +1214,29 @@ function renderPending() {
   els.pendingEmailNote.textContent = note;
 }
 
-function renderResult(result) {
+/** The link from the email and WhatsApp, opened on its own. */
+async function openResultLink(token) {
+  document.title = "Hasil Tes Penempatan, Titik Nol English Course";
+  state.contact = { name: "" };
+  try {
+    const data = await api(`/api/results/${encodeURIComponent(token)}`);
+    if (data.ready) {
+      renderResult(data.result, { programs: data.programs, publicView: true });
+      showScreen("result");
+      return;
+    }
+  } catch (error) {
+    showIntroNotice(error.message);
+    els.startBtn.disabled = true;
+    return;
+  }
+  showScreen("pending");
+  els.pendingWa.href = `https://wa.me/${state.config?.whatsapp || "6282333143544"}?text=${encodeURIComponent("Halo Admin Titik Nol, saya ingin menanyakan hasil tes penempatan saya.")}`;
+  els.pendingEmailNote.textContent = "Penilaian speaking kamu masih berjalan. Halaman ini menyegarkan sendiri, jadi tunggu sebentar saja.";
+  await pollResult(token, { publicView: true });
+}
+
+function renderResult(result, { programs = [], publicView = false } = {}) {
   const level = result.level;
   const levelIndex = Math.max(0, LEVEL_ORDER.indexOf(level.key));
 
@@ -1097,6 +1247,9 @@ function renderResult(result) {
   els.resultIndex.textContent = String(levelIndex + 1).padStart(2, "0");
   els.resultProgram.textContent = level.program;
   els.resultDescription.textContent = level.description;
+
+  renderSpeakingResult(result.speaking);
+  renderProgramGrid(programs);
 
   els.levelLadder.replaceChildren();
   LEVEL_ORDER.forEach((key, index) => {
@@ -1124,11 +1277,105 @@ function renderResult(result) {
     els.levelLadder.append(item);
   });
 
+  // A visitor from the emailed link has no attempt to repeat, and no channels to report on.
+  els.retryBtn.hidden = publicView;
   const contactName = state.contact?.name || "";
   const waText = `Halo Admin Titik Nol, saya ${contactName}. Saya baru selesai mengerjakan tes penempatan dengan hasil ${level.label} (${result.score} dari ${result.total}) dan ingin berkonsultasi tentang program yang sesuai.`;
-  els.waBtn.href = `https://wa.me/${state.config.whatsapp}?text=${encodeURIComponent(waText)}`;
+  els.waBtn.href = `https://wa.me/${state.config?.whatsapp || "6282333143544"}?text=${encodeURIComponent(waText)}`;
+  els.emailNote.textContent = publicView
+    ? "Ini halaman hasil lengkap kamu. Simpan tautannya agar kamu bisa membukanya kembali kapan saja."
+    : deliveryNote(state.delivery, state.contact?.email);
+}
 
-  els.emailNote.textContent = deliveryNote(state.delivery, state.contact?.email);
+/* The speaking block of the result, with the five aspects and the note from the grader. */
+function renderSpeakingResult(sp) {
+  if (!sp) {
+    els.resultSpeaking.hidden = true;
+    return;
+  }
+  els.resultSpeaking.hidden = false;
+  els.resultSpeakingCefr.textContent = sp.cefr;
+  els.resultSpeakingIelts.textContent = sp.ielts === null || sp.ielts === undefined ? "-" : Number(sp.ielts).toFixed(1);
+  els.resultSpeakingSource.textContent = sp.source === "manual" ? "dinilai oleh tim Titik Nol" : "dinilai otomatis oleh Speechace";
+
+  els.resultSpeakingAspects.replaceChildren();
+  for (const aspect of sp.aspects) {
+    const li = document.createElement("li");
+    const name = document.createElement("span");
+    name.className = "aspect-name";
+    name.textContent = aspect.label;
+    const cefr = document.createElement("span");
+    cefr.className = "aspect-cefr";
+    cefr.textContent = aspect.cefr || "-";
+    li.append(name, cefr);
+    if (aspect.score !== null && aspect.score !== undefined) {
+      const score = document.createElement("span");
+      score.className = "aspect-score";
+      score.textContent = `${Math.round(aspect.score)} / 100`;
+      li.append(score);
+    }
+    els.resultSpeakingAspects.append(li);
+  }
+
+  const notes = [];
+  if (sp.tooShort) notes.push("Jawaban kamu kurang dari 20 kata, jadi nilai keseluruhannya belum stabil.");
+  if (sp.offTopic) notes.push("Jawaban kamu belum sesuai dengan pertanyaannya.");
+  if (sp.transcript) notes.push(`Transkrip jawaban kamu: "${sp.transcript}"`);
+  notes.push(...(sp.notes || []).slice(0, 2));
+  els.resultSpeakingNote.textContent = notes.join(" ");
+  els.resultSpeakingNote.hidden = notes.length === 0;
+}
+
+/* The program cards, each linking to its product page on titiknolenglish.com. */
+function renderProgramGrid(cards) {
+  els.programGrid.replaceChildren();
+  if (!cards.length) {
+    els.programGrid.hidden = true;
+    return;
+  }
+  els.programGrid.hidden = false;
+  for (const card of cards) {
+    const link = document.createElement("a");
+    link.className = "program-card";
+    link.href = card.url;
+    link.target = "_blank";
+    link.rel = "noopener";
+
+    if (card.image) {
+      const img = document.createElement("img");
+      img.className = "program-card__img";
+      img.src = card.image;
+      img.alt = card.name;
+      img.loading = "lazy";
+      link.append(img);
+    }
+
+    const body = document.createElement("div");
+    body.className = "program-card__body";
+    if (card.recommended) {
+      const tag = document.createElement("p");
+      tag.className = "program-card__tag";
+      tag.textContent = "Rekomendasi kami";
+      body.append(tag);
+    }
+    const name = document.createElement("p");
+    name.className = "program-card__name";
+    name.textContent = card.name;
+    body.append(name);
+    if (card.recommended && card.levelLabel) {
+      const meta = document.createElement("p");
+      meta.className = "program-card__meta";
+      meta.textContent = `Sesuai level ${card.levelLabel} kamu`;
+      body.append(meta);
+    } else if (card.levels?.length) {
+      const meta = document.createElement("p");
+      meta.className = "program-card__meta";
+      meta.textContent = `Untuk level ${card.levels.join(", ")}`;
+      body.append(meta);
+    }
+    link.append(body);
+    els.programGrid.append(link);
+  }
 }
 
 // The email and WhatsApp go out in the background after the result appears, so the note says

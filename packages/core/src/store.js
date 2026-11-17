@@ -59,7 +59,10 @@ export async function loadQuestions(env, key, { activeOnly = false } = {}) {
 
 export async function loadLevels(env) {
   const { results } = await env.DB.prepare("SELECT * FROM levels ORDER BY position").all();
-  return results.map((r) => ({ key: r.key, position: r.position, label: r.label, min: r.min_score, max: r.max_score, program: r.program }));
+  return results.map((r) => ({
+    key: r.key, position: r.position, label: r.label, min: r.min_score, max: r.max_score,
+    program: r.program, programUrl: r.program_url || "", programImage: r.program_image || "",
+  }));
 }
 
 export function levelFor(levels, score) {
@@ -69,7 +72,35 @@ export function levelFor(levels, score) {
 /* Public result copy keeps the summary and description from src/levels.js, keyed by level. */
 export function publicLevel(level) {
   const copy = LEVEL_COPY.find((l) => l.key === level.key) || {};
-  return { key: level.key, label: level.label, program: level.program, summary: copy.summary || "", description: copy.description || "" };
+  return {
+    key: level.key, label: level.label, program: level.program,
+    programUrl: level.programUrl || "", programImage: level.programImage || "",
+    summary: copy.summary || "", description: copy.description || "",
+  };
+}
+
+/**
+ * The program cards of the result page, as a grid: the recommended program first with its flag,
+ * then the other programs of the level ladder. Each card is one distinct product page.
+ */
+export function programCards(levels, levelKey) {
+  const recommended = levels.find((l) => l.key === levelKey);
+  const cards = [];
+  for (const level of levels) {
+    if (!level.programUrl || cards.some((c) => c.url === level.programUrl)) continue;
+    cards.push({ name: level.program, url: level.programUrl, image: level.programImage || "", levels: [level.label] });
+  }
+  for (const level of levels) {
+    const card = cards.find((c) => c.url === level.programUrl);
+    if (card && !card.levels.includes(level.label)) card.levels.push(level.label);
+  }
+  const hit = cards.find((c) => recommended && c.url === recommended.programUrl);
+  if (hit) {
+    hit.recommended = true;
+    hit.levelLabel = recommended.label;
+    return [hit, ...cards.filter((c) => c !== hit)];
+  }
+  return cards;
 }
 
 export function focusStrikes(log) {

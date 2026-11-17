@@ -77,7 +77,7 @@ const NO_CERTIFICATE = "_Hasil ini dipakai untuk penempatan kelas dan bukan sert
  * The result with its speaking part, in the format of the PRD. It stays under 1,000 characters:
  * the transcript (only when it is shorter than 300 characters) and the notes go first.
  */
-function buildSpeakingWhatsApp(first, { score, total, level, speaking: sp }) {
+function buildSpeakingWhatsApp(first, { score, total, level, speaking: sp, resultUrl }) {
   const program = String(level.program || "").replace(/\.$/, "");
   const head = [
     `Halo ${first}, hasil tes penempatan kamu sudah siap.`,
@@ -95,6 +95,7 @@ function buildSpeakingWhatsApp(first, { score, total, level, speaking: sp }) {
   const tail = [
     "",
     `Program yang kami sarankan: ${program}.`,
+    ...(resultUrl ? ["", `Hasil lengkap: ${resultUrl}`] : []),
     "",
     "Balas pesan ini kalau ingin konsultasi.",
     "",
@@ -105,16 +106,17 @@ function buildSpeakingWhatsApp(first, { score, total, level, speaking: sp }) {
 }
 
 /** The placement result as a WhatsApp message, sent automatically after the contact step. */
-export function buildResultWhatsApp({ name, score, total, level, speaking = null }) {
+export function buildResultWhatsApp({ name, score, total, level, speaking = null, resultUrl = null }) {
   const first = String(name || "").trim().split(/\s+/)[0];
-  if (speaking) return buildSpeakingWhatsApp(first, { score, total, level, speaking });
-  // Without a speaking part the message stays exactly as it was before the speaking section.
+  if (speaking) return buildSpeakingWhatsApp(first, { score, total, level, speaking, resultUrl });
+  // Without a speaking part the message stays as it was, plus the result link.
   return [
     `Halo ${first}, terima kasih sudah mengerjakan tes penempatan Titik Nol English Course.`,
     "",
     `Skor kamu ${score} dari ${total}, jadi level kamu *${level.label}*.`,
     `Program yang kami sarankan: *${level.program}*.`,
     ...(level.description ? ["", level.description] : []),
+    ...(resultUrl ? ["", `Hasil lengkap: ${resultUrl}`] : []),
     "",
     "Kalau ingin konsultasi program atau menanyakan jadwal kelas, balas saja pesan ini.",
     "",

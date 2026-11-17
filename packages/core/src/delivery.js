@@ -70,13 +70,15 @@ export async function deliverResult(env, attemptId) {
     `UPDATE attempts SET delivery_lease_until = ?
       WHERE id = ? AND (email_status = 'pending' OR wa_status = 'pending')
         AND (delivery_lease_until IS NULL OR delivery_lease_until < ?) AND ${SPEAKING_DONE}
-      RETURNING id, student_id, name, email, whatsapp, score, total, level_key, email_status, wa_status`,
+      RETURNING id, student_id, name, email, whatsapp, score, total, level_key, email_status, wa_status, result_token`,
   ).bind(now + LEASE_SECONDS, attemptId, now).first();
   if (!attempt) return null; // nothing waiting, or another server is sending it
 
   const levels = await loadLevels(env);
   const level = publicLevel(levels.find((l) => l.key === attempt.level_key) || levelFor(levels, attempt.score ?? 0));
-  const facts = { name: attempt.name, email: attempt.email, score: attempt.score ?? 0, total: attempt.total, level, speaking: speakingFacts(speaking) };
+  // The private link to the full result page, sent inside both channels.
+  const resultUrl = attempt.result_token ? `${env.PUBLIC_WEB_URL}/?hasil=${attempt.result_token}` : null;
+  const facts = { name: attempt.name, email: attempt.email, score: attempt.score ?? 0, total: attempt.total, level, speaking: speakingFacts(speaking), resultUrl };
   const waText = buildResultWhatsApp(facts);
   const [mail, wa] = await Promise.all([
     attempt.email_status === "pending" ? sendResultEmail(env, facts) : null,

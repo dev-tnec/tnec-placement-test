@@ -50,15 +50,18 @@ const manualFacts = speakingFacts({
 
 const base = { name: "Rani Puspita Lestari", email: "rani.puspita@example.com", score: 13, total: 25, level };
 
-const waAuto = buildResultWhatsApp({ ...base, speaking: facts });
-const waManual = buildResultWhatsApp({ ...base, speaking: manualFacts });
-const emailAuto = buildResultEmail({ ...base, speaking: facts });
-const emailManual = buildResultEmail({ ...base, speaking: manualFacts });
+const waAuto = buildResultWhatsApp({ ...base, speaking: facts, resultUrl: "https://tes.example.test/?hasil=abc123" });
+const waManual = buildResultWhatsApp({ ...base, speaking: manualFacts, resultUrl: "https://tes.example.test/?hasil=abc123" });
+const waPlain = buildResultWhatsApp({ ...base, resultUrl: "https://tes.example.test/?hasil=abc123" });
+const emailAuto = buildResultEmail({ ...base, speaking: facts, resultUrl: "https://tes.example.test/?hasil=abc123" });
+const emailManual = buildResultEmail({ ...base, speaking: manualFacts, resultUrl: "https://tes.example.test/?hasil=abc123" });
 
 console.log("===== WHATSAPP, dinilai Speechace =====\n");
 console.log(waAuto);
 console.log("\n\n===== WHATSAPP, dinilai manual oleh tim =====\n");
 console.log(waManual);
+console.log("\n\n===== WHATSAPP, tanpa speaking =====\n");
+console.log(waPlain);
 console.log("\n\n===== EMAIL, subjek =====\n");
 console.log(emailAuto.subject);
 console.log("\n\n===== EMAIL, versi teks =====\n");
