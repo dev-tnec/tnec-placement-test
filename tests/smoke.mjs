@@ -526,6 +526,14 @@ assert.ok(certHtml.includes('class="cert-void"'), "a cancelled certificate carri
 assert.ok(certHtml.includes('href="logo.css"'), "the template keeps its relative stylesheet links");
 assert.equal(/\{\{\w+\}\}/.test(certHtml), false, "no placeholder is left on the page");
 
+// The React test runner build output is committed too, so Render needs no build command.
+const runnerIndex = readFileSync(new URL("../apps/web/public/index.html", import.meta.url), "utf8");
+const runnerEntry = runnerIndex.match(/src="(\/assets\/index-[^"]+\.js)"/);
+assert.ok(runnerEntry, "the test runner build output exists");
+assert.ok(existsSync(new URL(`../apps/web/public${runnerEntry[1]}`, import.meta.url)), "the test runner entry bundle exists on disk");
+assert.equal(/<script(?![^>]*\bsrc=)/i.test(runnerIndex), false, "the built runner uses no inline script");
+assert.equal(runnerIndex.includes("/assets/app.js"), false, "the old plain runner script is gone");
+
 // The React result report build output is committed too, so Render needs no build command.
 const reportIndex = readFileSync(new URL("../apps/web/public/hasil/index.html", import.meta.url), "utf8");
 const reportEntry = reportIndex.match(/src="(\/hasil\/assets\/[^"]+\.js)"/);

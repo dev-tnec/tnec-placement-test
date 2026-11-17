@@ -18,6 +18,10 @@ const clientBuild = fileURLToPath(new URL("../apps/admin/client/build.mjs", impo
 const built = spawnSync(process.execPath, [clientBuild], { stdio: "inherit" });
 if (built.status) process.exit(built.status);
 
+const studentBuild = fileURLToPath(new URL("../apps/web/student/build.mjs", import.meta.url));
+const studentBuilt = spawnSync(process.execPath, [studentBuild], { stdio: "inherit" });
+if (studentBuilt.status) process.exit(studentBuilt.status);
+
 const resultBuild = fileURLToPath(new URL("../apps/web/result/build.mjs", import.meta.url));
 const resultBuilt = spawnSync(process.execPath, [resultBuild], { stdio: "inherit" });
 if (resultBuilt.status) process.exit(resultBuilt.status);

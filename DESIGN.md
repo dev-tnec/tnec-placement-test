@@ -14,7 +14,7 @@ The intro is the one screen where the brand can be loud. The test, details, and 
 
 Never build a component, animation, or visualizer from scratch when a proven open-source one exists. The rule covers waves, carousels, date pickers, charts, command palettes, toasts, and every other common block. The approved sources are shadcn/ui patterns for the React dashboard and the ElevenLabs UI components for audio and voice interfaces; other established libraries are allowed the same way when they are the standard for the job.
 
-Because the CSP blocks third-party scripts, an open-source component arrives in one of two ways. The React dashboard may copy a shadcn-style component into `apps/admin/client/src`. The plain test site vendors the built file into `apps/web/public/assets` and imports it as an ES module. A component that cannot be consumed directly is ported one to one, keeping its drawing code, its defaults, its license, and a source link in the file header. The speaking wave is the ElevenLabs UI LiveWaveform, ported into `apps/web/public/assets/live-waveform.js` with its MIT notice. Never replace a sourced component with a hand-made approximation.
+Because the CSP blocks third-party scripts, an open-source component arrives by being copied into the React source. The dashboard may copy a shadcn-style component into `apps/admin/client/src`, and the student runner imports its components from `apps/web/student/src`. A component that cannot be consumed directly is ported one to one, keeping its drawing code, its defaults, its license, and a source link in the file header. The speaking wave is the ElevenLabs UI LiveWaveform, ported into `apps/web/student/src/live-waveform.js` with its MIT notice. Never replace a sourced component with a hand-made approximation.
 
 ## 3. Color
 
@@ -252,7 +252,7 @@ A notice is one even card: the pale yellow `--yellow-50` fill covers the whole b
 
 The speaking feedback is one aligned row inside the active card, directly above the buttons: a 10px pulsing `--red-500` dot, the label "Merekam suara kamu" at 13px/700 in `--red-600`, the live waveform filling the middle, and the timer at 22px/800 with tabular numerals. The row is 24px tall, sits 32px below the content above it and 16px above the button row, and all four pieces share one center line. The dot pulses once per second. Under 480px the label is hidden so the dot, wave, and timer keep one full row. The mic-failure notice and the skip action use the same position, and the record button stays available so the student can retry after allowing the microphone.
 
-The wave is the ElevenLabs UI LiveWaveform component, ported one to one into `apps/web/public/assets/live-waveform.js` with its MIT notice. Its settings are fixed: canvas, static mode with the mirrored spectrum, barWidth 3, barGap 1, barRadius 1.5, minimum bar height 4, the 5% to 40% frequency slice, sensitivity 1, smoothing 0.8, fftSize 256, 30ms updates, a 24px edge fade, and `--red-500` bars. Do not replace it with a hand-made equalizer or a row of dots.
+The wave is the ElevenLabs UI LiveWaveform component, ported one to one into `apps/web/student/src/live-waveform.js` with its MIT notice. Its settings are fixed: canvas, static mode with the mirrored spectrum, barWidth 3, barGap 1, barRadius 1.5, minimum bar height 4, the 5% to 40% frequency slice, sensitivity 1, smoothing 0.8, fftSize 256, 30ms updates, a 24px edge fade, and `--red-500` bars. Do not replace it with a hand-made equalizer or a row of dots.
 
 ## 10. States
 
@@ -312,9 +312,9 @@ The email uses the same hex values as this file. It cannot use CSS variables, so
 
 ## 16. Implementation
 
-The test site is plain HTML, one CSS file, one ES module, and one vendored component module, served by a small Node.js server. The test runner has no framework and no build step. The result report at `/hasil` is the exception: it is React, built by Vite from `apps/web/result` into `apps/web/public/hasil`, and its build output is committed like the dashboard's. Tailwind is not used in either React app, even though the reference mock uses it, because the production page needs a strict content security policy and a small payload. The report has its own `hasil.css` with the same tokens, not a utility framework.
+The test site is React, built by Vite from `apps/web/student` into `apps/web/public`, and served by a small Node.js server. The result report at `/hasil` is React too, built from `apps/web/result` into `apps/web/public/hasil`, and the dashboard is React, built from `apps/admin/client` into `apps/admin/public/admin`. All three build outputs are committed, so the servers only serve files. Tailwind is not used in any of them, even though the reference mock uses it, because the production page needs a strict content security policy and a small payload. The student runner keeps the approved `app.css`, and the report has its own `hasil.css` with the same tokens, not a utility framework.
 
-Open-source components are vendored under `apps/web/public/assets` and imported as ES modules, because the CSP blocks third-party scripts. `live-waveform.js` is the ElevenLabs UI LiveWaveform port with its MIT notice and source link at the top; keep both when touching it.
+The speaking wave lives in `apps/web/student/src/live-waveform.js`, the ElevenLabs UI LiveWaveform port with its MIT notice and source link at the top; keep both when touching it.
 
 Both apps declare the same globals once: `[hidden] { display: none !important; }`, `box-sizing: border-box` on everything, the `.sr-only` helper, and the `.tnum` tabular numerals helper. Without the hidden rule, a component class that sets `display` beats the hidden attribute and leaves widgets that should be hidden on screen.
 

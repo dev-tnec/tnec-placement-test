@@ -2,7 +2,8 @@
 // Source: https://github.com/elevenlabs/ui (apps/www/registry/elevenlabs-ui/ui/live-waveform.tsx)
 // MIT License, Copyright (c) ElevenLabs.
 // The canvas drawing, the mirrored static-mode spectrum, the edge fade, and the defaults are kept
-// as in the component; this app has no React, so only the hook wiring is replaced by a tiny API.
+// as in the component. This app mounts it on a plain div ref, so the hook wiring is replaced by a
+// tiny start/stop API while the drawing stays the same.
 
 export function createLiveWaveform(container, options = {}) {
   const {

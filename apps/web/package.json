@@ -7,7 +7,7 @@
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
-    "build": "node result/build.mjs"
+    "build": "node student/build.mjs && node result/build.mjs"
   },
   "dependencies": {
     "@tnec/core": "*"
