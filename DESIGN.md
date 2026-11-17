@@ -163,7 +163,7 @@ The prompt canvas is a white rounded rectangle with a 1px border, a small upperc
 
 The navigator is a 5 by 5 grid of 25 cells. Answered cells are solid navy, the current cell has a navy outline, flagged cells have a yellow dot in the top right. The finish button is navy and full width. When a test uses time per question, the back button and the flag button are hidden, navigator cells cannot be clicked, the timer label reads "untuk soal ini", and the next question opens by itself when the time runs out.
 
-When a test uses time per section, the navigator shows only the questions of the current section and the timer label names that section, for example Listening. The back button is disabled on the first question of the section, and the finish button reads "Lanjut ke Reading", "Lanjut ke Writing", or "Lanjut ke Speaking". The section locks when its time ends or when the student presses that button, and the next section opens on its first question with a fresh timer.
+When a test uses time per section, the navigator shows only the questions of the current section and the timer label names that section, for example Listening. Inside that section the cells are grouped under a small uppercase heading per part or passage, so Listening reads as Part 1 to Part 4 and Reading as Passage 1 to Passage 3. The back button is disabled on the first question of the section, and the finish button reads "Lanjut ke Reading", "Lanjut ke Writing", or "Lanjut ke Speaking". The section locks when its time ends or when the student presses that button, and the next section opens on its first question with a fresh timer.
 
 A keyboard hint sits below the grid on desktop only. It is removed on mobile because there is no keyboard.
 
