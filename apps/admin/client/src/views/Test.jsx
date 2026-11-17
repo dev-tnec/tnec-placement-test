@@ -46,7 +46,7 @@ export function TestPage({ testKey, tab }) {
   const tabs = [["soal", "Soal & Jawaban", packageQuestions(t).length + (speakingBank ? speakingBank.total : 0)], ["submission", "Submission", own.length]];
   if (testKey === "placement") tabs.push(["lead", "Lead", leads().length]);
   if (testKey === "ielts-mockup") {
-    tabs.push(["bagian", "Bagian", packageSections(t).length + (speakingBank ? speakingBank.parts.length : 0)]);
+    tabs.push(["bagian", "Bagian", packageSections(t).length]);
     tabs.push(["paket", "Paket", t.packages.length]);
   }
   tabs.push(["pengaturan", "Pengaturan", null]);
@@ -207,7 +207,8 @@ function SectionsTab() {
   const qs = packageQuestions(t);
   const rows = packageSections(t).map((s) => {
     const own = qs.filter((q) => q.sectionId === s.id).map((q) => q.position).sort((a, b) => a - b);
-    return { ...s, from: own[0] || null, to: own[own.length - 1] || null, n: own.length };
+    const plan = s.skill === "Speaking" ? t.mockupSpeaking?.parts.find((p) => p.part === s.part) || null : null;
+    return { ...s, from: own[0] || null, to: own[own.length - 1] || null, n: own.length, plan };
   });
 
   return <div className="stack">
@@ -217,7 +218,7 @@ function SectionsTab() {
           onChange={(e) => { ui.package[ui.test] = e.target.value; notify(); }}>
           <OptList list={t.packages.map((p) => [p.id, p.name])} />
         </select>
-        <p className="toolbar__meta">Setiap bagian memegang satu rentang soal beserta bacaan dan audionya. Saat soal diacak nanti, bagian ini tetap bersama soalnya. Audio Listening adalah satu berkas untuk Part 1 sampai Part 4, disimpan di bagian Listening pertama.</p>
+        <p className="toolbar__meta">Setiap bagian memegang satu rentang soal beserta bacaan dan audionya. Saat soal diacak nanti, bagian ini tetap bersama soalnya. Audio Listening adalah satu berkas untuk Part 1 sampai Part 4, disimpan di bagian Listening pertama. Tiga bagian speaking adalah bagian tetap dari Paket Demo A.</p>
       </div>
       {rows.length ? <div className="table-wrap"><table className="table">
         <caption className="sr-only">Bagian {TEST_META[ui.test].name}</caption>
@@ -227,38 +228,18 @@ function SectionsTab() {
           <th scope="col" className="is-action"><span className="sr-only">Aksi</span></th>
         </tr></thead>
         <tbody>{rows.map((s) => (
-          <tr key={s.id} onClick={rowRun(() => openSectionEditor(s.id))}>
+          <tr key={s.id} onClick={s.plan ? undefined : rowRun(() => openSectionEditor(s.id))}>
             <td><p className="q-prompt">{s.title}</p></td>
-            <td className="nowrap tnum">{s.n ? `Soal ${s.from} sampai ${s.to}` : <span className="muted">Belum ada soal</span>}</td>
+            <td className="nowrap tnum">{s.plan ? `${s.plan.questions.length} pertanyaan tetap` : s.n ? `Soal ${s.from} sampai ${s.to}` : <span className="muted">Belum ada soal</span>}</td>
             <td>{s.skill}</td>
-            <td className="hide-sm">{s.audio ? <span className="q-tag"><Icon name="volume" cls="icon--sm" />{s.audio.split("/").pop()}</span> : <span className="muted">Tidak ada</span>}</td>
-            <td className="hide-md">{s.passage ? `${s.passage.length} karakter` : <span className="muted">Tidak ada</span>}</td>
-            <td className="is-action"><button className="btn btn--quiet" type="button" onClick={(e) => { e.stopPropagation(); openSectionEditor(s.id); }}>Ubah</button></td>
+            <td className="hide-sm">{s.plan ? <span className="muted">Tidak ada</span> : s.audio ? <span className="q-tag"><Icon name="volume" cls="icon--sm" />{s.audio.split("/").pop()}</span> : <span className="muted">Tidak ada</span>}</td>
+            <td className="hide-md">{s.plan ? <span className="muted">Tidak ada</span> : s.passage ? `${s.passage.length} karakter` : <span className="muted">Tidak ada</span>}</td>
+            <td className="is-action">{s.plan ? <span className="muted">Tetap</span> : <button className="btn btn--quiet" type="button" onClick={(e) => { e.stopPropagation(); openSectionEditor(s.id); }}>Ubah</button>}</td>
           </tr>
         ))}</tbody>
       </table></div>
         : <Empty title="Belum ada bagian." desc="Tambahkan bagian untuk mengikat bacaan dan audio ke satu rentang soal." />}
     </section>
-    {t.mockupSpeaking ? <section className="panel">
-      <header className="panel__head"><div>
-        <h2 className="panel__title">Bagian speaking</h2>
-        <p className="panel__desc">Wawancara speaking memakai rencana tetap 18 pertanyaan dan tidak memakai rentang soal di bank, jadi tidak bisa diubah dari sini. Waktunya diatur di Pengaturan.</p>
-      </div></header>
-      <div className="table-wrap"><table className="table">
-        <caption className="sr-only">Bagian speaking {TEST_META[ui.test].name}</caption>
-        <thead><tr>
-          <th scope="col">Bagian</th><th scope="col">Pertanyaan</th><th scope="col">Persiapan</th><th scope="col">Waktu jawab</th>
-        </tr></thead>
-        <tbody>{t.mockupSpeaking.parts.map((p) => (
-          <tr key={p.part}>
-            <td><p className="q-prompt">{p.title}</p></td>
-            <td className="tnum">{p.questions.length} pertanyaan</td>
-            <td>{p.prepSeconds ? `${p.prepSeconds} detik` : <span className="muted">Tidak ada</span>}</td>
-            <td className="tnum">{p.speakSeconds} detik per pertanyaan</td>
-          </tr>
-        ))}</tbody>
-      </table></div>
-    </section> : null}
   </div>;
 }
 
@@ -275,7 +256,7 @@ function PackagesTab() {
   return <div className="stack">
     <section className="panel">
       <div className="toolbar toolbar--last">
-        <p className="toolbar__meta">Setiap paket punya soal dan bagian sendiri. Siswa mendapat paket yang dipilih saat tautan dikirim, atau paket aktif yang dipilih acak. Wawancara speaking 18 pertanyaan dipakai semua paket dan tidak dihitung di kolom Bagian.</p>
+        <p className="toolbar__meta">Setiap paket punya soal dan bagian sendiri. Siswa mendapat paket yang dipilih saat tautan dikirim, atau paket aktif yang dipilih acak. Paket Demo A sudah memuat tiga bagian speaking tetap, jadi ikut dihitung di kolom Bagian.</p>
       </div>
       {rows.length ? <div className="table-wrap"><table className="table">
         <caption className="sr-only">Paket soal {TEST_META[ui.test].name}</caption>
