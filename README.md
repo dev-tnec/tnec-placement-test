@@ -63,6 +63,7 @@ Both build with `npm ci --no-audit --no-fund` from `dev-tnec/tnec-placement-test
 | `DATABASE_URL`, `TRUST_PROXY=1`, `PUBLIC_WEB_URL` | Yes | Yes |
 | `CLOUDFLARE_ACCOUNT_ID`, `CLOUDFLARE_EMAIL_TOKEN`, `RESULT_FROM_EMAIL` | Yes | Yes |
 | `ATTCOS_API_BASE`, `ATTCOS_CHANNEL_ID`, `ATTCOS_API_KEY` | Yes, for the automatic result WhatsApp | Yes |
+| `GEMINI_API_KEY`, `GEMINI_MODEL` | Yes, for Writing scoring | Yes, for re-scoring Writing |
 | `ADMIN_URL`, `ADMIN_SETUP_CODE` | No | Yes |
 
 The values live only in Render and in the local `.env`. To change one, edit it under the service's Environment page in Render and deploy again. The repository is public, so a secret must never be committed.

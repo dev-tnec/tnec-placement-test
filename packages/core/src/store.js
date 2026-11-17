@@ -51,6 +51,7 @@ export function mapQuestion(row) {
     part: row.part ?? null,
     type: row.type || "choice",
     accepted: row.accepted ? JSON.parse(row.accepted) : null,
+    minWords: row.min_words ?? null,
     prompt: row.prompt,
     passage: row.passage || "",
     sectionId: row.section_id || null,
@@ -74,6 +75,7 @@ export function mapSection(row) {
     part: row.part ?? null,
     passage: row.passage || "",
     audio: row.audio_url || "",
+    image: row.image_url || "",
   };
 }
 

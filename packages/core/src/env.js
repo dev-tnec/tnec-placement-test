@@ -33,6 +33,10 @@ export function buildEnv(source = process.env) {
     SPEECHACE_KEY: String(source.SPEECHACE_KEY || "").trim(),
     SPEECHACE_API_BASE: trim(source.SPEECHACE_API_BASE) || "https://api2.speechace.com",
     SPEAKING_RETRY_SECONDS: String(source.SPEAKING_RETRY_SECONDS || ""),
+    // Google AI Studio (Gemini) scores the mockup writing essays.
+    GEMINI_API_KEY: String(source.GEMINI_API_KEY || "").trim(),
+    GEMINI_MODEL: String(source.GEMINI_MODEL || "").trim(),
+    GEMINI_MOCK: String(source.GEMINI_MOCK || "").trim(),
     WEB_PORT: webPort,
     ADMIN_PORT: adminPort,
   };

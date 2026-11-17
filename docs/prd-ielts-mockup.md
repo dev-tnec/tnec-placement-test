@@ -6,7 +6,7 @@ Status: draf untuk direview. Tanggal: 17 November 2026.
 
 Tes keempat di aplikasi ini, dengan kunci `ielts-mockup`, yang meniru mock test IELTS: siswa duduk satu sesi, mengerjakan Listening lalu Reading, dan mendapat perkiraan band per skill beserta band keseluruhan. Tes hanya terbuka lewat undangan WhatsApp ditambah kode unik per siswa. Bank soalnya diambil dari materi di `C:\Users\Sales\Desktop\ielts-mockup`, dan platform lama di folder itu tidak dipakai: isinya dibaca sebagai bahan, lalu fiturnya dibangun ulang di aplikasi ini.
 
-Rilis pertama mencakup Listening dan Reading, karena keduanya dinilai dari kunci jawaban dan sudah ada bahan lengkapnya: paket Desember dengan 40 soal listening beserta audionya dan 40 soal reading beserta kuncinya. Writing dan Speaking, yang butuh penilaian AI atau guru, menjadi fase kedua dengan PRD lanjutan sendiri.
+Rilis pertama mencakup Listening dan Reading, karena keduanya dinilai dari kunci jawaban dan sudah ada bahan lengkapnya: paket Desember dengan 40 soal listening beserta audionya dan 40 soal reading beserta kuncinya. Writing ditambahkan pada 17 November 2026 atas keputusan pemilik, dinilai AI, dan band keseluruhan memakai tiga skill sampai Speaking dibangun. Lihat bagian 15. Writing dan Speaking, yang butuh penilaian AI atau guru, menjadi fase kedua dengan PRD lanjutan sendiri.
 
 ## 2. Keputusan pemilik
 
@@ -144,9 +144,11 @@ Batasan kunci tes dan undangan, kolom `invites.code` dan `invites.opens_at`, ser
 
 ## 15. Fase kedua: Writing dan Speaking
 
-1. Soal `longtext` untuk dua task Writing dengan jumlah kata minimum, dan bagian Speaking dengan 22 prompt, perekaman suara, waktu siap dan waktu bicara per bagian.
-2. Penilaian: AI memberi band draf per kriteria Writing (Task Response, Coherence, Lexical Resource, Grammar) dan Speaking (Fluency, Lexical Resource, Grammar, Pronunciation), guru bisa menimpa dari halaman submission. Prompt dan kalibrasinya menyusul PRD fase kedua.
-3. Band keseluruhan baru memakai empat skill setelah fase ini jalan.
+Writing sudah jalan sejak 17 November 2026 dengan keputusan pemilik: esai dinilai AI saja tanpa review guru, dan band keseluruhan memakai Listening, Reading, dan Writing sampai Speaking dibangun.
+
+1. Soal `longtext` untuk dua task Writing dengan jumlah kata minimum, plus gambar grafik pada Task 1. Speaking dengan 22 prompt, perekaman suara, waktu siap dan waktu bicara per bagian masih menunggu.
+2. Penilaian Writing memakai Google AI Studio (Gemini) dengan empat kriteria: Task Response, Coherence and Cohesion, Lexical Resource, Grammatical Range and Accuracy. Band Writing adalah rata-rata Task 1 dan Task 2 dengan Task 2 berbobot dua kali. Tidak ada penimpaan guru; kalau AI gagal, tim menilai ulang dari halaman submission setelah kunci AI diperbaiki.
+3. Band keseluruhan sekarang rata-rata Listening, Reading, dan Writing. Setelah Speaking jalan, band keseluruhan memakai empat skill.
 
 ## 16. Urutan pengerjaan
 

@@ -695,3 +695,19 @@ body.nav-collapsed .account__out { margin-left: 0; }
 
 /* ---------- Daftar dialog ---------- */
 .dialog--daftar { width: min(760px, calc(100vw - 32px)); }
+
+/* Writing panel on a mockup submission: the band, the four criteria, and the essay. */
+.writing-total { display: flex; align-items: baseline; gap: 8px; padding: 12px 20px; border-bottom: 1px solid var(--gray-200); }
+.writing-total span { font-size: 11px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: var(--text-secondary); }
+.writing-total strong { font-size: 28px; font-weight: 800; color: var(--navy-900); font-variant-numeric: tabular-nums; }
+.writing-tasks { display: flex; flex-direction: column; gap: 16px; padding: 16px 20px 20px; }
+.writing-task { border: 1px solid var(--gray-200); border-radius: var(--radius-md); padding: 14px 16px; }
+.writing-task__head { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; margin-bottom: 8px; }
+.writing-task__title { margin: 0; font-size: 14px; font-weight: 700; color: var(--navy-900); }
+.writing-task__band { font-size: 12px; font-weight: 700; color: var(--navy-800); background: var(--surface-100); border-radius: var(--radius-pill); padding: 2px 10px; }
+.writing-criteria { margin: 0 0 8px; display: grid; grid-template-columns: 1fr 1fr; gap: 8px 16px; }
+.writing-criterion dt { font-size: 12px; font-weight: 600; color: var(--text-secondary); }
+.writing-criterion dt strong { color: var(--navy-900); }
+.writing-criterion dd { margin: 2px 0 0; font-size: 13px; color: var(--text-primary); }
+.writing-essay { margin: 10px 0 0; padding: 12px; background: var(--surface-50); border-radius: var(--radius-sm); white-space: pre-wrap; font-size: 13px; line-height: 1.7; max-height: 320px; overflow: auto; }
+@media (max-width: 760px) { .writing-criteria { grid-template-columns: 1fr; } }

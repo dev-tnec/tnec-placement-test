@@ -6,6 +6,8 @@ import { fileURLToPath } from "node:url";
 import { HttpError, json, readJson, nowSeconds, normalizeWhatsapp, isEmail, text, multiline, int } from "@tnec/core/http";
 import { randomToken, sha256Hex, verifyPassword, hashPassword } from "@tnec/core/crypto";
 import { TEST_KEYS, TEST_NAMES, mapTest, mapQuestion, mapSection, mapPackage, loadQuestions, loadLevels, publicLevel, attemptStatus, focusStrikes, addActivity, newId } from "@tnec/core/store";
+import { overallBand } from "@tnec/core/bands";
+import { gradeWritingTask, writingBand } from "@tnec/core/writing";
 import {
   latestPendaftaran, daftarCount, normalizeBirthDate, normalizeOption,
   JENJANG_PENDIDIKAN, TAHU_DARI, PENDAFTARAN_STATUS,
@@ -31,7 +33,7 @@ const INVITE_TTL = 14 * 24 * 60 * 60;
 const STAGES = { baru: "Baru", dihubungi: "Dihubungi", konsultasi: "Konsultasi", terdaftar: "Terdaftar", lepas: "Tidak lanjut" };
 const SOURCES = ["Placement test", "WhatsApp", "Instagram", "Datang langsung", "Rekomendasi alumni"];
 const MODES = ["Offline di Pare", "Online", "Online dan offline"];
-const SKILLS = ["Grammar", "Vocabulary", "Reading", "Listening"];
+const SKILLS = ["Grammar", "Vocabulary", "Reading", "Listening", "Writing"];
 const CHOICES = ["A", "B", "C", "D", "E", "F"];
 const ADMIN_CSP = "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'self'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'";
 const ms = (s) => (s ? s * 1000 : null);
@@ -245,6 +247,7 @@ const ROUTES = [
   ["PUT", /^\/api\/admin\/levels$/, updateLevels],
   ["GET", /^\/api\/admin\/attempts\/([0-9a-f-]{36})$/, getAttemptDetail],
   ["POST", /^\/api\/admin\/attempts\/([0-9a-f-]{36})\/(void|restore|resend-email)$/, attemptAction],
+  ["POST", /^\/api\/admin\/attempts\/([0-9a-f-]{36})\/writing-grade$/, regradeWriting],
   ["DELETE", /^\/api\/admin\/attempts\/([0-9a-f-]{36})$/, deleteAttempt],
   ["POST", /^\/api\/admin\/attempts\/bulk-delete$/, bulkDeleteAttempts],
   ["POST", /^\/api\/admin\/programs$/, saveProgram],
@@ -311,7 +314,7 @@ async function bootstrap(request, env, user, url) {
     stmt("SELECT * FROM students ORDER BY created_at DESC"),
     stmt(`SELECT id, test_key, student_id, started_at, expires_at, submitted_at, status, score, total, level_key, name,
                  violation_log, duration_seconds, limit_seconds, max_violations, email_status, pass_score, passed,
-                 voided_at, voided_by, void_reason, user_agent, country, bands, audio_played_at, package_id FROM attempts ORDER BY started_at DESC LIMIT 5000`),
+                 voided_at, voided_by, void_reason, user_agent, country, bands, audio_played_at, package_id, writing_status, writing_error FROM attempts ORDER BY started_at DESC LIMIT 5000`),
     stmt("SELECT student_id, MAX(at) AS last_at FROM activities GROUP BY student_id"),
     stmt("SELECT MIN(registered_at) AS at FROM pendaftaran WHERE status != 'batal' GROUP BY student_id"),
     stmt("SELECT * FROM programs ORDER BY name"),
@@ -435,6 +438,7 @@ function mapAttempt(a, now, speaking = null) {
     emailStatus: email, passScore: a.pass_score, passed: a.passed === null || a.passed === undefined ? null : Boolean(a.passed),
     voidBy: a.voided_by, voidAt: ms(a.voided_at), voidReason: a.void_reason || "", contactName: a.name || "",
     bands: a.bands ? JSON.parse(a.bands) : null, audioPlayedAt: ms(a.audio_played_at), packageId: a.package_id || null,
+    writingStatus: a.writing_status || null, writingError: a.writing_error || "",
     speaking: speakingBrief(speaking),
   };
 }
@@ -863,7 +867,7 @@ async function updateTestSettings(request, env, user, url, key) {
   const row = await env.DB.prepare("SELECT * FROM tests WHERE key = ?").bind(key).first();
   const next = { ...row };
   if (body.timeMode !== undefined) { if (!["total", "per"].includes(body.timeMode)) throw new HttpError(400, "Mode waktu tidak dikenal."); next.time_mode = body.timeMode; }
-  if (body.totalSeconds !== undefined) { const v = int(body.totalSeconds, { min: 60, max: 7200 }); if (v === null) throw new HttpError(400, "Durasi tes harus antara 1 dan 120 menit."); next.total_seconds = v; }
+  if (body.totalSeconds !== undefined) { const v = int(body.totalSeconds, { min: 60, max: 10800 }); if (v === null) throw new HttpError(400, "Durasi tes harus antara 1 dan 180 menit."); next.total_seconds = v; }
   if (body.perDefault !== undefined) { const v = int(body.perDefault, { min: 5, max: 180 }); if (v === null) throw new HttpError(400, "Waktu bawaan per soal harus antara 5 dan 180 detik."); next.per_default = v; }
   if (body.open !== undefined) next.is_open = body.open ? 1 : 0;
   if (body.maxViolations !== undefined) { const v = int(body.maxViolations, { min: 1, max: 5 }); if (v === null) throw new HttpError(400, "Batas pelanggaran harus antara 1 dan 5."); next.max_violations = v; }
@@ -927,6 +931,12 @@ function readQuestionInput(body) {
   if (body.seconds !== undefined && seconds === null) throw new HttpError(400, "Waktu soal harus antara 5 dan 180 detik.");
   const base = { prompt, passage: passage || null, part, skill: SKILLS.includes(body.skill) ? body.skill : "Grammar", status: body.status === "draf" ? "draf" : "aktif", seconds };
 
+  if (body.type === "longtext") {
+    const minWords = int(body.minWords, { min: 50, max: 1000 });
+    if (minWords === null) throw new HttpError(400, "Jumlah kata minimal harus angka 50 sampai 1.000.", { field: "minWords" });
+    return { ...base, type: "longtext", accepted: null, options: {}, answer: "ESSAY", minWords };
+  }
+
   if (body.type === "text") {
     const accepted = (Array.isArray(body.accepted) ? body.accepted : String(body.accepted || "").split(/\n/))
       .map((a) => text(a, 300)).filter(Boolean);
@@ -972,11 +982,11 @@ async function createQuestion(request, env, user, url, key) {
   const test = await env.DB.prepare("SELECT per_default FROM tests WHERE key = ?").bind(key).first();
   const max = await env.DB.prepare("SELECT COALESCE(MAX(position), 0) AS p FROM questions WHERE test_key = ? AND package_id IS NOT DISTINCT FROM ?").bind(key, packageId).first();
   const now = nowSeconds();
-  const r = await env.DB.prepare(`INSERT INTO questions (test_key, package_id, position, skill, part, section_id, prompt, passage, option_a, option_b, option_c, option_d, option_e, option_f, answer, seconds, status, type, accepted, created_at, updated_at)
-                                  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id`)
+  const r = await env.DB.prepare(`INSERT INTO questions (test_key, package_id, position, skill, part, section_id, prompt, passage, option_a, option_b, option_c, option_d, option_e, option_f, answer, seconds, status, type, accepted, min_words, created_at, updated_at)
+                                  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id`)
     .bind(key, packageId, max.p + 1, q.skill, q.part, sectionId, q.prompt, q.passage,
       q.options.A ?? null, q.options.B ?? null, q.options.C ?? null, q.options.D ?? null, q.options.E ?? null, q.options.F ?? null,
-      q.answer, q.seconds ?? test.per_default, q.status, q.type, q.accepted ? JSON.stringify(q.accepted) : null, now, now).first();
+      q.answer, q.seconds ?? test.per_default, q.status, q.type, q.accepted ? JSON.stringify(q.accepted) : null, q.minWords ?? null, now, now).first();
   return json({ ok: true, id: r ? r.id : null });
 }
 
@@ -992,10 +1002,10 @@ async function updateQuestion(request, env, user, url, key, id) {
   const q = readQuestionInput(body);
   const sectionId = await readSectionId(env, key, body, row.package_id);
   await env.DB.prepare(`UPDATE questions SET skill = ?, part = ?, section_id = ?, prompt = ?, passage = ?, option_a = ?, option_b = ?, option_c = ?, option_d = ?, option_e = ?, option_f = ?,
-                         answer = ?, seconds = ?, status = ?, type = ?, accepted = ?, updated_at = ? WHERE id = ?`)
+                         answer = ?, seconds = ?, status = ?, type = ?, accepted = ?, min_words = ?, updated_at = ? WHERE id = ?`)
     .bind(q.skill, q.part, sectionId, q.prompt, q.passage,
       q.options.A ?? null, q.options.B ?? null, q.options.C ?? null, q.options.D ?? null, q.options.E ?? null, q.options.F ?? null,
-      q.answer, q.seconds ?? row.seconds, q.status, q.type, q.accepted ? JSON.stringify(q.accepted) : null, nowSeconds(), row.id).run();
+      q.answer, q.seconds ?? row.seconds, q.status, q.type, q.accepted ? JSON.stringify(q.accepted) : null, q.minWords ?? null, nowSeconds(), row.id).run();
   return json({ ok: true, keyChanged: row.answer !== q.answer });
 }
 
@@ -1026,7 +1036,9 @@ function readSectionInput(body) {
   if (rawPassage.length > 20000) throw new HttpError(400, "Bacaan terlalu panjang, maksimal 20.000 karakter.", { field: "passage" });
   const audioUrl = String(body.audioUrl || "").trim();
   if (audioUrl && !audioUrl.startsWith("/")) throw new HttpError(400, "Alamat audio harus dimulai dengan / dan dihosting di situs tes ini.", { field: "audioUrl" });
-  return { title, skill, part, from, to, passage: rawPassage || null, audioUrl: audioUrl || null };
+  const imageUrl = String(body.imageUrl || "").trim();
+  if (imageUrl && !imageUrl.startsWith("/")) throw new HttpError(400, "Alamat gambar harus dimulai dengan / dan dihosting di situs tes ini.", { field: "imageUrl" });
+  return { title, skill, part, from, to, passage: rawPassage || null, audioUrl: audioUrl || null, imageUrl: imageUrl || null };
 }
 
 async function assignSectionRange(env, key, sectionId, from, to, part, packageId) {
@@ -1041,9 +1053,9 @@ async function createSection(request, env, user, url, key) {
   const max = await env.DB.prepare("SELECT COALESCE(MAX(position), 0) AS p FROM question_sections WHERE test_key = ? AND package_id IS NOT DISTINCT FROM ?").bind(key, packageId).first();
   const now = nowSeconds();
   const id = newId("sec");
-  await env.DB.prepare(`INSERT INTO question_sections (id, test_key, package_id, position, title, skill, part, passage, audio_url, created_at, updated_at)
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
-    .bind(id, key, packageId, max.p + 1, s.title, s.skill, s.part, s.passage, s.audioUrl, now, now).run();
+  await env.DB.prepare(`INSERT INTO question_sections (id, test_key, package_id, position, title, skill, part, passage, audio_url, image_url, created_at, updated_at)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+    .bind(id, key, packageId, max.p + 1, s.title, s.skill, s.part, s.passage, s.audioUrl, s.imageUrl, now, now).run();
   await assignSectionRange(env, key, id, s.from, s.to, s.part, packageId);
   return json({ ok: true, id });
 }
@@ -1057,8 +1069,8 @@ async function getSectionRow(env, key, id) {
 async function updateSection(request, env, user, url, key, id) {
   const row = await getSectionRow(env, key, id);
   const s = readSectionInput(await readJson(request));
-  await env.DB.prepare(`UPDATE question_sections SET title = ?, skill = ?, part = ?, passage = ?, audio_url = ?, updated_at = ? WHERE id = ?`)
-    .bind(s.title, s.skill, s.part, s.passage, s.audioUrl, nowSeconds(), row.id).run();
+  await env.DB.prepare(`UPDATE question_sections SET title = ?, skill = ?, part = ?, passage = ?, audio_url = ?, image_url = ?, updated_at = ? WHERE id = ?`)
+    .bind(s.title, s.skill, s.part, s.passage, s.audioUrl, s.imageUrl, nowSeconds(), row.id).run();
   // Questions outside the new range leave the section; questions inside it join, even when they
   // belonged to another section before.
   await env.DB.prepare("UPDATE questions SET section_id = NULL WHERE section_id = ? AND (position < ? OR position > ?)").bind(row.id, s.from, s.to).run();
@@ -1112,8 +1124,8 @@ async function questionAction(request, env, user, url, key, id, action) {
   } else if (action === "duplicate") {
     await env.DB.batch([
       env.DB.prepare("UPDATE questions SET position = position + 1 WHERE test_key = ? AND package_id IS NOT DISTINCT FROM ? AND position > ?").bind(key, fresh.package_id, fresh.position),
-      env.DB.prepare(`INSERT INTO questions (test_key, package_id, position, skill, part, section_id, prompt, passage, option_a, option_b, option_c, option_d, option_e, option_f, answer, seconds, status, type, accepted, created_at, updated_at)
-                      SELECT test_key, package_id, position + 1, skill, part, section_id, prompt, passage, option_a, option_b, option_c, option_d, option_e, option_f, answer, seconds, 'draf', type, accepted, ?::bigint, ?::bigint FROM questions WHERE id = ?`).bind(now, now, fresh.id),
+      env.DB.prepare(`INSERT INTO questions (test_key, package_id, position, skill, part, section_id, prompt, passage, option_a, option_b, option_c, option_d, option_e, option_f, answer, seconds, status, type, accepted, min_words, created_at, updated_at)
+                      SELECT test_key, package_id, position + 1, skill, part, section_id, prompt, passage, option_a, option_b, option_c, option_d, option_e, option_f, answer, seconds, 'draf', type, accepted, min_words, ?::bigint, ?::bigint FROM questions WHERE id = ?`).bind(now, now, fresh.id),
     ]);
   } else {
     const other = await env.DB.prepare(`SELECT id, position FROM questions WHERE test_key = ? AND package_id IS NOT DISTINCT FROM ? AND position ${action === "up" ? "< ? ORDER BY position DESC" : "> ? ORDER BY position ASC"} LIMIT 1`)
@@ -1340,6 +1352,31 @@ function deviceLabel(ua) {
   const browser = /Edg\//.test(s) ? "Edge" : /SamsungBrowser/.test(s) ? "Samsung Internet" : /Chrome\//.test(s) ? "Chrome" : /Firefox\//.test(s) ? "Firefox" : /Safari\//.test(s) ? "Safari" : "Browser";
   const os = /Android/.test(s) ? "Android" : /iPhone|iPad/.test(s) ? "iPhone" : /Windows/.test(s) ? "Windows" : /Mac OS X/.test(s) ? "macOS" : /Linux/.test(s) ? "Linux" : "perangkat lain";
   return `${browser} di ${os}`;
+}
+
+/* Re-run the AI writing score for a submitted attempt, for example after the key was fixed. */
+async function regradeWriting(request, env, user, url, id) {
+  const a = await getAttemptRow(env, id);
+  if ((a.test_key || "placement") !== "ielts-mockup") throw new HttpError(400, "Penilaian writing hanya untuk IELTS Mockup.");
+  const all = await loadQuestions(env, "ielts-mockup", { packageId: a.package_id || undefined });
+  const byId = new Map(all.map((q) => [q.id, q]));
+  const ids = a.question_ids ? JSON.parse(a.question_ids) : [];
+  const essays = ids.map((qid) => byId.get(qid)).filter((q) => q && q.type === "longtext");
+  if (!essays.length) throw new HttpError(400, "Percobaan ini tidak punya soal writing.");
+  const { results: answers } = await env.DB.prepare("SELECT question_id, choice FROM answers WHERE attempt_id = ?").bind(id).all();
+  const answerById = new Map(answers.map((x) => [x.question_id, x.choice]));
+  const tasks = await Promise.all(essays.map((q) => gradeWritingTask(env, {
+    taskNumber: q.part || 1,
+    prompt: q.prompt,
+    text: String(answerById.get(q.id) ?? "").slice(0, 20000),
+    minWords: q.minWords || 150,
+  })));
+  const writing = { skill: "Writing", band: writingBand(tasks), tasks };
+  const stored = a.bands ? JSON.parse(a.bands) : { skills: [] };
+  const skills = [...(stored.skills || []).filter((s) => s.skill !== "Writing"), writing];
+  const bands = { skills, overall: overallBand(skills.map((s) => s.band)) };
+  await env.DB.prepare("UPDATE attempts SET bands = ?, writing_status = 'graded', writing_error = NULL WHERE id = ?").bind(JSON.stringify(bands), id).run();
+  return json({ ok: true, bands });
 }
 
 async function attemptAction(request, env, user, url, id, action) {

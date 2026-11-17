@@ -397,6 +397,7 @@ assert.deepEqual(retryDelays({}), [60, 300]);
 
 /* ---------- IELTS mockup: text answers, band conversion, and band rounding ---------- */
 import { normalizeTextAnswer, bandForRaw, overallBand } from "@tnec/core/bands";
+import { writingBand, countWords } from "@tnec/core/writing";
 
 assert.equal(normalizeTextAnswer("  Radio   Programme! "), "radio programme");
 assert.equal(normalizeTextAnswer("LS14 2JW"), "ls14 2jw");
@@ -412,6 +413,14 @@ assert.equal(overallBand([6, 5.5]), 6, "the mean rounds to the nearest half");
 assert.equal(overallBand([6.5, 5.5, 6, 7]), 6.5);
 assert.equal(overallBand([6.25, 5.75]), 6);
 assert.equal(overallBand([]), 0);
+
+/* Writing: Task 2 weighs twice Task 1, and the band rounds to the nearest half. */
+assert.equal(writingBand([{ taskNumber: 1, band: 6 }, { taskNumber: 2, band: 7 }]), 6.5);
+assert.equal(writingBand([{ taskNumber: 1, band: 5.5 }, { taskNumber: 2, band: 5.5 }]), 5.5);
+assert.equal(writingBand([{ taskNumber: 2, band: 6.5 }]), 6.5);
+assert.equal(writingBand([{ taskNumber: 1, band: 5 }]), 5);
+assert.equal(writingBand([]), 0);
+assert.equal(countWords("  one two   three "), 3);
 
 /* The dashboard bootstrap cache: round trip, TTL, and clear. */
 const cacheStore = new Map();

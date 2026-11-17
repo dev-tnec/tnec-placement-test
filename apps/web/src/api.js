@@ -7,6 +7,7 @@ import {
   focusStrikes, addActivity, upsertStudentFromContact, newId,
 } from "@tnec/core/store";
 import { normalizeTextAnswer, bandForRaw, overallBand } from "@tnec/core/bands";
+import { gradeWritingTask, writingBand } from "@tnec/core/writing";
 import { CONSENT_VERSION, PRIVACY, TERMS, WHATSAPP, fillLegal } from "@tnec/core/legal";
 import { whatsappConfigured } from "@tnec/core/whatsapp";
 import { deliverInBackground, runInBackground, EMAIL_SKIPPED } from "@tnec/core/delivery";
@@ -15,6 +16,8 @@ import { SPEAKING_MAX_BYTES, speakingType, speechaceConfigured, gradeInBackgroun
 import { isFinalStatus, speakingFacts } from "@tnec/core/speaking-result";
 
 const PUBLIC_BODY_LIMIT = 16 * 1024;
+// Two writing essays need more room than the other JSON bodies.
+const SUBMIT_BODY_LIMIT = 64 * 1024;
 // The recording comes as the raw request body. The cap is 3 MB plus room for nothing else.
 export const SPEAKING_ROUTE = /^\/api\/attempts\/[0-9a-f-]{36}\/speaking$/;
 export const SPEAKING_BODY_LIMIT = SPEAKING_MAX_BYTES + 1024;
@@ -204,7 +207,7 @@ async function createAttempt(request, env) {
     timeMode: test.timeMode,
     maxViolations: test.maxViolations,
     autoSubmit: test.autoSubmit,
-    sections: sections.map((s) => ({ id: s.id, title: s.title, skill: s.skill, part: s.part, passage: s.passage, audio: s.audio })),
+    sections: sections.map((s) => ({ id: s.id, title: s.title, skill: s.skill, part: s.part, passage: s.passage, audio: s.audio, image: s.image })),
     questions: questions.map((q) => ({
       id: q.id,
       skill: q.skill,
@@ -212,6 +215,7 @@ async function createAttempt(request, env) {
       type: q.type,
       ...(q.part ? { part: q.part } : {}),
       ...(q.sectionId ? { sectionId: q.sectionId } : {}),
+      ...(q.type === "longtext" ? { minWords: q.minWords || 150 } : {}),
       ...(q.passage ? { passage: q.passage } : {}),
       ...(q.type === "choice" ? { options: q.options } : {}),
       ...(perMode ? { seconds: q.seconds } : {}),
@@ -261,13 +265,14 @@ async function logViolation(request, env, attemptId) {
   return json({ ok: true, counted: Boolean(row) });
 }
 
-function inviteResult(attempt, score, total, passed, bands) {
+function inviteResult(attempt, score, total, passed, bands, writing = null) {
   if (bands) {
     return {
       test: attempt.test_key,
       testName: TEST_NAMES[attempt.test_key],
       overall: bands.overall,
       skills: bands.skills,
+      ...(writing ? { writingStatus: writing.status || null, writingError: writing.error || "" } : {}),
       disclaimer: "Hasil ini adalah perkiraan dan bukan skor resmi IELTS. Skor resmi hanya diterbitkan oleh British Council atau IDP.",
     };
   }
@@ -315,15 +320,16 @@ function gradeAnswer(question, raw) {
 }
 
 async function submitAttempt(request, env, attemptId) {
-  const body = await readJson(request, PUBLIC_BODY_LIMIT);
+  const body = await readJson(request, SUBMIT_BODY_LIMIT);
   const attempt = await getAttempt(env, attemptId);
 
   if (attempt.status === "submitted") {
     const stored = attempt.bands ? JSON.parse(attempt.bands) : null;
+    const writing = attempt.test_key === "ielts-mockup" ? { status: attempt.writing_status || null, error: attempt.writing_error || "" } : null;
     return json({
       ok: true,
       total: attempt.total,
-      ...(attempt.invite_id ? { result: inviteResult(attempt, attempt.score, attempt.total, attempt.passed, stored) } : {}),
+      ...(attempt.invite_id ? { result: inviteResult(attempt, attempt.score, attempt.total, attempt.passed, stored, writing) } : {}),
     });
   }
 
@@ -345,37 +351,65 @@ async function submitAttempt(request, env, attemptId) {
 
   let score = 0;
   const correctBySkill = new Map();
-  const statements = list.map((question) => {
+  const statements = [];
+  for (const question of list) {
     const raw = rawAnswers[question.id];
+    if (question.type === "longtext") {
+      // The essay is stored as the answer; it has no key and never counts in the raw score.
+      statements.push(env.DB.prepare(
+        `INSERT INTO answers (attempt_id, question_id, choice, is_correct, answer_key) VALUES (?, ?, ?, 0, '')
+         ON CONFLICT (attempt_id, question_id) DO UPDATE SET choice = EXCLUDED.choice, is_correct = 0, answer_key = ''`,
+      ).bind(attemptId, question.id, String(raw ?? "").slice(0, 20000)));
+      continue;
+    }
     const graded = gradeAnswer(question, raw);
     const isCorrect = graded.correct ? 1 : 0;
     score += isCorrect;
     correctBySkill.set(question.skill, (correctBySkill.get(question.skill) || 0) + isCorrect);
     const stored = question.type === "text" ? String(raw ?? "").slice(0, 300) : normalizeChoice(raw);
-    return env.DB.prepare(
+    statements.push(env.DB.prepare(
       `INSERT INTO answers (attempt_id, question_id, choice, is_correct, answer_key) VALUES (?, ?, ?, ?, ?)
        ON CONFLICT (attempt_id, question_id) DO UPDATE SET choice = EXCLUDED.choice, is_correct = EXCLUDED.is_correct, answer_key = EXCLUDED.answer_key`,
-    ).bind(attemptId, question.id, stored, isCorrect, graded.key);
-  });
+    ).bind(attemptId, question.id, stored, isCorrect, graded.key));
+  }
 
   const total = list.length;
   const testKey = attempt.test_key || "placement";
   let levelKey = null;
   let passed = null;
   let bands = null;
+  let writingStatus = null;
+  let writingError = null;
   if (testKey === "placement") {
     levelKey = levelFor(await loadLevels(env), score).key;
   } else if (testKey === "post") {
     passed = (total ? Math.round((score / total) * 100) : 0) >= (attempt.pass_score ?? 70) ? 1 : 0;
   } else if (testKey === "ielts-mockup") {
     bands = await computeBands(env, correctBySkill);
+    const essays = list.filter((q) => q.type === "longtext");
+    if (essays.length) {
+      try {
+        const tasks = await Promise.all(essays.map((q) => gradeWritingTask(env, {
+          taskNumber: q.part || 1,
+          prompt: q.prompt,
+          text: String(rawAnswers[q.id] ?? "").slice(0, 20000),
+          minWords: q.minWords || 150,
+        })));
+        const writing = { skill: "Writing", band: writingBand(tasks), tasks };
+        bands = { skills: [...bands.skills, writing], overall: overallBand([...bands.skills.map((s) => s.band), writing.band]) };
+        writingStatus = "graded";
+      } catch (error) {
+        writingStatus = "failed";
+        writingError = String(error?.message || "Penilaian AI writing gagal.").slice(0, 500);
+      }
+    }
   }
   const timedOut = now > attempt.expires_at ? 1 : 0;
 
   statements.push(env.DB.prepare(
     `UPDATE attempts SET status = 'submitted', submitted_at = ?, score = ?, total = ?, level_key = ?, timed_out = ?,
-            duration_seconds = ?, passed = ?, bands = ? WHERE id = ?`,
-  ).bind(now, score, total, levelKey, timedOut, Math.max(0, now - attempt.started_at), passed, bands ? JSON.stringify(bands) : attempt.bands, attemptId));
+            duration_seconds = ?, passed = ?, bands = ?, writing_status = ?, writing_error = ? WHERE id = ?`,
+  ).bind(now, score, total, levelKey, timedOut, Math.max(0, now - attempt.started_at), passed, bands ? JSON.stringify(bands) : attempt.bands, writingStatus, writingError, attemptId));
 
   if (attempt.invite_id) {
     const nilai = total ? Math.round((score / total) * 100) : 0;
@@ -395,11 +429,12 @@ async function submitAttempt(request, env, attemptId) {
 
   // Placement scores stay hidden until the contact step. Invite attempts already
   // belong to a known student, so their result is returned right away.
+  const writing = testKey === "ielts-mockup" ? { status: writingStatus, error: writingError || "" } : null;
   return json({
     ok: true,
     total,
     timedOut: Boolean(timedOut),
-    ...(attempt.invite_id ? { result: inviteResult(attempt, score, total, passed, bands) } : {}),
+    ...(attempt.invite_id ? { result: inviteResult(attempt, score, total, passed, bands, writing) } : {}),
   });
 }
 

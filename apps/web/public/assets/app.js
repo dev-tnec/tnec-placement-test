@@ -53,6 +53,8 @@ const els = {
   flagText: $("#flag-text"),
   questionBadge: $("#question-badge"),
   passage: $("#passage"),
+  passageLabel: $("#passage-label"),
+  passageImage: $("#passage-image"),
   passageText: $("#passage-text"),
   prompt: $("#question-prompt"),
   optionsList: $("#options-list"),
@@ -146,6 +148,7 @@ const els = {
   bandOverall: $("#band-overall"),
   bandList: $("#band-list"),
   scoreNote: $("#score-note"),
+  writingResult: $("#writing-result"),
   toast: $("#toast"),
   live: $("#live"),
 };
@@ -413,7 +416,7 @@ function applyInviteCopy(info, config) {
     ".",
   );
   setCopy("intro-lead", ielts
-    ? `Mock test ini meniru tes IELTS sungguhan: ${total} soal Listening yang menyertai satu audio, lalu ${total} soal Reading dari tiga bacaan. Hasilnya berupa perkiraan band untuk tiap skill.`
+    ? "Mock test ini meniru tes IELTS sungguhan: bagian Listening dengan satu audio, bagian Reading dari tiga bacaan, dan dua task Writing yang dinilai AI. Hasilnya berupa perkiraan band untuk Listening, Reading, dan Writing."
     : pre
       ? `Tes ini berisi ${total} soal pilihan ganda. Nilainya kami pakai sebagai titik awal untuk melihat perkembangan kamu selama program.`
       : `Tes ini berisi ${total} soal pilihan ganda. Hasilnya kami pakai untuk menentukan apakah kamu sudah siap lanjut ke level berikutnya.`);
@@ -424,12 +427,12 @@ function applyInviteCopy(info, config) {
   setCopy("step3-meta", ielts ? "Band langsung muncul" : pre ? "Nilai langsung muncul" : "Nilai dan kelulusan");
   setCopy("how3-title", ielts ? "Melihat band kamu" : "Melihat nilai kamu");
   setCopy("how3-body", ielts
-    ? "Setelah jawaban terkirim, skor mentah dan band kamu langsung muncul di layar untuk Listening dan Reading, lengkap dengan band keseluruhan."
+    ? "Setelah jawaban terkirim, band Listening dan Reading muncul, lalu esai kamu dinilai AI untuk band Writing, lengkap dengan band keseluruhan."
     : "Setelah jawaban terkirim, nilai kamu langsung muncul di layar dan tercatat di data kelas, jadi tutor bisa membahasnya bersama kamu.");
   setCopy("data-1", "Kami menyimpan jawaban, nilai, waktu pengerjaan, dan catatan pelanggaran selama tes, lalu mencatatnya di data kamu sebagai siswa Titik Nol.");
   setCopy("data-2", "Data itu kami pakai untuk menghitung nilai dan memantau perkembangan belajar kamu bersama tutor. Data tidak dijual dan tidak dipakai untuk iklan.");
   setCopy("data-3", ielts
-    ? "Setelah jawaban terkirim, band kamu langsung muncul di layar. Kamu tidak perlu mengisi data kontak lagi."
+    ? "Setelah jawaban terkirim, band kamu langsung muncul di layar, dan esai Writing kamu dinilai AI tanpa nama atau kontak kamu. Kamu tidak perlu mengisi data kontak lagi."
     : pre
       ? "Setelah jawaban terkirim, nilai kamu langsung muncul di layar. Kamu tidak perlu mengisi data kontak lagi."
       : "Setelah jawaban terkirim, nilai dan hasil kelulusan kamu langsung muncul di layar. Kamu tidak perlu mengisi data kontak lagi.");
@@ -641,11 +644,24 @@ function renderQuestion() {
   // The section owns the reading passage or listening instructions, so every question of the
   // section shows the same text and a later shuffle cannot separate them.
   const passage = section?.passage || question.passage;
-  if (passage) {
+  const image = section?.image || "";
+  els.passageLabel.textContent = section?.title || "Bacaan";
+  if (image) {
+    els.passageImage.src = image;
+    els.passageImage.alt = section?.title || "Gambar soal";
+    els.passageImage.hidden = false;
+  } else {
+    els.passageImage.hidden = true;
+    els.passageImage.removeAttribute("src");
+    els.passageImage.alt = "";
+  }
+  if (passage || image) {
     els.passage.hidden = false;
-    els.passageText.textContent = passage;
+    els.passageText.hidden = !passage;
+    els.passageText.textContent = passage || "";
   } else {
     els.passage.hidden = true;
+    els.passageText.hidden = false;
     els.passageText.textContent = "";
   }
 
@@ -679,6 +695,32 @@ function renderQuestion() {
     input.value = state.answers[question.id] || "";
     input.addEventListener("input", () => answerText(question.id, input.value));
     field.append(label, input);
+    els.optionsList.append(field);
+  } else if (question.type === "longtext") {
+    const field = document.createElement("div");
+    field.className = "field answer-field";
+    const label = document.createElement("label");
+    label.className = "label";
+    label.htmlFor = `q-${question.id}`;
+    label.textContent = "Tulisan kamu";
+    const area = document.createElement("textarea");
+    area.className = "textarea";
+    area.id = `q-${question.id}`;
+    area.rows = 12;
+    area.maxLength = 20000;
+    area.autocomplete = "off";
+    area.value = state.answers[question.id] || "";
+    const counter = document.createElement("p");
+    counter.className = "micro";
+    const update = () => {
+      const words = area.value.trim().split(/\s+/).filter(Boolean).length;
+      const minimum = question.minWords || 150;
+      counter.textContent = `${words} kata, minimal ${minimum} kata`;
+      counter.classList.toggle("is-warning", words < minimum);
+    };
+    area.addEventListener("input", () => { answerText(question.id, area.value); update(); });
+    update();
+    field.append(label, area, counter);
     els.optionsList.append(field);
   } else {
     const letters = Object.keys(question.options || {});
@@ -1555,13 +1597,45 @@ function renderScore(result) {
       band.textContent = String(skill.band);
       const raw = document.createElement("span");
       raw.className = "band-list__raw";
-      raw.textContent = `${skill.raw} dari 40 benar`;
+      raw.textContent = skill.skill === "Writing" ? "dinilai AI" : `${skill.raw} dari 40 benar`;
       li.append(name, band, raw);
       els.bandList.append(li);
     }
+    // The writing tasks and their four criteria, when the AI scored them.
+    const writing = result.skills.find((s) => s.skill === "Writing");
+    els.writingResult.replaceChildren();
+    els.writingResult.hidden = !writing && result.writingStatus !== "failed";
+    if (writing) {
+      for (const task of writing.tasks || []) {
+        const block = document.createElement("div");
+        block.className = "writing-result__task";
+        const head = document.createElement("p");
+        head.className = "writing-result__head";
+        head.textContent = `Writing Task ${task.taskNumber}: band ${task.band}`;
+        block.append(head);
+        for (const [key, label] of [["task_response", "Task Response"], ["coherence_cohesion", "Coherence & Cohesion"], ["lexical_resource", "Lexical Resource"], ["grammatical_range_accuracy", "Grammatical Range & Accuracy"]]) {
+          const criterion = task.criteria?.[key];
+          if (!criterion) continue;
+          const row = document.createElement("p");
+          row.className = "writing-result__criterion";
+          const strong = document.createElement("strong");
+          strong.textContent = `${label} ${criterion.band}`;
+          const comment = document.createElement("span");
+          comment.textContent = criterion.comment;
+          row.append(strong, comment);
+          block.append(row);
+        }
+        els.writingResult.append(block);
+      }
+    } else if (result.writingStatus === "failed") {
+      const note = document.createElement("p");
+      note.className = "writing-result__criterion";
+      note.textContent = "Penilaian Writing belum berhasil. Tim Titik Nol akan menghubungi kamu dengan hasilnya.";
+      els.writingResult.append(note);
+    }
     $("#score-summary").textContent = `Terima kasih sudah mengerjakan mock IELTS${first ? `, ${first}` : ""}.`;
     $("#score-headline").textContent = "Band keseluruhan kamu";
-    $("#score-description").textContent = `${result.disclaimer} Band pada tes resmi ditentukan dari empat skill, jadi band ini akan lengkap setelah bagian Writing dan Speaking tersedia.`;
+    $("#score-description").textContent = `${result.disclaimer} Band ini dihitung dari Listening, Reading, dan Writing. Speaking belum termasuk, jadi band resmi tetap butuh empat skill.`;
     return;
   }
 

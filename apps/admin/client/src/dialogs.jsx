@@ -119,7 +119,11 @@ function QuestionDialog({ id }) {
       body.packageId = packageOf(t)?.id || null;
     }
 
-    if (type === "text") {
+    if (type === "longtext") {
+      const minWords = Number($("#qe-minwords").value);
+      if (!Number.isInteger(minWords) || minWords < 50 || minWords > 1000) fail($("#qe-minwords"), "qe-options-err", "Jumlah kata minimal harus angka 50 sampai 1.000.");
+      body.minWords = minWords;
+    } else if (type === "text") {
       const accepted = $("#qe-accepted").value.split(/\n/).map((a) => a.trim()).filter(Boolean);
       if (!accepted.length) fail($("#qe-accepted"), "qe-options-err", "Tulis minimal satu jawaban yang diterima, satu per baris.");
       else if (new Set(accepted.map((a) => a.toLowerCase())).size !== accepted.length) fail($("#qe-accepted"), "qe-options-err", "Ada jawaban diterima yang ditulis dua kali.");
@@ -193,9 +197,18 @@ function QuestionDialog({ id }) {
                 <input type="radio" name="qe-type" value="text" checked={type === "text"} onChange={() => setType("text")} /><span className="mode__mark" aria-hidden="true"></span>
                 <span><span className="mode__title">Isian teks</span><span className="mode__desc">Peserta mengetik jawaban, dinilai longgar terhadap daftar jawaban yang diterima.</span></span>
               </label>
+              <label className={`mode${type === "longtext" ? " is-on" : ""}`}>
+                <input type="radio" name="qe-type" value="longtext" checked={type === "longtext"} onChange={() => setType("longtext")} /><span className="mode__mark" aria-hidden="true"></span>
+                <span><span className="mode__title">Esai</span><span className="mode__desc">Peserta menulis esai panjang, dinilai AI dengan empat kriteria IELTS Writing.</span></span>
+              </label>
             </div>
           </fieldset> : null}
-          {type === "text" ? <div className="field">
+          {type === "longtext" ? <div className="field">
+            <label className="label" htmlFor="qe-minwords">Jumlah kata minimal</label>
+            <div className="unit-row"><span className="unit"><input className="input tnum" id="qe-minwords" type="number" min="50" max="1000" defaultValue={q && q.minWords ? q.minWords : 250} /><span>kata</span></span></div>
+            <p className="hint">Esai dinilai AI, lalu band Writing masuk ke band keseluruhan bersama Listening dan Reading.</p>
+            <p className="error" id="qe-options-err" hidden></p>
+          </div> : type === "text" ? <div className="field">
             <label className="label" htmlFor="qe-accepted">Jawaban yang diterima</label>
             <textarea className="textarea" id="qe-accepted" rows="4" defaultValue={q && q.accepted ? q.accepted.join("\n") : ""} placeholder={"Satu jawaban per baris, contoh:\nlake\nthe lake"}></textarea>
             <p className="hint">Huruf besar atau kecil, tanda baca, dan spasi ganda tidak dipedulikan saat menilai.</p>
@@ -218,7 +231,7 @@ function QuestionDialog({ id }) {
             <div className="field">
               <label className="label" htmlFor="qe-skill">Skill</label>
               <select className="select" id="qe-skill" defaultValue={q ? q.skill : (isIelts ? "Listening" : "Grammar")}>
-                <OptList list={isIelts ? [["Listening", "Listening"], ["Reading", "Reading"]] : [["Grammar", "Grammar"], ["Vocabulary", "Vocabulary"], ["Reading", "Reading"]]} />
+                <OptList list={isIelts ? [["Listening", "Listening"], ["Reading", "Reading"], ["Writing", "Writing"]] : [["Grammar", "Grammar"], ["Vocabulary", "Vocabulary"], ["Reading", "Reading"]]} />
               </select>
             </div>
             {isIelts ? <div className="field">
@@ -277,16 +290,18 @@ function SectionDialog({ id }) {
     const start = Number($("#se-from").value);
     const end = Number($("#se-to").value);
     const audioUrl = $("#se-audio").value.trim();
+    const imageUrl = $("#se-image").value.trim();
     if (!title) fail($("#se-title"), "se-title-err", "Nama bagian wajib diisi.");
     if (!Number.isInteger(start) || !Number.isInteger(end) || start < 1 || end > max || start > end) {
       fail($("#se-from"), "se-range-err", `Rentang soal harus angka 1 sampai ${max}, dan soal awal tidak boleh lebih besar dari soal akhir.`);
     }
     if (audioUrl && !audioUrl.startsWith("/")) fail($("#se-audio"), "se-audio-err", "Alamat audio harus dimulai dengan / dan dihosting di situs tes ini.");
+    if (imageUrl && !imageUrl.startsWith("/")) fail($("#se-image"), "se-image-err", "Alamat gambar harus dimulai dengan / dan dihosting di situs tes ini.");
     if (first) { first.focus(); return; }
 
     const body = {
       title, skill: $("#se-skill").value, part: $("#se-part").value || null, from: start, to: end,
-      passage: $("#se-passage").value.trim(), audioUrl,
+      passage: $("#se-passage").value.trim(), audioUrl, imageUrl,
       packageId: s ? s.packageId : (packageOf(t)?.id || null),
     };
     const done = busy(form.querySelector('[type="submit"]'), "Menyimpan...");
@@ -323,7 +338,7 @@ function SectionDialog({ id }) {
           <div className="form-grid">
             <div className="field">
               <label className="label" htmlFor="se-skill">Skill</label>
-              <select className="select" id="se-skill" defaultValue={s ? s.skill : "Listening"}><OptList list={[["Listening", "Listening"], ["Reading", "Reading"]]} /></select>
+              <select className="select" id="se-skill" defaultValue={s ? s.skill : "Listening"}><OptList list={[["Listening", "Listening"], ["Reading", "Reading"], ["Writing", "Writing"]]} /></select>
             </div>
             <div className="field">
               <label className="label" htmlFor="se-part">Bagian ke</label>
@@ -353,6 +368,12 @@ function SectionDialog({ id }) {
             <input className="input" id="se-audio" type="text" defaultValue={s ? s.audio : ""} placeholder="/audio/ielts-dec-1.mp3" />
             <p className="hint">Diputar satu kali per percobaan, hanya untuk soal di bagian ini. Berkasnya di bawah apps/web/public/audio.</p>
             <p className="error" id="se-audio-err" hidden></p>
+          </div>
+          <div className="field">
+            <label className="label" htmlFor="se-image">Alamat gambar</label>
+            <input className="input" id="se-image" type="text" defaultValue={s ? s.image : ""} placeholder="/images/ielts-writing-dalton.png" />
+            <p className="hint">Tampil di atas soal bagian ini, misalnya grafik Writing Task 1.</p>
+            <p className="error" id="se-image-err" hidden></p>
           </div>
         </div>
         <footer className="dialog__foot">

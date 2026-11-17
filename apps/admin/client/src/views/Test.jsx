@@ -126,13 +126,15 @@ function QuestionsTab() {
                   {(section?.passage || (!section && x.passage)) ? <span className="q-tag"><Icon name="book" cls="icon--sm" />{x.skill === "Listening" ? "Dengan instruksi" : "Dengan bacaan"}</span> : null}
                 </div> : null}
                 <p className="q-prompt">{x.prompt}</p>
-                {x.type === "text"
-                  ? <ul className="opts" aria-label="Jawaban yang diterima">
-                    <li className="opt is-key"><span className="opt__key">Kunci</span><span className="opt__text">{(x.accepted || []).join(", ")}</span></li>
-                  </ul>
-                  : <ul className="opts" aria-label={`Pilihan jawaban, kunci ${x.answer}`}>
-                    {Object.keys(x.options).map((k) => <li key={k} className={`opt${k === x.answer ? " is-key" : ""}`}><span className="opt__key">{k}</span><span className="opt__text">{x.options[k]}</span></li>)}
-                  </ul>}
+                {x.type === "longtext"
+                  ? <ul className="opts" aria-label="Esai"><li className="opt is-key"><span className="opt__key">Esai</span><span className="opt__text">Minimal {x.minWords} kata, dinilai AI</span></li></ul>
+                  : x.type === "text"
+                    ? <ul className="opts" aria-label="Jawaban yang diterima">
+                      <li className="opt is-key"><span className="opt__key">Kunci</span><span className="opt__text">{(x.accepted || []).join(", ")}</span></li>
+                    </ul>
+                    : <ul className="opts" aria-label={`Pilihan jawaban, kunci ${x.answer}`}>
+                      {Object.keys(x.options).map((k) => <li key={k} className={`opt${k === x.answer ? " is-key" : ""}`}><span className="opt__key">{k}</span><span className="opt__text">{x.options[k]}</span></li>)}
+                    </ul>}
               </td>
               <td className="hide-md">{x.skill}</td>
               <td className="hide-sm">
@@ -262,7 +264,7 @@ function SubmissionsTab() {
   const head = ui.test === "placement"
     ? <><th scope="col">Peserta</th><th scope="col">Skor</th><th scope="col" className="hide-sm">Level</th><th scope="col" className="hide-md">Durasi</th><th scope="col" className="hide-md">Pelanggaran</th><th scope="col" className="hide-xl">Email hasil</th></>
     : ui.test === "ielts-mockup"
-      ? <><th scope="col">Peserta</th><th scope="col">Listening</th><th scope="col">Reading</th><th scope="col">Band keseluruhan</th><th scope="col" className="hide-md">Audio</th></>
+      ? <><th scope="col">Peserta</th><th scope="col">Listening</th><th scope="col">Reading</th><th scope="col">Writing</th><th scope="col">Band keseluruhan</th><th scope="col" className="hide-md">Audio</th></>
       : <><th scope="col">Siswa</th><th scope="col" className="hide-md">Program</th><th scope="col" className="hide-tab">Tutor / Kelas</th>{ui.test === "post" ? <><th scope="col" className="hide-xl">Pre-test</th><th scope="col">Nilai</th><th scope="col">Hasil</th></> : <><th scope="col">Nilai</th><th scope="col" className="hide-lg">Durasi</th></>}</>;
 
   return <section className="panel">
@@ -328,12 +330,14 @@ function AttemptRow({ a, sel, onToggle }) {
     const bands = a.bands || { skills: [], overall: 0 };
     const listen = bands.skills.find((x) => x.skill === "Listening");
     const read = bands.skills.find((x) => x.skill === "Reading");
+    const write = bands.skills.find((x) => x.skill === "Writing");
     const pkg = a.packageId ? db.tests["ielts-mockup"].packages.find((p) => p.id === a.packageId) : null;
     return <tr className={sel ? "is-selected" : ""} onClick={rowClick(href)}>
       <td className="is-check"><input type="checkbox" checked={sel} aria-label={`Pilih submission ${s ? s.name : a.contactName || a.short}`} onChange={(e) => onToggle(a.id, e.target.checked)} /></td>
       <td>{person}{pkg ? <span className="cell-sub">{pkg.name}</span> : null}</td>
       <td className="nowrap tnum">{listen ? `${listen.raw} / 40, band ${listen.band}` : <span className="muted">Tidak ada</span>}</td>
       <td className="nowrap tnum">{read ? `${read.raw} / 40, band ${read.band}` : <span className="muted">Tidak ada</span>}</td>
+      <td className="nowrap tnum">{write ? `band ${write.band}` : <span className="muted">Belum dinilai</span>}</td>
       <td><strong className="tnum">{bands.overall || "-"}</strong></td>
       <td className="hide-md">{a.audioPlayedAt ? <><Icon name="clock" cls="icon--sm" /> {fmtDateTime(a.audioPlayedAt)}</> : <span className="muted">Belum diputar</span>}</td>
       {tail}
@@ -443,7 +447,7 @@ function SettingsTab({ testKey }) {
     const body = { timeMode: mode };
     if (mode === "total") {
       const m = Number(min), s = Number(sec), tot = m * 60 + s;
-      const maxMinutes = testKey === "ielts-mockup" ? 120 : 60;
+      const maxMinutes = testKey === "ielts-mockup" ? 180 : 60;
       if (!Number.isInteger(m) || !Number.isInteger(s) || s < 0 || s > 59 || tot < 60 || tot > maxMinutes * 60) { fieldError($("#set-min"), "set-time-err", `Durasi tes harus antara 1 dan ${maxMinutes} menit, dengan detik dari 0 sampai 59.`); $("#set-min").focus(); return; }
       body.totalSeconds = tot;
     } else {
@@ -549,7 +553,7 @@ function SettingsTab({ testKey }) {
             <div className="field" hidden={mode !== "total"}>
               <span className="label" id="lbl-total">Durasi tes</span>
               <div className="unit-row" role="group" aria-labelledby="lbl-total">
-                <label className="unit"><input className="input tnum" type="number" id="set-min" min="0" max="60" value={min} onChange={(e) => setMin(e.target.value)} /><span>menit</span></label>
+                <label className="unit"><input className="input tnum" type="number" id="set-min" min="0" max={testKey === "ielts-mockup" ? 180 : 60} value={min} onChange={(e) => setMin(e.target.value)} /><span>menit</span></label>
                 <label className="unit"><input className="input tnum" type="number" id="set-sec" min="0" max="59" step="5" value={sec} onChange={(e) => setSec(e.target.value)} /><span>detik</span></label>
               </div>
             </div>
@@ -737,16 +741,19 @@ export function AttemptDetail({ testKey, id }) {
     const q = t.questions.find((y) => y.id === Number(x.questionId));
     return { no: i + 1, q, r: { choice: x.choice, ok: x.ok, key: x.key || (q ? q.answer : "") } };
   });
-  const hasAnswers = answerRows.length > 0;
-  const answerSkills = [...new Set(answerRows.filter((x) => x.q).map((x) => x.q.skill))];
+  // The essays get their own panel; the answer table only holds the keyed questions.
+  const writingRows = answerRows.filter((x) => x.q && x.q.type === "longtext");
+  const objectiveRows = answerRows.filter((x) => !x.q || x.q.type !== "longtext");
+  const hasAnswers = objectiveRows.length > 0;
+  const answerSkills = [...new Set(objectiveRows.filter((x) => x.q).map((x) => x.q.skill))];
   const skillRows = hasAnswers ? answerSkills.map((k) => {
-    const rows = answerRows.filter((x) => x.q && x.q.skill === k);
+    const rows = objectiveRows.filter((x) => x.q && x.q.skill === k);
     return { k, ok: rows.filter((x) => x.r.ok).length, n: rows.length };
   }).filter((r) => r.n) : [];
-  const wrong = answerRows.filter((x) => x.r.choice && !x.r.ok).length;
-  const blank = answerRows.filter((x) => !x.r.choice).length;
+  const wrong = objectiveRows.filter((x) => x.r.choice && !x.r.ok).length;
+  const blank = objectiveRows.filter((x) => !x.r.choice).length;
   const filter = ui.answers;
-  const shownAnswers = answerRows.filter((x) => filter === "all" || (filter === "wrong" ? x.r.choice && !x.r.ok : !x.r.choice));
+  const shownAnswers = objectiveRows.filter((x) => filter === "all" || (filter === "wrong" ? x.r.choice && !x.r.ok : !x.r.choice));
   let strike = 0;
   const logRows = (a.log || []).map((e, i) => {
     let text = LOG_TEXT[e.type] || e.type;
@@ -772,9 +779,13 @@ export function AttemptDetail({ testKey, id }) {
     const bands = a.bands || { skills: [], overall: 0 };
     const pkg = a.packageId ? db.tests["ielts-mockup"].packages.find((p) => p.id === a.packageId) : null;
     cells.push(cell("Paket", pkg ? pkg.name : "-", "paket soal yang dikerjakan"));
-    cells.push(cell("Band keseluruhan", bands.overall || "-", "perkiraan dari Listening dan Reading"));
+    cells.push(cell("Band keseluruhan", bands.overall || "-", "perkiraan dari Listening, Reading, dan Writing"));
     for (const sk of bands.skills) {
-      cells.push(cell(`${sk.skill} (band ${sk.band})`, <>{sk.raw}<small> / 40</small></>, `benar ${sk.raw} dari 40`));
+      if (sk.skill === "Writing") {
+        cells.push(cell("Writing", <>band {sk.band}</>, "dinilai AI dari dua task"));
+      } else {
+        cells.push(cell(`${sk.skill} (band ${sk.band})`, <>{sk.raw}<small> / 40</small></>, `benar ${sk.raw} dari 40`));
+      }
     }
     cells.push(cell("Audio", a.audioPlayedAt ? "Diputar" : "Belum diputar", a.audioPlayedAt ? fmtDateTime(a.audioPlayedAt) : "aturan mock: sekali per attempt"));
   } else if (testKey === "placement") {
@@ -821,7 +832,7 @@ export function AttemptDetail({ testKey, id }) {
         {a.loading ? <p className="loading-line" role="status">Memuat jawaban...</p> : hasAnswers ? <>
           <div className="toolbar toolbar--last toolbar--flush">
             <div className="chips" role="group" aria-label="Saring jawaban">
-              {[["all", "Semua", answerRows.length], ["wrong", "Salah", wrong], ["blank", "Kosong", blank]].map(([k, label, n]) => (
+              {[["all", "Semua", objectiveRows.length], ["wrong", "Salah", wrong], ["blank", "Kosong", blank]].map(([k, label, n]) => (
                 <Chip key={k} value={k} label={label} n={n} pressed={filter === k}
                   onClick={(v) => { ui.answers = v; notify(); }} />
               ))}
@@ -844,6 +855,8 @@ export function AttemptDetail({ testKey, id }) {
         </> : null}
       </section>
 
+      {testKey === "ielts-mockup" ? <WritingPanel a={a} rows={writingRows} /> : null}
+
       {testKey === "placement" ? <SpeakingPanel a={a} /> : null}
 
       <section className="panel">
@@ -855,6 +868,63 @@ export function AttemptDetail({ testKey, id }) {
       </section>
     </div>
   </>;
+}
+
+/* ===================== The writing panel ===================== */
+
+const WRITING_CRITERIA = [
+  ["task_response", "Task Response"],
+  ["coherence_cohesion", "Coherence & Cohesion"],
+  ["lexical_resource", "Lexical Resource"],
+  ["grammatical_range_accuracy", "Grammatical Range & Accuracy"],
+];
+
+function WritingPanel({ a, rows }) {
+  const writing = a.bands?.skills?.find((s) => s.skill === "Writing") || null;
+  const [busy, setBusy] = useState(false);
+
+  async function regrade(e) {
+    const b = e.currentTarget;
+    b.disabled = true;
+    setBusy(true);
+    await mutate(() => api(`/api/admin/attempts/${a.id}/writing-grade`, { method: "POST" }), "Writing dinilai ulang.");
+    setBusy(false);
+  }
+
+  return <section className="panel" aria-label="Writing">
+    <header className="panel__head"><div>
+      <h2 className="panel__title">Writing</h2>
+      <p className="panel__desc">Dinilai AI dengan empat kriteria IELTS. Task 2 berbobot dua kali Task 1, dan band Writing masuk ke band keseluruhan.</p>
+    </div>
+    <button className="btn btn--quiet btn--sm" type="button" disabled={busy || a.loading} onClick={regrade}>{busy ? "Menilai..." : "Nilai ulang writing"}</button>
+    </header>
+    {a.loading ? <p className="loading-line" role="status">Memuat esai...</p> : <>
+      {a.writingStatus === "failed" ? <Notice icon="alert" neutral>Penilaian AI gagal: {a.writingError || "tidak ada pesan."} Perbaiki kunci AI, lalu tekan Nilai ulang writing.</Notice> : null}
+      {writing ? <div className="writing-total"><span>Band Writing</span><strong>{writing.band}</strong></div> : null}
+      <div className="writing-tasks">
+        {rows.map(({ q, r }) => {
+          const task = writing?.tasks?.find((t) => t.taskNumber === (q.part || 1));
+          const words = task?.words ?? String(r.choice || "").trim().split(/\s+/).filter(Boolean).length;
+          return <article className="writing-task" key={q.id}>
+            <header className="writing-task__head">
+              <h3 className="writing-task__title">Task {q.part || 1}</h3>
+              {task ? <span className="writing-task__band">Band {task.band}</span> : null}
+              <span className="hint">{words} kata dari minimal {q.minWords} kata</span>
+            </header>
+            {task ? <dl className="writing-criteria">
+              {WRITING_CRITERIA.map(([key, label]) => task.criteria?.[key] ? <div className="writing-criterion" key={key}>
+                <dt>{label} <strong>{task.criteria[key].band}</strong></dt>
+                <dd>{task.criteria[key].comment}</dd>
+              </div> : null)}
+            </dl> : null}
+            {task?.strengths?.length ? <p className="hint">Kelebihan: {task.strengths.join("; ")}.</p> : null}
+            {task?.improvements?.length ? <p className="hint">Saran: {task.improvements.join("; ")}.</p> : null}
+            <p className="writing-essay">{r.choice || "(tidak dijawab)"}</p>
+          </article>;
+        })}
+      </div>
+    </>}
+  </section>;
 }
 
 /* ===================== The speaking panel ===================== */

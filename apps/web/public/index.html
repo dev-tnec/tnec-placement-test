@@ -7,8 +7,8 @@
 <meta name="theme-color" content="#0A1B38">
 <title>Tes Penempatan Online - Titik Nol English Course</title>
 <link rel="icon" href="/favicon.svg" type="image/svg+xml">
-<link rel="stylesheet" href="/assets/app.css?v=23">
-<script type="module" src="/assets/app.js?v=23"></script>
+<link rel="stylesheet" href="/assets/app.css?v=24">
+<script type="module" src="/assets/app.js?v=24"></script>
 </head>
 <body data-screen="intro">
 <a class="skip-link" href="#main">Lewati ke konten</a>
@@ -270,7 +270,8 @@
 
           <div class="question-card__body">
             <div class="passage" id="passage" hidden>
-              <p class="passage__label">Bacaan</p>
+              <p class="passage__label" id="passage-label">Bacaan</p>
+              <img class="passage__image" id="passage-image" alt="" hidden>
               <p class="passage__text" id="passage-text"></p>
             </div>
 
@@ -737,6 +738,7 @@
             <p class="result-program" id="score-headline"></p>
           </div>
           <p class="result-description" id="score-description"></p>
+          <div class="writing-result" id="writing-result" hidden></div>
           <p class="micro" id="score-note">Nilai ini sudah tercatat di data kamu sebagai siswa Titik Nol English Course, jadi halaman ini boleh ditutup.</p>
         </div>
       </div>

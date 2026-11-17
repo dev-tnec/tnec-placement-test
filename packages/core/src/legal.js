@@ -1,7 +1,7 @@
 // Legal copy and public config. Bump CONSENT_VERSION whenever the text changes,
 // so every stored consent record points to the exact version the user saw.
 
-export const CONSENT_VERSION = "2026-11-18";
+export const CONSENT_VERSION = "2026-11-19";
 export const WHATSAPP = "6282333143544";
 // Fills the {{total}}, {{duration}}, {{strikes}}, and {{speakingSeconds}} tokens with the live test
 // settings, so the legal text always matches what the dashboard has configured.
@@ -20,8 +20,9 @@ export const TERMS = {
     {
       heading: "1. Tentang tes ini",
       paragraphs: [
-        "Tes ini dibuat oleh Titik Nol English Course untuk mengukur kemampuan bahasa Inggris kamu. Tes ini terdiri dari {{total}} soal pilihan ganda dengan satu jawaban benar per soal, dan durasinya {{duration}}.",
+        "Tes ini dibuat oleh Titik Nol English Course untuk mengukur kemampuan bahasa Inggris kamu. Tes ini terdiri dari {{total}} soal, dengan pilihan ganda, isian, dan pada tes tertentu esai, dan durasinya {{duration}}.",
         "Kalau tes penempatan memuat bagian speaking, setelah soal pilihan ganda kamu menjawab satu pertanyaan dengan berbicara dalam bahasa Inggris selama paling lama {{speakingSeconds}} detik. Rekaman itu dinilai otomatis oleh sistem kami, atau oleh tim kami kalau penilaian otomatis gagal. Nilai speaking ditampilkan terpisah dan tidak mengubah level dari soal pilihan ganda.",
+        "Kalau tes memuat bagian writing, kamu menulis esai sesuai tugas yang tampil dengan jumlah kata minimal yang tertera. Esai dinilai dengan bantuan AI memakai kriteria IELTS Writing, dan hasilnya berupa perkiraan band, bukan penilaian resmi.",
         "Hasil tes ini dipakai untuk menentukan kelas atau memantau perkembangan belajar, dan bukan sertifikat resmi. Jangan memakai hasil ini sebagai bukti kemampuan bahasa Inggris untuk keperluan formal.",
       ],
     },
@@ -38,9 +39,10 @@ export const TERMS = {
       paragraphs: [
         "Skor dihitung di server setelah jawaban dikirim, dan jawaban yang sudah dikirim tidak bisa diubah.",
         "Jawaban baru bisa dikirim setelah semua soal dijawab. Pada tes dengan batas waktu per soal, jawaban tetap terkirim otomatis setelah soal terakhir, walaupun ada soal yang terlewat karena waktunya habis.",
-        "Kalau waktu habis, percobaan itu gagal dan jawaban kamu tidak dikirim. Kamu bisa mengulang tes dari awal, dan percobaan baru akan memakai soal yang sama dengan waktu yang baru.",
+        "Kalau waktu habis, percobaan itu gagal dan jawaban kamu tidak dikirim. Kamu bisa mengulang tes dari awal, dan percobaan baru akan memakai soal yang sama dengan waktu yang baru. Khusus tes yang memakai kirim otomatis, jawaban yang sudah terisi tetap dikirim saat waktu habis.",
         "Kalau tes memakai batas waktu per soal, soal berikutnya muncul otomatis saat waktu satu soal habis, soal sebelumnya tidak bisa dibuka lagi, dan jawaban terkirim setelah soal terakhir.",
         "Kalau kamu merekam jawaban speaking, hasil lengkap tidak tampil di halaman tes. Hasil itu kami kirim ke email dan WhatsApp kamu setelah rekaman selesai dinilai. Rekaman hanya bisa dikirim satu kali.",
+        "Kalau tes memuat bagian writing, esai kamu dinilai AI saat jawaban dikirim. Kalau penilaian otomatis gagal, tim kami meninjaunya dan menghubungi kamu dengan hasilnya.",
       ],
     },
     {
@@ -79,6 +81,7 @@ export const PRIVACY = {
         "Data pendaftaran dan komunikasi: program, periode, kelas, catatan tim, serta pesan WhatsApp yang kami kirim ke kamu.",
         "Data hasil tes: jawaban, skor, level, waktu mulai dan selesai, serta durasi pengerjaan.",
         "Rekaman suara: kalau tes memuat bagian speaking, kami menyimpan rekaman jawaban lisan kamu, transkrip yang dibuat dari rekaman itu, dan nilai speaking kamu.",
+        "Tulisan esai: kalau tes memuat bagian writing, kami menyimpan teks esai kamu beserta nilai dan catatan penilaiannya.",
         "Data teknis: jenis dan versi perangkat atau browser, negara asal koneksi, dan catatan pelanggaran mode layar penuh atau perpindahan tab. Kami tidak menyimpan alamat IP lengkap.",
         "Data persetujuan: versi syarat dan kebijakan yang kamu setujui beserta waktu persetujuannya.",
       ],
@@ -86,7 +89,7 @@ export const PRIVACY = {
     {
       heading: "3. Tujuan dan dasar pemrosesan",
       paragraphs: [
-        "Kami memakai data kamu untuk menghitung skor, menilai rekaman speaking, menentukan level, mengirim hasil tes ke email dan WhatsApp kamu, menghubungi kamu lewat WhatsApp untuk konsultasi, jadwal kelas, atau tautan tes, mengelola pendaftaran kelas, dan menjaga integritas tes.",
+        "Kami memakai data kamu untuk menghitung skor, menilai rekaman speaking dan esai writing, menentukan level, mengirim hasil tes ke email dan WhatsApp kamu, menghubungi kamu lewat WhatsApp untuk konsultasi, jadwal kelas, atau tautan tes, mengelola pendaftaran kelas, dan menjaga integritas tes.",
         "Dasar pemrosesan adalah persetujuan yang kamu berikan saat mencentang kotak persetujuan di halaman ini, dan kamu bisa menarik persetujuan itu kapan saja.",
         "Kami tidak memakai data kamu untuk iklan pihak ketiga dan tidak menjual data kamu.",
       ],
@@ -106,6 +109,7 @@ export const PRIVACY = {
         "Neon bertindak sebagai prosesor untuk basis data, dan Cloudflare untuk pengiriman email hasil tes. Kami tidak membagikan data kamu kepada pihak lain untuk tujuan pemasaran.",
         "Pesan WhatsApp dari kami, termasuk hasil tes, dikirim melalui AttCos, layanan pesan yang kami pakai sebagai prosesor, dari nomor WhatsApp Titik Nol, lalu sampai ke kamu lewat layanan WhatsApp milik Meta. Keduanya hanya menerima nomor WhatsApp dan isi pesan yang diperlukan untuk mengirimkannya.",
         "Rekaman suara dan teks pertanyaan speaking dikirim ke mitra penilaian kami, layanan penilaian bahasa pihak ketiga yang kami pakai sebagai prosesor, dan diproses di server di Singapura. Mitra tersebut hanya menerima rekaman, pertanyaan, dan kode acak pengganti identitas, bukan nama, email, atau nomor WhatsApp kamu, lalu menghapus data itu paling lama 90 hari setelah penilaian.",
+        "Teks esai writing dan teks tugasnya dikirim ke mitra penilaian bahasa berbasis AI yang kami pakai sebagai prosesor, dan diproses di luar Indonesia. Mitra tersebut hanya menerima esai, tugas, dan kode acak pengganti identitas, bukan nama, email, atau nomor WhatsApp kamu, dan memakai data itu hanya untuk memberi nilai. Hasil penilaiannya kami simpan bersama hasil tes kamu.",
       ],
     },
     {
