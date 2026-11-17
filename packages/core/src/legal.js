@@ -1,7 +1,7 @@
 // Legal copy and public config. Bump CONSENT_VERSION whenever the text changes,
 // so every stored consent record points to the exact version the user saw.
 
-export const CONSENT_VERSION = "2026-11-19";
+export const CONSENT_VERSION = "2026-11-20";
 export const WHATSAPP = "6282333143544";
 // Fills the {{total}}, {{duration}}, {{strikes}}, and {{speakingSeconds}} tokens with the live test
 // settings, so the legal text always matches what the dashboard has configured.
@@ -21,7 +21,7 @@ export const TERMS = {
       heading: "1. Tentang tes ini",
       paragraphs: [
         "Tes ini dibuat oleh Titik Nol English Course untuk mengukur kemampuan bahasa Inggris kamu. Tes ini terdiri dari {{total}} soal, dengan pilihan ganda, isian, dan pada tes tertentu esai, dan durasinya {{duration}}.",
-        "Kalau tes penempatan memuat bagian speaking, setelah soal pilihan ganda kamu menjawab satu pertanyaan dengan berbicara dalam bahasa Inggris selama paling lama {{speakingSeconds}} detik. Rekaman itu dinilai otomatis oleh sistem kami, atau oleh tim kami kalau penilaian otomatis gagal. Nilai speaking ditampilkan terpisah dan tidak mengubah level dari soal pilihan ganda.",
+        "Kalau tes memuat bagian speaking, kamu menjawab pertanyaan examiner satu per satu dengan berbicara dalam bahasa Inggris, dengan waktu yang tampil di layar. Pada tes penempatan ada satu pertanyaan berdurasi paling lama {{speakingSeconds}} detik; pada IELTS Mockup ada tiga bagian dengan beberapa pertanyaan. Rekaman itu dinilai otomatis oleh sistem kami, atau oleh tim kami kalau penilaian otomatis gagal. Nilai speaking ditampilkan terpisah dan tidak mengubah level dari soal pilihan ganda.",
         "Kalau tes memuat bagian writing, kamu menulis esai sesuai tugas yang tampil dengan jumlah kata minimal yang tertera. Esai dinilai dengan bantuan AI memakai kriteria IELTS Writing, dan hasilnya berupa perkiraan band, bukan penilaian resmi.",
         "Hasil tes ini dipakai untuk menentukan kelas atau memantau perkembangan belajar, dan bukan sertifikat resmi. Jangan memakai hasil ini sebagai bukti kemampuan bahasa Inggris untuk keperluan formal.",
       ],

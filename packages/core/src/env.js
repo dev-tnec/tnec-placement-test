@@ -32,6 +32,7 @@ export function buildEnv(source = process.env) {
     // Speechace scores the speaking answer. A key works in one region only; TNEC's is Singapore.
     SPEECHACE_KEY: String(source.SPEECHACE_KEY || "").trim(),
     SPEECHACE_API_BASE: trim(source.SPEECHACE_API_BASE) || "https://api2.speechace.com",
+    SPEECHACE_MOCK: String(source.SPEECHACE_MOCK || "").trim(),
     SPEAKING_RETRY_SECONDS: String(source.SPEAKING_RETRY_SECONDS || ""),
     // Google AI Studio (Gemini) scores the mockup writing essays.
     GEMINI_API_KEY: String(source.GEMINI_API_KEY || "").trim(),

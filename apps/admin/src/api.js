@@ -248,6 +248,8 @@ const ROUTES = [
   ["GET", /^\/api\/admin\/attempts\/([0-9a-f-]{36})$/, getAttemptDetail],
   ["POST", /^\/api\/admin\/attempts\/([0-9a-f-]{36})\/(void|restore|resend-email)$/, attemptAction],
   ["POST", /^\/api\/admin\/attempts\/([0-9a-f-]{36})\/writing-grade$/, regradeWriting],
+  ["POST", /^\/api\/admin\/attempts\/([0-9a-f-]{36})\/speaking-retry$/, retryMockupSpeaking],
+  ["GET", /^\/api\/admin\/speaking-answers\/(\d+)\/audio$/, getSpeakingAnswerAudio],
   ["DELETE", /^\/api\/admin\/attempts\/([0-9a-f-]{36})$/, deleteAttempt],
   ["POST", /^\/api\/admin\/attempts\/bulk-delete$/, bulkDeleteAttempts],
   ["POST", /^\/api\/admin\/programs$/, saveProgram],
@@ -314,7 +316,7 @@ async function bootstrap(request, env, user, url) {
     stmt("SELECT * FROM students ORDER BY created_at DESC"),
     stmt(`SELECT id, test_key, student_id, started_at, expires_at, submitted_at, status, score, total, level_key, name,
                  violation_log, duration_seconds, limit_seconds, max_violations, email_status, pass_score, passed,
-                 voided_at, voided_by, void_reason, user_agent, country, bands, audio_played_at, package_id, writing_status, writing_error FROM attempts ORDER BY started_at DESC LIMIT 5000`),
+                 voided_at, voided_by, void_reason, user_agent, country, bands, audio_played_at, package_id, writing_status, writing_error, speaking_status, speaking_error FROM attempts ORDER BY started_at DESC LIMIT 5000`),
     stmt("SELECT student_id, MAX(at) AS last_at FROM activities GROUP BY student_id"),
     stmt("SELECT MIN(registered_at) AS at FROM pendaftaran WHERE status != 'batal' GROUP BY student_id"),
     stmt("SELECT * FROM programs ORDER BY name"),
@@ -439,6 +441,7 @@ function mapAttempt(a, now, speaking = null) {
     voidBy: a.voided_by, voidAt: ms(a.voided_at), voidReason: a.void_reason || "", contactName: a.name || "",
     bands: a.bands ? JSON.parse(a.bands) : null, audioPlayedAt: ms(a.audio_played_at), packageId: a.package_id || null,
     writingStatus: a.writing_status || null, writingError: a.writing_error || "",
+    speakingStatus: a.speaking_status || null, speakingError: a.speaking_error || "",
     speaking: speakingBrief(speaking),
   };
 }
@@ -1212,8 +1215,13 @@ async function getAttemptDetail(request, env, user, url, id) {
     log.push({ at: ms(sp.created_at), type: studentSkip ? "speaking_student_skip" : "speaking_uploaded" });
     if (sp.graded_at && !studentSkip) log.push({ at: ms(sp.graded_at), type: `speaking_${sp.status}`, by: sp.graded_by || "" });
   }
+  const { results: speakingRows } = await env.DB.prepare(
+    `SELECT id, part, prompt_no, prompt, status, transcript, scores, ielts_overall, needs_review, error, duration_seconds, audio_bytes, (audio IS NOT NULL) AS has_audio
+     FROM speaking_answers WHERE attempt_id = ? ORDER BY part, prompt_no`,
+  ).bind(id).all();
+  const speakingAnswers = speakingRows.map((r) => ({ ...r, scores: parseJson(r.scores), needs_review: Boolean(r.needs_review) }));
   log.sort((x, y) => x.at - y.at);
-  return json({ id: a.id, answers, log, device: deviceLabel(a.user_agent), country: a.country || "", consent: a.consent_version, speaking });
+  return json({ id: a.id, answers, log, device: deviceLabel(a.user_agent), country: a.country || "", consent: a.consent_version, speaking, speakingAnswers });
 }
 
 function speakingDetail(sp) {
@@ -1377,6 +1385,26 @@ async function regradeWriting(request, env, user, url, id) {
   const bands = { skills, overall: overallBand(skills.map((s) => s.band)) };
   await env.DB.prepare("UPDATE attempts SET bands = ?, writing_status = 'graded', writing_error = NULL WHERE id = ?").bind(JSON.stringify(bands), id).run();
   return json({ ok: true, bands });
+}
+
+/* Re-queue the failed speaking answers. The web app's worker scores them again. */
+async function retryMockupSpeaking(request, env, user, url, id) {
+  const a = await getAttemptRow(env, id);
+  if ((a.test_key || "placement") !== "ielts-mockup") throw new HttpError(400, "Penilaian speaking hanya untuk IELTS Mockup.");
+  const count = await env.DB.prepare("SELECT COUNT(*) AS n FROM speaking_answers WHERE attempt_id = ?").bind(id).first();
+  if (!count?.n) throw new HttpError(400, "Percobaan ini tidak punya jawaban speaking.");
+  await env.DB.prepare("UPDATE speaking_answers SET status = 'pending', tries = 0, next_attempt_at = 0, lease_until = 0, error = NULL WHERE attempt_id = ? AND status = 'failed'").bind(id).run();
+  await env.DB.prepare("UPDATE attempts SET speaking_status = NULL, speaking_error = NULL WHERE id = ?").bind(id).run();
+  return json({ ok: true });
+}
+
+async function getSpeakingAnswerAudio(request, env, user, url, id) {
+  const row = await env.DB.prepare("SELECT audio, audio_mime FROM speaking_answers WHERE id = ?").bind(Number(id)).first();
+  if (!row || !row.audio) throw new HttpError(404, "Rekaman tidak ditemukan.");
+  return new Response(row.audio, {
+    status: 200,
+    headers: { "Content-Type": row.audio_mime || "audio/webm", "Cache-Control": "no-store", "X-Content-Type-Options": "nosniff" },
+  });
 }
 
 async function attemptAction(request, env, user, url, id, action) {

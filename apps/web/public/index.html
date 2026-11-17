@@ -7,8 +7,8 @@
 <meta name="theme-color" content="#0A1B38">
 <title>Tes Penempatan Online - Titik Nol English Course</title>
 <link rel="icon" href="/favicon.svg" type="image/svg+xml">
-<link rel="stylesheet" href="/assets/app.css?v=24">
-<script type="module" src="/assets/app.js?v=24"></script>
+<link rel="stylesheet" href="/assets/app.css?v=26">
+<script type="module" src="/assets/app.js?v=26"></script>
 </head>
 <body data-screen="intro">
 <a class="skip-link" href="#main">Lewati ke konten</a>
@@ -422,11 +422,17 @@
           </div>
           <div class="question-card__body">
             <p class="eyebrow">Pertanyaan speaking</p>
+            <div class="speak-video" id="speak-video-wrap" hidden>
+              <video id="speak-video" playsinline preload="metadata"></video>
+              <button class="btn btn--secondary btn--sm" id="speak-video-play" type="button">Putar pertanyaan</button>
+            </div>
             <div class="prompt-canvas">
               <p class="question__prompt" id="speaking-prompt"></p>
             </div>
+            <div class="speak-cue" id="speaking-cue" hidden></div>
 
             <p class="speaking-lead" id="speak-note"></p>
+            <p class="micro" id="speak-prep" hidden></p>
 
             <div class="speak-actions">
               <button class="btn btn--primary btn--lg" id="speak-start" type="button" hidden>
@@ -710,8 +716,25 @@
     </div>
   </section>
 
-  <!-- 5. SCORE (pre-test and post-test links from the dashboard) -->
-  <section class="screen" id="screen-score" aria-labelledby="score-title" hidden>
+  <!-- The IELTS mockup waits for the speaking answers while Speechace scores them. -->
+  <section class="screen" id="screen-mockup-pending" aria-labelledby="mockup-pending-title" hidden>
+    <div class="wrap wrap--details">
+      <div class="question-card">
+        <div class="question-card__top">
+          <span class="badge">IELTS Mockup</span>
+          <span class="question-card__meta">Menyiapkan hasil</span>
+        </div>
+        <div class="question-card__body">
+          <p class="eyebrow">Penilaian speaking</p>
+          <h1 class="speaking-title" id="mockup-pending-title" tabindex="-1">Jawaban speaking kamu sedang dinilai</h1>
+          <p class="speaking-lead" id="mockup-pending-lead">Penilaian otomatis biasanya selesai dalam beberapa menit. Halaman ini menyegarkan sendiri, jadi kamu tidak perlu menekan apa pun.</p>
+          <p class="micro" id="mockup-pending-status" role="status">Menunggu penilaian...</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 5. SCORE (pre-test and post-test links from the dashboard) -->  <section class="screen" id="screen-score" aria-labelledby="score-title" hidden>
     <div class="wrap wrap--details result-wrap">
       <div class="result-grid">
         <div class="result-card">
@@ -739,6 +762,7 @@
           </div>
           <p class="result-description" id="score-description"></p>
           <div class="writing-result" id="writing-result" hidden></div>
+          <div class="writing-result" id="speaking-result" hidden></div>
           <p class="micro" id="score-note">Nilai ini sudah tercatat di data kamu sebagai siswa Titik Nol English Course, jadi halaman ini boleh ditutup.</p>
         </div>
       </div>

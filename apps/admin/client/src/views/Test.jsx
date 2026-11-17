@@ -264,7 +264,7 @@ function SubmissionsTab() {
   const head = ui.test === "placement"
     ? <><th scope="col">Peserta</th><th scope="col">Skor</th><th scope="col" className="hide-sm">Level</th><th scope="col" className="hide-md">Durasi</th><th scope="col" className="hide-md">Pelanggaran</th><th scope="col" className="hide-xl">Email hasil</th></>
     : ui.test === "ielts-mockup"
-      ? <><th scope="col">Peserta</th><th scope="col">Listening</th><th scope="col">Reading</th><th scope="col">Writing</th><th scope="col">Band keseluruhan</th><th scope="col" className="hide-md">Audio</th></>
+      ? <><th scope="col">Peserta</th><th scope="col">Listening</th><th scope="col">Reading</th><th scope="col">Writing</th><th scope="col">Speaking</th><th scope="col">Band keseluruhan</th><th scope="col" className="hide-md">Audio</th></>
       : <><th scope="col">Siswa</th><th scope="col" className="hide-md">Program</th><th scope="col" className="hide-tab">Tutor / Kelas</th>{ui.test === "post" ? <><th scope="col" className="hide-xl">Pre-test</th><th scope="col">Nilai</th><th scope="col">Hasil</th></> : <><th scope="col">Nilai</th><th scope="col" className="hide-lg">Durasi</th></>}</>;
 
   return <section className="panel">
@@ -331,6 +331,7 @@ function AttemptRow({ a, sel, onToggle }) {
     const listen = bands.skills.find((x) => x.skill === "Listening");
     const read = bands.skills.find((x) => x.skill === "Reading");
     const write = bands.skills.find((x) => x.skill === "Writing");
+    const speak = bands.skills.find((x) => x.skill === "Speaking");
     const pkg = a.packageId ? db.tests["ielts-mockup"].packages.find((p) => p.id === a.packageId) : null;
     return <tr className={sel ? "is-selected" : ""} onClick={rowClick(href)}>
       <td className="is-check"><input type="checkbox" checked={sel} aria-label={`Pilih submission ${s ? s.name : a.contactName || a.short}`} onChange={(e) => onToggle(a.id, e.target.checked)} /></td>
@@ -338,6 +339,7 @@ function AttemptRow({ a, sel, onToggle }) {
       <td className="nowrap tnum">{listen ? `${listen.raw} / 40, band ${listen.band}` : <span className="muted">Tidak ada</span>}</td>
       <td className="nowrap tnum">{read ? `${read.raw} / 40, band ${read.band}` : <span className="muted">Tidak ada</span>}</td>
       <td className="nowrap tnum">{write ? `band ${write.band}` : <span className="muted">Belum dinilai</span>}</td>
+      <td className="nowrap tnum">{speak ? `band ${speak.band}` : <span className="muted">{a.speakingStatus === "failed" ? "Gagal" : "Belum"}</span>}</td>
       <td><strong className="tnum">{bands.overall || "-"}</strong></td>
       <td className="hide-md">{a.audioPlayedAt ? <><Icon name="clock" cls="icon--sm" /> {fmtDateTime(a.audioPlayedAt)}</> : <span className="muted">Belum diputar</span>}</td>
       {tail}
@@ -779,13 +781,18 @@ export function AttemptDetail({ testKey, id }) {
     const bands = a.bands || { skills: [], overall: 0 };
     const pkg = a.packageId ? db.tests["ielts-mockup"].packages.find((p) => p.id === a.packageId) : null;
     cells.push(cell("Paket", pkg ? pkg.name : "-", "paket soal yang dikerjakan"));
-    cells.push(cell("Band keseluruhan", bands.overall || "-", "perkiraan dari Listening, Reading, dan Writing"));
+    cells.push(cell("Band keseluruhan", bands.overall || "-", `perkiraan dari ${bands.skills.map((s) => s.skill).join(", ")}`));
     for (const sk of bands.skills) {
       if (sk.skill === "Writing") {
         cells.push(cell("Writing", <>band {sk.band}</>, "dinilai AI dari dua task"));
+      } else if (sk.skill === "Speaking") {
+        cells.push(cell("Speaking", <>band {sk.band}</>, "dinilai otomatis dari rekaman"));
       } else {
         cells.push(cell(`${sk.skill} (band ${sk.band})`, <>{sk.raw}<small> / 40</small></>, `benar ${sk.raw} dari 40`));
       }
+    }
+    if (!bands.skills.some((s) => s.skill === "Speaking")) {
+      cells.push(cell("Speaking", a.speakingStatus === "failed" ? "Gagal" : "Belum dinilai", "dinilai otomatis dari rekaman"));
     }
     cells.push(cell("Audio", a.audioPlayedAt ? "Diputar" : "Belum diputar", a.audioPlayedAt ? fmtDateTime(a.audioPlayedAt) : "aturan mock: sekali per attempt"));
   } else if (testKey === "placement") {
@@ -856,6 +863,7 @@ export function AttemptDetail({ testKey, id }) {
       </section>
 
       {testKey === "ielts-mockup" ? <WritingPanel a={a} rows={writingRows} /> : null}
+      {testKey === "ielts-mockup" ? <MockupSpeakingPanel a={a} /> : null}
 
       {testKey === "placement" ? <SpeakingPanel a={a} /> : null}
 
@@ -920,6 +928,63 @@ function WritingPanel({ a, rows }) {
             {task?.strengths?.length ? <p className="hint">Kelebihan: {task.strengths.join("; ")}.</p> : null}
             {task?.improvements?.length ? <p className="hint">Saran: {task.improvements.join("; ")}.</p> : null}
             <p className="writing-essay">{r.choice || "(tidak dijawab)"}</p>
+          </article>;
+        })}
+      </div>
+    </>}
+  </section>;
+}
+
+/* ===================== The mockup speaking panel ===================== */
+
+const SPEAK_STATUS = { pending: "Menunggu", grading: "Sedang dinilai", graded: "Dinilai", manual: "Dinilai manual", failed: "Gagal", skipped: "Dilewati" };
+const SPEAK_ASPECTS = [["pronunciation", "Pronunciation"], ["fluency", "Fluency"], ["grammar", "Grammar"], ["vocab", "Vocabulary"], ["coherence", "Coherence"]];
+
+function MockupSpeakingPanel({ a }) {
+  const speaking = a.bands?.skills?.find((s) => s.skill === "Speaking") || null;
+  const answers = a.speakingAnswers || [];
+  const [busy, setBusy] = useState(false);
+  const hasFailed = answers.some((x) => x.status === "failed");
+
+  async function retry(e) {
+    const b = e.currentTarget;
+    b.disabled = true;
+    setBusy(true);
+    await mutate(() => api(`/api/admin/attempts/${a.id}/speaking-retry`, { method: "POST" }), "Jawaban speaking yang gagal masuk antrean penilaian ulang.");
+    setBusy(false);
+  }
+
+  if (!answers.length && !speaking) return null;
+  return <section className="panel" aria-label="Speaking">
+    <header className="panel__head"><div>
+      <h2 className="panel__title">Speaking</h2>
+      <p className="panel__desc">Dinilai otomatis dengan empat kriteria IELTS. Rekaman dihapus 30 hari setelah tes.</p>
+    </div>
+    {hasFailed ? <button className="btn btn--quiet btn--sm" type="button" disabled={busy || a.loading} onClick={retry}>{busy ? "Mengantrekan..." : "Nilai ulang yang gagal"}</button> : null}
+    </header>
+    {a.loading ? <p className="loading-line" role="status">Memuat rekaman...</p> : <>
+      {a.speakingStatus === "failed" ? <Notice icon="alert" neutral>Penilaian speaking gagal: {a.speakingError || "tidak ada pesan."} Perbaiki kuota atau kunci Speechace, lalu tekan Nilai ulang yang gagal.</Notice> : null}
+      {speaking ? <div className="writing-total"><span>Band Speaking</span><strong>{speaking.band}</strong></div> : null}
+      {speaking ? <dl className="writing-criteria speaking-criteria">
+        {[["pronunciation", "Pronunciation"], ["fluency_coherence", "Fluency & Coherence"], ["lexical_resource", "Lexical Resource"], ["grammatical_range_accuracy", "Grammatical Range & Accuracy"]].map(([key, label]) => (
+          speaking.criteria?.[key] === null || speaking.criteria?.[key] === undefined ? null
+            : <div className="writing-criterion" key={key}><dt>{label} <strong>{speaking.criteria[key]}</strong></dt></div>
+        ))}
+      </dl> : null}
+      <div className="writing-tasks">
+        {answers.map((ans) => {
+          const aspects = ans.scores?.aspects || {};
+          return <article className="writing-task" key={ans.id}>
+            <header className="writing-task__head">
+              <h3 className="writing-task__title">Part {ans.part} · Pertanyaan {ans.prompt_no}</h3>
+              <span className="writing-task__band">{SPEAK_STATUS[ans.status] || ans.status}</span>
+              <span className="hint">{ans.duration_seconds ? `${ans.duration_seconds} detik` : ""}{ans.needs_review ? " · perlu dicek" : ""}</span>
+            </header>
+            <p className="q-prompt">{ans.prompt}</p>
+            {ans.transcript ? <p className="hint">Transkrip: {ans.transcript}</p> : null}
+            {Object.keys(aspects).length ? <p className="hint">{SPEAK_ASPECTS.map(([key, label]) => `${label} ${aspects[key]?.ielts ?? "-"}`).join(" · ")}</p> : null}
+            {ans.error ? <p className="error">{ans.error}</p> : null}
+            {ans.has_audio && (ans.status === "graded" || ans.status === "manual") ? <audio className="speaking-answer__audio" controls preload="none" src={`/api/admin/speaking-answers/${ans.id}/audio`}></audio> : null}
           </article>;
         })}
       </div>

@@ -163,7 +163,7 @@ export function studentFeed(id) {
 export function withDetail(a) {
   if (!a) return a;
   const d = loadDetail(attemptDetails, a.id, `/api/admin/attempts/${a.id}`,
-    (raw) => ({ answers: raw.answers, log: raw.log, device: raw.device, country: raw.country, consent: raw.consent, speaking: raw.speaking || null }),
+    (raw) => ({ answers: raw.answers, log: raw.log, device: raw.device, country: raw.country, consent: raw.consent, speaking: raw.speaking || null, speakingAnswers: raw.speakingAnswers || [] }),
     () => route().parts[3] === a.id);
   return d ? { ...a, ...d, loading: false } : { ...a, answers: null, log: null, consent: "", loading: true, speaking: a.speaking || null };
 }

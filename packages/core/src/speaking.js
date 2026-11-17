@@ -221,7 +221,14 @@ export async function purgeOldAudio(env, now = nowSeconds()) {
         error = CASE WHEN status IN ('pending', 'grading') THEN 'Rekaman sudah terhapus sebelum sempat dinilai.' ELSE error END
       WHERE audio IS NOT NULL AND created_at < ?`,
   ).bind(cutoff).run();
-  const count = purged.meta?.changes || 0;
+  const mockup = await env.DB.prepare(
+    `UPDATE speaking_answers SET audio = NULL,
+        status = CASE WHEN status IN ('pending', 'grading') THEN 'failed' ELSE status END,
+        needs_review = CASE WHEN status IN ('pending', 'grading') THEN 1 ELSE needs_review END,
+        error = CASE WHEN status IN ('pending', 'grading') THEN 'Rekaman sudah terhapus sebelum sempat dinilai.' ELSE error END
+      WHERE audio IS NOT NULL AND created_at < ?`,
+  ).bind(cutoff).run();
+  const count = (purged.meta?.changes || 0) + (mockup.meta?.changes || 0);
   if (count) console.log(`speaking audio purged count=${count} older_than_days=${AUDIO_RETENTION_DAYS}`);
   return count;
 }

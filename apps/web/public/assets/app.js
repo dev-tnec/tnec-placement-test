@@ -263,6 +263,9 @@ async function init() {
   els.speakRetake.addEventListener("click", retakeRecording);
   els.speakSend.addEventListener("click", sendRecording);
   els.speakSkip.addEventListener("click", skipSpeaking);
+  $("#speak-video-play").addEventListener("click", playMockupVideo);
+  $("#speak-video").addEventListener("ended", mockupVideoFinished);
+  $("#speak-video").addEventListener("error", () => { if (state.mockupSpeaking?.started) mockupVideoFinished(); });
   els.codeInput.addEventListener("input", () => { state.inviteCode = els.codeInput.value.trim(); syncConsent(); });
   els.audioPlay.addEventListener("click", playListeningAudio);
   els.violationClose.addEventListener("click", reenterFullscreen);
@@ -382,7 +385,9 @@ function applySettings(config) {
   state.maxStrikes = config.maxViolations || 3;
 
   // Speaking runs on the placement test only, after the multiple choice part.
-  state.speaking = config.speaking?.enabled ? config.speaking : null;
+  state.speaking = config.speaking?.enabled
+    ? { ...config.speaking, min: config.speaking.minSeconds, max: config.speaking.seconds }
+    : null;
   if (state.speaking) {
     els.detailsLead.textContent =
       "Jawaban dan rekaman kamu sudah tersimpan dengan aman. Lengkapi data di bawah ini, lalu kami siapkan hasil lengkap tes kamu dan mengirimkannya ke email dan WhatsApp kamu.";
@@ -416,7 +421,7 @@ function applyInviteCopy(info, config) {
     ".",
   );
   setCopy("intro-lead", ielts
-    ? "Mock test ini meniru tes IELTS sungguhan: bagian Listening dengan satu audio, bagian Reading dari tiga bacaan, dan dua task Writing yang dinilai AI. Hasilnya berupa perkiraan band untuk Listening, Reading, dan Writing."
+    ? "Mock test ini meniru tes IELTS sungguhan: bagian Listening dengan satu audio, bagian Reading dari tiga bacaan, dua task Writing yang dinilai AI, dan speaking bersama examiner lewat video. Hasilnya berupa perkiraan band untuk Listening, Reading, Writing, dan Speaking."
     : pre
       ? `Tes ini berisi ${total} soal pilihan ganda. Nilainya kami pakai sebagai titik awal untuk melihat perkembangan kamu selama program.`
       : `Tes ini berisi ${total} soal pilihan ganda. Hasilnya kami pakai untuk menentukan apakah kamu sudah siap lanjut ke level berikutnya.`);
@@ -427,12 +432,12 @@ function applyInviteCopy(info, config) {
   setCopy("step3-meta", ielts ? "Band langsung muncul" : pre ? "Nilai langsung muncul" : "Nilai dan kelulusan");
   setCopy("how3-title", ielts ? "Melihat band kamu" : "Melihat nilai kamu");
   setCopy("how3-body", ielts
-    ? "Setelah jawaban terkirim, band Listening dan Reading muncul, lalu esai kamu dinilai AI untuk band Writing, lengkap dengan band keseluruhan."
+    ? "Setelah jawaban terkirim, band Listening, Reading, dan Writing muncul, lalu band Speaking menyusul setelah rekaman dinilai otomatis."
     : "Setelah jawaban terkirim, nilai kamu langsung muncul di layar dan tercatat di data kelas, jadi tutor bisa membahasnya bersama kamu.");
   setCopy("data-1", "Kami menyimpan jawaban, nilai, waktu pengerjaan, dan catatan pelanggaran selama tes, lalu mencatatnya di data kamu sebagai siswa Titik Nol.");
   setCopy("data-2", "Data itu kami pakai untuk menghitung nilai dan memantau perkembangan belajar kamu bersama tutor. Data tidak dijual dan tidak dipakai untuk iklan.");
   setCopy("data-3", ielts
-    ? "Setelah jawaban terkirim, band kamu langsung muncul di layar, dan esai Writing kamu dinilai AI tanpa nama atau kontak kamu. Kamu tidak perlu mengisi data kontak lagi."
+    ? "Setelah jawaban terkirim, band kamu langsung muncul di layar. Esai Writing dinilai AI dan rekaman speaking dinilai otomatis, tanpa nama atau kontak kamu. Kamu tidak perlu mengisi data kontak lagi."
     : pre
       ? "Setelah jawaban terkirim, nilai kamu langsung muncul di layar. Kamu tidak perlu mengisi data kontak lagi."
       : "Setelah jawaban terkirim, nilai dan hasil kelulusan kamu langsung muncul di layar. Kamu tidak perlu mengisi data kontak lagi.");
@@ -560,6 +565,7 @@ function beginAttempt(data) {
   state.sections = data.sections || [];
   state.audioPlayed = new Set();
   state.audioSection = null;
+  state.mockupSpeaking = data.mockupSpeaking ? { plan: data.mockupSpeaking, done: false, started: false, pi: 0, qi: 0 } : null;
   state.maxStrikes = data.maxViolations || state.maxStrikes;
   state.index = 0;
   state.answers = {};
@@ -599,7 +605,7 @@ function beginAttempt(data) {
 }
 
 function showScreen(name, { focus = true } = {}) {
-  for (const key of ["intro", "test", "speaking", "details", "result", "pending", "score"]) {
+  for (const key of ["intro", "test", "speaking", "details", "result", "pending", "score", "mockup-pending"]) {
     $(`#screen-${key}`).hidden = key !== name;
   }
   document.body.dataset.screen = name;
@@ -614,6 +620,7 @@ function showScreen(name, { focus = true } = {}) {
     result: "#result-level",
     pending: "#pending-title",
     score: "#score-title",
+    "mockup-pending": "#mockup-pending-title",
   }[name];
   if (target) $(target).focus({ preventScroll: true });
 }
@@ -879,6 +886,10 @@ function openSubmit() {
     announce(message);
     return;
   }
+  if (state.mockupSpeaking && !state.mockupSpeaking.done) {
+    beginMockupSpeaking();
+    return;
+  }
   els.submitAnswered.textContent = String(Object.keys(state.answers).length);
   if (!els.submitDialog.open) els.submitDialog.showModal();
 }
@@ -972,6 +983,11 @@ async function submitAnswers() {
       body: { answers: state.answers },
     });
     state.submitted = true;
+    if (!data.result && state.mockupSpeaking && data.speaking) {
+      await exitFullscreen();
+      showMockupPending(data.speaking);
+      return;
+    }
     if (data.result) {
       renderScore(data.result);
       showScreen("score");
@@ -1252,6 +1268,10 @@ function voiceCheckPassed() {
   clearCheckRecording();
   els.speakCheckCard.hidden = true;
   els.speakAnswerCard.hidden = false;
+  if (state.mockupSpeaking?.started) {
+    setMockupQuestion(0, 0);
+    return;
+  }
   els.speakStart.focus();
 }
 
@@ -1289,6 +1309,32 @@ function retakeRecording() {
 
 async function sendRecording() {
   if (!state.recBlob || state.speakBusy || !state.attempt) return;
+  if (state.mockupSpeaking && !state.mockupSpeaking.done) {
+    const plan = state.mockupSpeaking.plan;
+    const part = plan.parts[state.mockupSpeaking.pi];
+    const question = part.questions[state.mockupSpeaking.qi];
+    state.speakBusy = true;
+    els.speakSend.disabled = true;
+    els.speakRetake.disabled = true;
+    $("#speak-send-label").textContent = "Menyimpan...";
+    try {
+      await api(`/api/attempts/${state.attempt.id}/speaking-answer?part=${part.part}&prompt=${question.no}`, {
+        method: "POST",
+        headers: { "content-type": state.recBlob.type, "x-duration": String(state.recDuration) },
+        body: state.recBlob,
+      });
+      clearRecording();
+      advanceMockupSpeaking();
+    } catch (error) {
+      toast(error.message || "Rekaman gagal disimpan. Periksa koneksi kamu, lalu coba lagi.");
+    } finally {
+      state.speakBusy = false;
+      els.speakSend.disabled = false;
+      els.speakRetake.disabled = false;
+      $("#speak-send-label").textContent = "Lanjut";
+    }
+    return;
+  }
   state.speakBusy = true;
   els.speakSend.disabled = true;
   els.speakRetake.disabled = true;
@@ -1321,6 +1367,23 @@ async function sendRecording() {
 
 async function skipSpeaking() {
   if (!state.attempt || state.speakBusy) return;
+  if (state.mockupSpeaking && !state.mockupSpeaking.done) {
+    state.speakBusy = true;
+    els.speakSkip.disabled = true;
+    try {
+      await api(`/api/attempts/${state.attempt.id}/speaking-skip`, { method: "POST", body: { reason: "mic" } });
+      state.mockupSpeaking.done = true;
+      clearRecording();
+      releaseMic();
+      openSubmit();
+    } catch (error) {
+      toast(error.message || "Bagian ini belum bisa dilewati. Coba lagi.");
+    } finally {
+      state.speakBusy = false;
+      els.speakSkip.disabled = false;
+    }
+    return;
+  }
   state.speakBusy = true;
   els.speakSkip.disabled = true;
   try {
@@ -1336,6 +1399,173 @@ async function skipSpeaking() {
   } finally {
     state.speakBusy = false;
     els.speakSkip.disabled = false;
+  }
+}
+
+/* ---------- The IELTS mockup speaking runner ---------- */
+
+function beginMockupSpeaking() {
+  if (!state.mockupSpeaking?.plan) return;
+  state.mockupSpeaking.started = true;
+  state.mockupSpeaking.done = false;
+  state.mockupSpeaking.pi = 0;
+  state.mockupSpeaking.qi = 0;
+  state.speaking = null;
+  const lead = $("#speak-check-lead");
+  if (lead) lead.textContent = "Rekam sebentar saja, lalu dengarkan hasilnya. Kalau suara kamu terdengar jelas, kamu siap menjawab pertanyaan dari examiner.";
+  els.speakAnswerCard.querySelector(".badge").textContent = "IELTS Mockup Speaking";
+  els.speakCheckCard.hidden = false;
+  els.speakAnswerCard.hidden = true;
+  resetCheckUi();
+  showScreen("speaking");
+}
+
+function setMockupQuestion(pi, qi) {
+  const plan = state.mockupSpeaking?.plan;
+  if (!plan) return;
+  const part = plan.parts[pi];
+  const question = part.questions[qi];
+  state.mockupSpeaking.pi = pi;
+  state.mockupSpeaking.qi = qi;
+  state.speaking = { enabled: true, min: 5, max: part.speakSeconds, seconds: part.speakSeconds, minSeconds: 5, prompt: question.text };
+  $("#speaking-step").textContent = `Part ${part.part} · Pertanyaan ${qi + 1} dari ${part.questions.length}`;
+  els.speakingPrompt.textContent = question.text;
+  const cue = $("#speaking-cue");
+  cue.hidden = !part.cue;
+  if (part.cue) {
+    cue.replaceChildren();
+    for (const [i, line] of part.cue.entries()) {
+      const p = document.createElement("p");
+      p.className = i === 0 ? "speak-cue__title" : "speak-cue__line";
+      p.textContent = line;
+      cue.append(p);
+    }
+  }
+  els.speakNote.textContent = part.part === 2
+    ? "Tonton examiner, gunakan 60 detik untuk menyiapkan jawaban, lalu rekam."
+    : "Tonton pertanyaan dari examiner, lalu rekam jawabanmu. Kamu bisa memutar ulang pertanyaannya sebelum mulai.";
+  const wrap = $("#speak-video-wrap");
+  const video = $("#speak-video");
+  const play = $("#speak-video-play");
+  wrap.hidden = false;
+  video.src = question.video;
+  video.load();
+  play.hidden = false;
+  play.disabled = false;
+  $("#speak-prep").hidden = true;
+  clearInterval(state.prepId);
+  state.prepId = null;
+  clearRecording();
+  els.speakStart.hidden = true;
+  els.speakStop.hidden = true;
+  els.speakReview.hidden = true;
+  els.speakMeter.hidden = true;
+  els.speakTimer.hidden = true;
+  els.speakError.hidden = true;
+  els.speakSkip.hidden = true;
+  $("#speak-send-label").textContent = "Lanjut";
+}
+
+async function playMockupVideo() {
+  const video = $("#speak-video");
+  const play = $("#speak-video-play");
+  if (!video.getAttribute("src")) return;
+  play.disabled = true;
+  try {
+    await video.play();
+  } catch {
+    play.disabled = false;
+    mockupVideoFinished();
+  }
+}
+
+function mockupVideoFinished() {
+  if (!state.mockupSpeaking?.started) return;
+  const part = state.mockupSpeaking.plan.parts[state.mockupSpeaking.pi];
+  const play = $("#speak-video-play");
+  play.hidden = false;
+  play.disabled = false;
+  if (part.prepSeconds) {
+    startMockupPrep(part.prepSeconds);
+  } else {
+    els.speakStart.hidden = false;
+    els.speakStart.disabled = false;
+    els.speakStart.focus();
+  }
+}
+
+function startMockupPrep(seconds) {
+  clearInterval(state.prepId);
+  let left = seconds;
+  const prep = $("#speak-prep");
+  prep.hidden = false;
+  prep.textContent = `Waktu persiapan: ${left} detik`;
+  els.speakStart.hidden = true;
+  state.prepId = setInterval(() => {
+    left -= 1;
+    if (left <= 0) {
+      clearInterval(state.prepId);
+      state.prepId = null;
+      prep.hidden = true;
+      els.speakStart.hidden = false;
+      els.speakStart.disabled = false;
+      els.speakStart.focus();
+      announce("Waktu persiapan selesai. Mulai menjawab.");
+    } else {
+      prep.textContent = `Waktu persiapan: ${left} detik`;
+    }
+  }, 1000);
+}
+
+function advanceMockupSpeaking() {
+  const plan = state.mockupSpeaking?.plan;
+  if (!plan) return;
+  const { pi, qi } = state.mockupSpeaking;
+  const part = plan.parts[pi];
+  if (qi + 1 < part.questions.length) {
+    setMockupQuestion(pi, qi + 1);
+    return;
+  }
+  if (pi + 1 < plan.parts.length) {
+    setMockupQuestion(pi + 1, 0);
+    return;
+  }
+  state.mockupSpeaking.done = true;
+  clearInterval(state.prepId);
+  state.prepId = null;
+  releaseMic();
+  openSubmit();
+}
+
+function showMockupPending(speaking) {
+  $("#mockup-pending-status").textContent = speaking?.answered
+    ? `${speaking.answered} dari ${speaking.total} jawaban sudah masuk. Menunggu penilaian...`
+    : "Menunggu penilaian...";
+  showScreen("mockup-pending");
+  pollMockupResult();
+}
+
+async function pollMockupResult() {
+  stopResultPoll();
+  const check = async () => {
+    if (document.hidden) return;
+    let data;
+    try {
+      data = await api(`/api/attempts/${state.attempt.id}/result`);
+    } catch {
+      return;
+    }
+    if (!data.ready) {
+      if (data.speaking?.answered) $("#mockup-pending-status").textContent = `${data.speaking.answered} dari ${data.speaking.total} jawaban sudah masuk. Menunggu penilaian...`;
+      return;
+    }
+    stopResultPoll();
+    renderScore(data.result);
+    showScreen("score");
+  };
+  await check();
+  if (state.pollId === null && document.body.dataset.screen !== "score") {
+    state.pollId = setInterval(check, RESULT_POLL_MS);
   }
 }
 
@@ -1597,7 +1827,7 @@ function renderScore(result) {
       band.textContent = String(skill.band);
       const raw = document.createElement("span");
       raw.className = "band-list__raw";
-      raw.textContent = skill.skill === "Writing" ? "dinilai AI" : `${skill.raw} dari 40 benar`;
+      raw.textContent = skill.skill === "Writing" ? "dinilai AI" : skill.skill === "Speaking" ? "dinilai otomatis" : `${skill.raw} dari 40 benar`;
       li.append(name, band, raw);
       els.bandList.append(li);
     }
@@ -1633,9 +1863,44 @@ function renderScore(result) {
       note.textContent = "Penilaian Writing belum berhasil. Tim Titik Nol akan menghubungi kamu dengan hasilnya.";
       els.writingResult.append(note);
     }
+    // The speaking band and its four criteria, when Speechace scored the answers.
+    const speaking = result.skills.find((s) => s.skill === "Speaking");
+    const speakingBox = $("#speaking-result");
+    speakingBox.replaceChildren();
+    speakingBox.hidden = !speaking && result.speakingStatus !== "failed" && result.speakingStatus !== "skipped";
+    if (speaking) {
+      const block = document.createElement("div");
+      block.className = "writing-result__task";
+      const head = document.createElement("p");
+      head.className = "writing-result__head";
+      head.textContent = `Speaking: band ${speaking.band}`;
+      block.append(head);
+      for (const [key, label] of [["pronunciation", "Pronunciation"], ["fluency_coherence", "Fluency & Coherence"], ["lexical_resource", "Lexical Resource"], ["grammatical_range_accuracy", "Grammatical Range & Accuracy"]]) {
+        const value = speaking.criteria?.[key];
+        if (value === null || value === undefined) continue;
+        const row = document.createElement("p");
+        row.className = "writing-result__criterion";
+        const strong = document.createElement("strong");
+        strong.textContent = `${label} ${value}`;
+        row.append(strong);
+        block.append(row);
+      }
+      const note = document.createElement("p");
+      note.className = "writing-result__criterion";
+      note.textContent = "Rekaman dinilai otomatis dengan empat kriteria IELTS Speaking.";
+      block.append(note);
+      speakingBox.append(block);
+    } else if (result.speakingStatus === "failed" || result.speakingStatus === "skipped") {
+      const note = document.createElement("p");
+      note.className = "writing-result__criterion";
+      note.textContent = result.speakingStatus === "skipped"
+        ? "Kamu melewati bagian speaking, jadi band Speaking tidak ada di hasil ini."
+        : "Penilaian Speaking belum berhasil. Tim Titik Nol akan menghubungi kamu dengan hasilnya.";
+      speakingBox.append(note);
+    }
     $("#score-summary").textContent = `Terima kasih sudah mengerjakan mock IELTS${first ? `, ${first}` : ""}.`;
     $("#score-headline").textContent = "Band keseluruhan kamu";
-    $("#score-description").textContent = `${result.disclaimer} Band ini dihitung dari Listening, Reading, dan Writing. Speaking belum termasuk, jadi band resmi tetap butuh empat skill.`;
+    $("#score-description").textContent = `${result.disclaimer} Band ini dihitung dari Listening, Reading, Writing${speaking ? ", dan Speaking" : ""}.${speaking ? "" : " Speaking belum termasuk, jadi band resmi tetap butuh empat skill."}`;
     return;
   }
 

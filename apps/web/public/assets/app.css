@@ -1987,3 +1987,10 @@ kbd {
 .writing-result__criterion { margin: 0 0 var(--space-2); font-size: 13px; line-height: 1.6; color: var(--text-secondary); }
 .writing-result__criterion strong { display: block; color: var(--navy-900); font-weight: 600; }
 .writing-result__criterion:last-child { margin-bottom: 0; }
+/* IELTS mockup speaking: the examiner video, the Part 2 cue card, and the preparation timer. */
+.speak-video { margin: 0 0 var(--space-4); display: flex; flex-direction: column; align-items: flex-start; gap: var(--space-2); }
+.speak-video video { width: 100%; max-width: 420px; border-radius: var(--radius-md); background: var(--navy-900); }
+.speak-cue { margin: var(--space-3) 0; padding: var(--space-3) var(--space-4); border: 1px solid var(--gray-200); border-radius: var(--radius-md); background: var(--surface-50); }
+.speak-cue__title { margin: 0 0 var(--space-2); font-weight: 600; color: var(--navy-900); }
+.speak-cue__line { margin: 0; color: var(--text-secondary); font-size: 14px; }
+#speak-prep { margin: var(--space-2) 0 0; font-weight: 600; color: var(--navy-800); }

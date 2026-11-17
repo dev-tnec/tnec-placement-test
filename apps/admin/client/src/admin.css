@@ -711,3 +711,6 @@ body.nav-collapsed .account__out { margin-left: 0; }
 .writing-criterion dd { margin: 2px 0 0; font-size: 13px; color: var(--text-primary); }
 .writing-essay { margin: 10px 0 0; padding: 12px; background: var(--surface-50); border-radius: var(--radius-sm); white-space: pre-wrap; font-size: 13px; line-height: 1.7; max-height: 320px; overflow: auto; }
 @media (max-width: 760px) { .writing-criteria { grid-template-columns: 1fr; } }
+/* Mockup speaking: the criteria strip and the recording player in the answers list. */
+.speaking-criteria { padding: 12px 20px 0; }
+.speaking-answer__audio { display: block; width: 100%; max-width: 420px; margin-top: 10px; }

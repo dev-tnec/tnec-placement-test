@@ -8,6 +8,7 @@ import { migrate } from "@tnec/core/migrate";
 import { startServer, closeServers, staticResponse, textResponse, BASE_HEADERS, STRICT_CSP } from "@tnec/core/node-server";
 import { runInBackground, deliverPending, drainDeliveries } from "@tnec/core/delivery";
 import { startSpeakingWorker, stopSpeakingWorker } from "@tnec/core/speaking";
+import { startMockupSpeakingWorker, stopMockupSpeakingWorker } from "@tnec/core/speaking-mockup-worker";
 import { handlePublic, SPEAKING_ROUTE, SPEAKING_BODY_LIMIT } from "./src/api.js";
 
 const PUBLIC_DIR = resolve(dirname(fileURLToPath(import.meta.url)), "public");
@@ -39,6 +40,7 @@ if (isMain) {
   // speaking recordings that were not scored yet.
   runInBackground(() => deliverPending(env));
   startSpeakingWorker(env);
+startMockupSpeakingWorker(env);
 
   // On a deploy Render sends SIGTERM and waits 30 seconds, so let running requests, scoring
   // calls, and result sends finish first.
@@ -47,6 +49,7 @@ if (isMain) {
     if (stopping) return;
     stopping = true;
     stopSpeakingWorker();
+  stopMockupSpeakingWorker();
     await closeServers([server]);
     await drainDeliveries();
     await env.DB.close().catch(() => {});

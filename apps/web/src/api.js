@@ -14,12 +14,14 @@ import { deliverInBackground, runInBackground, EMAIL_SKIPPED } from "@tnec/core/
 import { sha256Hex, randomToken } from "@tnec/core/crypto";
 import { SPEAKING_MAX_BYTES, speakingType, speechaceConfigured, gradeInBackground, purgeExpiredAttempts } from "@tnec/core/speaking";
 import { isFinalStatus, speakingFacts } from "@tnec/core/speaking-result";
+import { mockupSpeakingPlan, mockupSpeakingQuestion, MOCKUP_SPEAKING_TOTAL } from "@tnec/core/speaking-mockup";
+import { gradeAnswer as gradeMockupAnswer } from "@tnec/core/speaking-mockup-worker";
 
 const PUBLIC_BODY_LIMIT = 16 * 1024;
 // Two writing essays need more room than the other JSON bodies.
 const SUBMIT_BODY_LIMIT = 64 * 1024;
 // The recording comes as the raw request body. The cap is 3 MB plus room for nothing else.
-export const SPEAKING_ROUTE = /^\/api\/attempts\/[0-9a-f-]{36}\/speaking$/;
+export const SPEAKING_ROUTE = /^\/api\/attempts\/[0-9a-f-]{36}\/(speaking|speaking-answer)$/;
 export const SPEAKING_BODY_LIMIT = SPEAKING_MAX_BYTES + 1024;
 // A recording has to arrive within 2 hours of submitting the multiple choice answers.
 const SPEAKING_UPLOAD_WINDOW = 2 * 3600;
@@ -55,13 +57,17 @@ async function handleApi(request, env, url) {
 
   if (path === "/api/attempts" && request.method === "POST") return createAttempt(request, env);
 
-  const match = path.match(/^\/api\/attempts\/([0-9a-f-]{36})\/(violation|submit|contact|speaking|speaking-skip|audio-played)$/);
+  const mockupResult = path.match(/^\/api\/attempts\/([0-9a-f-]{36})\/result$/);
+  if (mockupResult && request.method === "GET") return getMockupResult(env, mockupResult[1]);
+
+  const match = path.match(/^\/api\/attempts\/([0-9a-f-]{36})\/(violation|submit|contact|speaking|speaking-skip|audio-played|speaking-answer)$/);
   if (match && request.method === "POST") {
     const [, attemptId, action] = match;
     if (!ATTEMPT_ID_RE.test(attemptId)) throw new HttpError(400, "ID percobaan tidak valid.");
     if (action === "violation") return logViolation(request, env, attemptId);
     if (action === "submit") return submitAttempt(request, env, attemptId);
     if (action === "audio-played") return markAudioPlayed(request, env, attemptId);
+    if (action === "speaking-answer") return uploadMockupSpeaking(request, env, attemptId, url);
     if (action === "speaking") return uploadSpeaking(request, env, attemptId);
     if (action === "speaking-skip") return skipSpeaking(request, env, attemptId);
     return saveContact(request, env, attemptId);
@@ -207,6 +213,7 @@ async function createAttempt(request, env) {
     timeMode: test.timeMode,
     maxViolations: test.maxViolations,
     autoSubmit: test.autoSubmit,
+    mockupSpeaking: test.key === "ielts-mockup" && test.speakingEnabled ? mockupSpeakingPlan() : null,
     sections: sections.map((s) => ({ id: s.id, title: s.title, skill: s.skill, part: s.part, passage: s.passage, audio: s.audio, image: s.image })),
     questions: questions.map((q) => ({
       id: q.id,
@@ -265,7 +272,7 @@ async function logViolation(request, env, attemptId) {
   return json({ ok: true, counted: Boolean(row) });
 }
 
-function inviteResult(attempt, score, total, passed, bands, writing = null) {
+function inviteResult(attempt, score, total, passed, bands, writing = null, speaking = null) {
   if (bands) {
     return {
       test: attempt.test_key,
@@ -273,6 +280,7 @@ function inviteResult(attempt, score, total, passed, bands, writing = null) {
       overall: bands.overall,
       skills: bands.skills,
       ...(writing ? { writingStatus: writing.status || null, writingError: writing.error || "" } : {}),
+      ...(speaking ? { speakingStatus: speaking.status || null, speakingError: speaking.error || "" } : {}),
       disclaimer: "Hasil ini adalah perkiraan dan bukan skor resmi IELTS. Skor resmi hanya diterbitkan oleh British Council atau IDP.",
     };
   }
@@ -326,10 +334,11 @@ async function submitAttempt(request, env, attemptId) {
   if (attempt.status === "submitted") {
     const stored = attempt.bands ? JSON.parse(attempt.bands) : null;
     const writing = attempt.test_key === "ielts-mockup" ? { status: attempt.writing_status || null, error: attempt.writing_error || "" } : null;
+    const speaking = attempt.test_key === "ielts-mockup" ? { status: attempt.speaking_status || null, error: attempt.speaking_error || "" } : null;
     return json({
       ok: true,
       total: attempt.total,
-      ...(attempt.invite_id ? { result: inviteResult(attempt, attempt.score, attempt.total, attempt.passed, stored, writing) } : {}),
+      ...(attempt.invite_id ? { result: inviteResult(attempt, attempt.score, attempt.total, attempt.passed, stored, writing, speaking) } : {}),
     });
   }
 
@@ -404,6 +413,36 @@ async function submitAttempt(request, env, attemptId) {
       }
     }
   }
+
+  let speakingStatus = attempt.speaking_status || null;
+  let speakingError = attempt.speaking_error || "";
+  let speakingPending = false;
+  let speakingAnswered = 0;
+  if (testKey === "ielts-mockup") {
+    const test = await loadTest(env, "ielts-mockup");
+    if (test.speakingEnabled) {
+      const { results: speakingRows } = await env.DB.prepare("SELECT status, error FROM speaking_answers WHERE attempt_id = ?").bind(attemptId).all();
+      speakingAnswered = speakingRows.length;
+      if (speakingStatus === "skipped") {
+        // The student skipped speaking after a microphone failure.
+      } else if (!speakingAnswered && now <= attempt.expires_at) {
+        throw new HttpError(409, "Selesaikan bagian speaking dulu sebelum mengirim jawaban.");
+      } else if (speakingRows.some((r) => r.status === "pending" || r.status === "grading")) {
+        speakingPending = true;
+      } else if (speakingRows.some((r) => r.status === "failed")) {
+        speakingStatus = "failed";
+        speakingError = speakingRows.find((r) => r.status === "failed")?.error || "Penilaian speaking gagal.";
+      }
+    }
+    // The worker may have added Speaking while the essays were being scored.
+    if (bands) {
+      const stored = await env.DB.prepare("SELECT bands FROM attempts WHERE id = ?").bind(attemptId).first();
+      const storedSpeaking = stored?.bands ? (JSON.parse(stored.bands).skills || []).find((s) => s.skill === "Speaking") : null;
+      if (storedSpeaking && !bands.skills.some((s) => s.skill === "Speaking")) {
+        bands = { skills: [...bands.skills, storedSpeaking], overall: overallBand([...bands.skills.map((s) => s.band), storedSpeaking.band]) };
+      }
+    }
+  }
   const timedOut = now > attempt.expires_at ? 1 : 0;
 
   statements.push(env.DB.prepare(
@@ -429,12 +468,22 @@ async function submitAttempt(request, env, attemptId) {
 
   // Placement scores stay hidden until the contact step. Invite attempts already
   // belong to a known student, so their result is returned right away.
+  if (speakingPending) {
+    return json({
+      ok: true,
+      total,
+      timedOut: Boolean(timedOut),
+      result: null,
+      speaking: { status: "pending", answered: speakingAnswered, total: MOCKUP_SPEAKING_TOTAL },
+    });
+  }
   const writing = testKey === "ielts-mockup" ? { status: writingStatus, error: writingError || "" } : null;
+  const speaking = testKey === "ielts-mockup" ? { status: speakingStatus, error: speakingError } : null;
   return json({
     ok: true,
     total,
     timedOut: Boolean(timedOut),
-    ...(attempt.invite_id ? { result: inviteResult(attempt, score, total, passed, bands, writing) } : {}),
+    ...(attempt.invite_id ? { result: inviteResult(attempt, score, total, passed, bands, writing, speaking) } : {}),
   });
 }
 
@@ -557,16 +606,74 @@ async function uploadSpeaking(request, env, attemptId) {
 }
 
 /** Records that the student could not record, so the result goes out without the speaking part. */
+/* One recording per mockup speaking question. The audio is stored, then the worker sends it to
+   Speechace; a re-recording replaces the audio only while the answer is still pending or failed. */
+async function uploadMockupSpeaking(request, env, attemptId, url) {
+  const attempt = await getAttempt(env, attemptId);
+  if ((attempt.test_key || "placement") !== "ielts-mockup") throw new HttpError(404, "Percobaan speaking tidak ditemukan.");
+  const test = await loadTest(env, "ielts-mockup");
+  if (!test.speakingEnabled) throw new HttpError(409, "Bagian speaking sedang tidak dipakai di tes ini.");
+  if (attempt.status !== "in_progress") throw new HttpError(409, "Jawaban sudah dikirim, jadi rekaman baru tidak bisa ditambahkan.");
+  const part = Number(url.searchParams.get("part"));
+  const promptNo = Number(url.searchParams.get("prompt"));
+  const found = mockupSpeakingQuestion(part, promptNo);
+  if (!found) throw new HttpError(400, "Pertanyaan speaking tidak dikenal.");
+  const mime = speakingType(request.headers.get("content-type") || "");
+  if (!mime) throw new HttpError(415, "Format rekaman tidak dikenal. Coba rekam ulang dari browser ini.");
+  const duration = Number(request.headers.get("x-duration") || 0);
+  const audio = await request.bytes();
+  if (audio.length < SPEAKING_MIN_BYTES) throw new HttpError(400, "Rekaman kosong atau terlalu pendek. Coba rekam ulang.");
+  if (audio.length > SPEAKING_MAX_BYTES) throw new HttpError(413, "Rekaman terlalu besar. Coba rekam ulang.");
+  const now = nowSeconds();
+  const row = await env.DB.prepare(
+    `INSERT INTO speaking_answers (attempt_id, part, prompt_no, prompt, video_url, audio, audio_mime, audio_bytes, duration_seconds, status, tries, next_attempt_at, lease_until, created_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', 0, 0, 0, ?)
+     ON CONFLICT (attempt_id, part, prompt_no) DO UPDATE SET
+       audio = EXCLUDED.audio, audio_mime = EXCLUDED.audio_mime, audio_bytes = EXCLUDED.audio_bytes,
+       duration_seconds = EXCLUDED.duration_seconds, status = 'pending', tries = 0, next_attempt_at = 0,
+       lease_until = 0, error = NULL, scores = NULL, transcript = NULL, ielts_overall = NULL, needs_review = 0
+     WHERE speaking_answers.status IN ('pending', 'failed')
+     RETURNING id`,
+  ).bind(attemptId, found.part.part, found.question.no, found.question.text, found.question.video, audio, mime, audio.length, duration, now).first();
+  if (!row) throw new HttpError(409, "Jawaban ini sudah dinilai, jadi rekamannya tidak bisa diganti.");
+  runInBackground(() => gradeMockupAnswer(env, row.id));
+  return json({ ok: true });
+}
+
+/* The result after the submit, while Speechace finishes the speaking answers. The attempt id is a
+   random UUID and only the mockup answers here, so no contact details leave the server. */
+async function getMockupResult(env, attemptId) {
+  const attempt = await getAttempt(env, attemptId);
+  if ((attempt.test_key || "placement") !== "ielts-mockup") throw new HttpError(404, "Hasil tidak ditemukan.");
+  if (attempt.status !== "submitted") return json({ ready: false, speaking: { status: "pending" } });
+  const { results } = await env.DB.prepare("SELECT status FROM speaking_answers WHERE attempt_id = ?").bind(attemptId).all();
+  if (results.some((r) => r.status === "pending" || r.status === "grading")) {
+    return json({ ready: false, speaking: { status: "pending", answered: results.length, total: MOCKUP_SPEAKING_TOTAL } });
+  }
+  const stored = attempt.bands ? JSON.parse(attempt.bands) : null;
+  const writing = { status: attempt.writing_status || null, error: attempt.writing_error || "" };
+  const speaking = { status: attempt.speaking_status || null, error: attempt.speaking_error || "" };
+  return json({ ready: true, result: inviteResult(attempt, attempt.score, attempt.total, attempt.passed, stored, writing, speaking) });
+}
+
 async function skipSpeaking(request, env, attemptId) {
+  const attempt = await getAttempt(env, attemptId);
+  if ((attempt.test_key || "placement") === "ielts-mockup") {
+    if (attempt.status !== "in_progress") throw new HttpError(409, "Percobaan ini sudah dikirim, jadi speaking tidak bisa dilewati.");
+    const count = await env.DB.prepare("SELECT COUNT(*) AS n FROM speaking_answers WHERE attempt_id = ?").bind(attemptId).first();
+    if (count?.n) throw new HttpError(409, "Jawaban speaking sudah direkam, jadi tidak bisa dilewati.");
+    await env.DB.prepare("UPDATE attempts SET speaking_status = 'skipped', speaking_error = NULL WHERE id = ?").bind(attemptId).run();
+    return json({ ok: true });
+  }
   const body = await readJson(request, PUBLIC_BODY_LIMIT);
   const reason = SKIP_REASONS[body?.reason] ? body.reason : "mic";
-  const attempt = await speakingAttempt(env, attemptId);
+  const placementAttempt = await speakingAttempt(env, attemptId);
   const test = await loadTest(env, "placement");
   const now = nowSeconds();
   await env.DB.prepare(
     `INSERT INTO speaking_submissions (id, attempt_id, student_id, prompt, status, error, scores, graded_at, created_at)
      VALUES (?, ?, ?, ?, 'skipped', ?, ?, ?, ?) ON CONFLICT (attempt_id) DO NOTHING`,
-  ).bind(newId("spk"), attemptId, attempt.student_id, test.speakingPrompt || "", SKIP_REASONS[reason], JSON.stringify({ source: "student", reason }), now, now).run();
+  ).bind(newId("spk"), attemptId, placementAttempt.student_id, test.speakingPrompt || "", SKIP_REASONS[reason], JSON.stringify({ source: "student", reason }), now, now).run();
   return json({ ok: true });
 }
 
