@@ -1,7 +1,7 @@
 // Legal copy and public config. Bump CONSENT_VERSION whenever the text changes,
 // so every stored consent record points to the exact version the user saw.
 
-export const CONSENT_VERSION = "2026-11-17b";
+export const CONSENT_VERSION = "2026-11-18";
 export const WHATSAPP = "6282333143544";
 // Fills the {{total}}, {{duration}}, {{strikes}}, and {{speakingSeconds}} tokens with the live test
 // settings, so the legal text always matches what the dashboard has configured.
@@ -37,6 +37,7 @@ export const TERMS = {
       heading: "3. Pengiriman jawaban",
       paragraphs: [
         "Skor dihitung di server setelah jawaban dikirim, dan jawaban yang sudah dikirim tidak bisa diubah.",
+        "Jawaban baru bisa dikirim setelah semua soal dijawab. Pada tes dengan batas waktu per soal, jawaban tetap terkirim otomatis setelah soal terakhir, walaupun ada soal yang terlewat karena waktunya habis.",
         "Kalau waktu habis, percobaan itu gagal dan jawaban kamu tidak dikirim. Kamu bisa mengulang tes dari awal, dan percobaan baru akan memakai soal yang sama dengan waktu yang baru.",
         "Kalau tes memakai batas waktu per soal, soal berikutnya muncul otomatis saat waktu satu soal habis, soal sebelumnya tidak bisa dibuka lagi, dan jawaban terkirim setelah soal terakhir.",
         "Kalau kamu merekam jawaban speaking, hasil lengkap tidak tampil di halaman tes. Hasil itu kami kirim ke email dan WhatsApp kamu setelah rekaman selesai dinilai. Rekaman hanya bisa dikirim satu kali.",

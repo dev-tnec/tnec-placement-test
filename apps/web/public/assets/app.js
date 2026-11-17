@@ -344,7 +344,7 @@ function applySettings(config) {
   }
 
   if (config.timeMode === "per") {
-    setCopy("rule-time", `Tes terdiri dari ${total} soal pilihan ganda, dan setiap soal punya batas waktunya sendiri. Saat waktu satu soal habis, soal berikutnya langsung muncul, dan soal sebelumnya tidak bisa dibuka lagi.`);
+    setCopy("rule-time", `Tes terdiri dari ${total} soal pilihan ganda, dan setiap soal punya batas waktunya sendiri. Saat waktu satu soal habis, soal berikutnya langsung muncul, dan soal sebelumnya tidak bisa dibuka lagi. Tombol kirim baru bisa dipakai setelah semua soal dijawab.`);
     setCopy("how2-body", `Tes berlangsung paling lama ${spanText(seconds)} tanpa jeda, dengan batas waktu di setiap soal. Selama tes, layar akan otomatis masuk ke mode penuh agar kamu bisa fokus.`);
     setCopy("start-note", `Tes berlangsung paling lama ${spanText(seconds)}, dan jawaban hanya bisa dikirim satu kali.`);
   }
@@ -507,8 +507,8 @@ function beginAttempt(data) {
   els.navCount.textContent = `${data.total} soal`;
   els.submitTotal.textContent = String(data.total);
   els.finishNote.textContent = state.perMode
-    ? "Setiap soal punya waktunya sendiri. Soal berikutnya muncul otomatis saat waktu habis, dan jawaban terkirim setelah soal terakhir."
-    : "Periksa kembali jawaban kamu sebelum mengirim, karena jawaban tidak bisa diubah setelah terkirim.";
+    ? "Setiap soal punya waktunya sendiri. Soal berikutnya muncul otomatis saat waktu habis, dan jawaban terkirim setelah soal terakhir. Tombol kirim baru bisa dipakai setelah semua soal dijawab."
+    : "Periksa kembali jawaban kamu sebelum mengirim, karena jawaban tidak bisa diubah setelah terkirim. Semua soal juga harus sudah dijawab sebelum jawaban bisa dikirim.";
 
   showScreen("test");
   buildNavigator();
@@ -693,8 +693,25 @@ function toggleFlag() {
   syncNavigator();
 }
 
+// The answers go out only after every question is answered. The manual send is gated here and in
+// openSubmit; the per-question auto send after the last question is the one exception, because
+// its blanks come from question timeouts, and those questions cannot be opened again.
 function openSubmit() {
   if (!state.attempt || state.submitting || state.ending) return;
+  const missing = state.attempt.total - Object.keys(state.answers).length;
+  if (missing > 0) {
+    const first = state.attempt.questions.findIndex((q) => !state.answers[q.id]);
+    const onThisQuestion = first === state.index;
+    const message = onThisQuestion
+      ? "Soal ini belum dijawab. Pilih jawabannya dulu, baru jawaban bisa dikirim."
+      : state.perMode
+        ? `Masih ada ${missing} soal yang belum dijawab dan sudah tidak bisa dibuka lagi. Jawaban terkirim otomatis saat waktu soal terakhir habis.`
+        : `Masih ada ${missing} soal yang belum dijawab. Soal ${first + 1} terbuka sekarang.`;
+    if (!state.perMode && !onThisQuestion && first >= 0) goTo(first);
+    toast(message);
+    announce(message);
+    return;
+  }
   els.submitAnswered.textContent = String(Object.keys(state.answers).length);
   if (!els.submitDialog.open) els.submitDialog.showModal();
 }
@@ -766,6 +783,10 @@ function formatTime(seconds) {
 
 async function submitAnswers() {
   if (!state.attempt || state.submitting) return;
+  if (!state.autoSubmitted && Object.keys(state.answers).length < state.attempt.total) {
+    openSubmit();
+    return;
+  }
   state.submitting = true;
   state.ending = true;
   clearInterval(state.timerId);
