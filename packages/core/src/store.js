@@ -54,6 +54,7 @@ export function mapQuestion(row) {
     prompt: row.prompt,
     passage: row.passage || "",
     sectionId: row.section_id || null,
+    packageId: row.package_id || null,
     options,
     answer: row.answer,
     seconds: row.seconds,
@@ -66,6 +67,7 @@ export function mapSection(row) {
   return {
     id: row.id,
     test: row.test_key,
+    packageId: row.package_id || null,
     position: row.position,
     title: row.title,
     skill: row.skill,
@@ -75,15 +77,39 @@ export function mapSection(row) {
   };
 }
 
-export async function loadSections(env, key) {
-  const { results } = await env.DB.prepare("SELECT * FROM question_sections WHERE test_key = ? ORDER BY position, id").bind(key).all();
-  return results.map(mapSection);
+export function mapPackage(row) {
+  if (!row) return null;
+  return {
+    id: row.id,
+    test: row.test_key,
+    name: row.name,
+    position: row.position,
+    active: Boolean(row.is_active),
+  };
 }
 
-export async function loadQuestions(env, key, { activeOnly = false } = {}) {
-  const sql = `SELECT * FROM questions WHERE test_key = ?${activeOnly ? " AND status = 'aktif'" : ""} ORDER BY position, id`;
-  const { results } = await env.DB.prepare(sql).bind(key).all();
+export async function loadQuestions(env, key, { activeOnly = false, packageId } = {}) {
+  const clauses = ["test_key = ?"];
+  const args = [key];
+  if (activeOnly) clauses.push("status = 'aktif'");
+  if (packageId) {
+    clauses.push("package_id = ?");
+    args.push(packageId);
+  }
+  const sql = `SELECT * FROM questions WHERE ${clauses.join(" AND ")} ORDER BY position, id`;
+  const { results } = await env.DB.prepare(sql).bind(...args).all();
   return results.map(mapQuestion);
+}
+
+export async function loadSections(env, key, { packageId } = {}) {
+  const clauses = ["test_key = ?"];
+  const args = [key];
+  if (packageId) {
+    clauses.push("package_id = ?");
+    args.push(packageId);
+  }
+  const { results } = await env.DB.prepare(`SELECT * FROM question_sections WHERE ${clauses.join(" AND ")} ORDER BY position, id`).bind(...args).all();
+  return results.map(mapSection);
 }
 
 export async function loadLevels(env) {

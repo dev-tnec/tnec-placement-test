@@ -5,7 +5,7 @@ import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { HttpError, json, readJson, nowSeconds, normalizeWhatsapp, isEmail, text, multiline, int } from "@tnec/core/http";
 import { randomToken, sha256Hex, verifyPassword, hashPassword } from "@tnec/core/crypto";
-import { TEST_KEYS, TEST_NAMES, mapTest, mapQuestion, mapSection, loadQuestions, loadLevels, publicLevel, attemptStatus, focusStrikes, addActivity, newId } from "@tnec/core/store";
+import { TEST_KEYS, TEST_NAMES, mapTest, mapQuestion, mapSection, mapPackage, loadQuestions, loadLevels, publicLevel, attemptStatus, focusStrikes, addActivity, newId } from "@tnec/core/store";
 import {
   latestPendaftaran, daftarCount, normalizeBirthDate, normalizeOption,
   JENJANG_PENDIDIKAN, TAHU_DARI, PENDAFTARAN_STATUS,
@@ -240,6 +240,8 @@ const ROUTES = [
   ["POST", /^\/api\/admin\/tests\/(placement|pre|post|ielts-mockup)\/sections$/, createSection],
   ["PUT", /^\/api\/admin\/tests\/(placement|pre|post|ielts-mockup)\/sections\/([\w-]+)$/, updateSection],
   ["DELETE", /^\/api\/admin\/tests\/(placement|pre|post|ielts-mockup)\/sections\/([\w-]+)$/, deleteSection],
+  ["POST", /^\/api\/admin\/tests\/(placement|pre|post|ielts-mockup)\/packages$/, createPackage],
+  ["PUT", /^\/api\/admin\/tests\/(placement|pre|post|ielts-mockup)\/packages\/([\w-]+)$/, updatePackage],
   ["PUT", /^\/api\/admin\/levels$/, updateLevels],
   ["GET", /^\/api\/admin\/attempts\/([0-9a-f-]{36})$/, getAttemptDetail],
   ["POST", /^\/api\/admin\/attempts\/([0-9a-f-]{36})\/(void|restore|resend-email)$/, attemptAction],
@@ -304,11 +306,12 @@ async function bootstrap(request, env, user, url) {
     stmt("SELECT * FROM tests"),
     stmt("SELECT * FROM questions ORDER BY test_key, position, id"),
     stmt("SELECT * FROM question_sections ORDER BY test_key, position, id"),
+    stmt("SELECT * FROM question_packages ORDER BY test_key, position, id"),
     stmt("SELECT * FROM levels ORDER BY position"),
     stmt("SELECT * FROM students ORDER BY created_at DESC"),
     stmt(`SELECT id, test_key, student_id, started_at, expires_at, submitted_at, status, score, total, level_key, name,
                  violation_log, duration_seconds, limit_seconds, max_violations, email_status, pass_score, passed,
-                 voided_at, voided_by, void_reason, user_agent, country, bands, audio_played_at FROM attempts ORDER BY started_at DESC LIMIT 5000`),
+                 voided_at, voided_by, void_reason, user_agent, country, bands, audio_played_at, package_id FROM attempts ORDER BY started_at DESC LIMIT 5000`),
     stmt("SELECT student_id, MAX(at) AS last_at FROM activities GROUP BY student_id"),
     stmt("SELECT MIN(registered_at) AS at FROM pendaftaran WHERE status != 'batal' GROUP BY student_id"),
     stmt("SELECT * FROM programs ORDER BY name"),
@@ -323,7 +326,7 @@ async function bootstrap(request, env, user, url) {
             FROM speaking_submissions ORDER BY created_at DESC LIMIT 5000`),
     stmt("SELECT * FROM pendaftaran ORDER BY registered_at, id"),
   ]), certificateData(env)]);
-  const [tests, questions, sections, levels, students, attempts, lastActs, enrolled, programs, durations, programTutors, tutors, periods, classes, s7, s30, speaking, pendaftaran] = res.map((r) => r.results);
+  const [tests, questions, sections, packages, levels, students, attempts, lastActs, enrolled, programs, durations, programTutors, tutors, periods, classes, s7, s30, speaking, pendaftaran] = res.map((r) => r.results);
   const speakingByAttempt = new Map(speaking.map((s) => [s.attempt_id, s]));
   const last = new Map(lastActs.map((r) => [r.student_id, r.last_at]));
   // Registrations per student, oldest to newest: they drive the registered filter and the count.
@@ -359,6 +362,7 @@ async function bootstrap(request, env, user, url) {
       settings: mapTest(tests.find((t) => t.key === key)),
       questions: questions.filter((q) => q.test_key === key).map(mapQuestion),
       sections: sections.filter((s) => s.test_key === key).map(mapSection),
+      packages: packages.filter((p) => p.test_key === key).map(mapPackage),
       stats: stats[key] || { d7: {}, d30: {} },
     }])),
     levels: levels.map((l) => ({ key: l.key, label: l.label, min: l.min_score, max: l.max_score, program: l.program })),
@@ -430,7 +434,7 @@ function mapAttempt(a, now, speaking = null) {
     durationSec: Math.max(0, duration || 0), limitSec: a.limit_seconds || a.expires_at - a.started_at,
     emailStatus: email, passScore: a.pass_score, passed: a.passed === null || a.passed === undefined ? null : Boolean(a.passed),
     voidBy: a.voided_by, voidAt: ms(a.voided_at), voidReason: a.void_reason || "", contactName: a.name || "",
-    bands: a.bands ? JSON.parse(a.bands) : null, audioPlayedAt: ms(a.audio_played_at),
+    bands: a.bands ? JSON.parse(a.bands) : null, audioPlayedAt: ms(a.audio_played_at), packageId: a.package_id || null,
     speaking: speakingBrief(speaking),
   };
 }
@@ -821,6 +825,9 @@ async function createInvite(request, env, user, url, id) {
   const token = randomToken(24);
   const now = nowSeconds();
   let code = null;
+  let packageId = null;
+  let packageName = null;
+  let packageTotal = null;
   if (test === "ielts-mockup") {
     for (let i = 0; i < 5 && !code; i += 1) {
       const candidate = randomCode();
@@ -828,10 +835,26 @@ async function createInvite(request, env, user, url, id) {
       if (!taken) code = candidate;
     }
     if (!code) throw new HttpError(500, "Kode undangan tidak bisa dibuat, coba lagi.");
+    // A specific package when the team picks one, otherwise a random active package with questions.
+    const requested = String(body.packageId || "").trim();
+    const pkg = requested
+      ? await env.DB.prepare("SELECT id, name FROM question_packages WHERE id = ? AND test_key = ? AND is_active = 1").bind(requested, test).first()
+      : await env.DB.prepare(`SELECT p.id, p.name FROM question_packages p
+                              WHERE p.test_key = ? AND p.is_active = 1
+                                AND EXISTS (SELECT 1 FROM questions q WHERE q.package_id = p.id AND q.status = 'aktif')
+                              ORDER BY RANDOM() LIMIT 1`).bind(test).first();
+    if (!pkg) throw new HttpError(requested ? 400 : 503, requested
+      ? "Paket soal tidak ditemukan atau tidak aktif."
+      : "Belum ada paket soal aktif dengan soal. Tambahkan paket dan soalnya dulu.");
+    const count = await env.DB.prepare("SELECT COUNT(*) AS n FROM questions WHERE package_id = ? AND status = 'aktif'").bind(pkg.id).first();
+    if (!count || !count.n) throw new HttpError(503, "Paket soal ini belum punya soal aktif.");
+    packageId = pkg.id;
+    packageName = pkg.name;
+    packageTotal = count.n;
   }
-  await env.DB.prepare("INSERT INTO invites (id, token_hash, student_id, test_key, code, created_at, expires_at, created_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?)")
-    .bind(newId("inv"), await sha256Hex(token), s.id, test, code, now, now + INVITE_TTL, user.name).run();
-  return json({ ok: true, link: `${env.PUBLIC_WEB_URL}/?undangan=${token}`, code, expiresAt: ms(now + INVITE_TTL) });
+  await env.DB.prepare("INSERT INTO invites (id, token_hash, student_id, test_key, code, package_id, created_at, expires_at, created_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)")
+    .bind(newId("inv"), await sha256Hex(token), s.id, test, code, packageId, now, now + INVITE_TTL, user.name).run();
+  return json({ ok: true, link: `${env.PUBLIC_WEB_URL}/?undangan=${token}`, code, packageName, packageTotal, expiresAt: ms(now + INVITE_TTL) });
 }
 
 /* ===================== Tests and questions ===================== */
@@ -924,24 +947,34 @@ function readQuestionInput(body) {
   return { ...base, type: "choice", accepted: null, options, answer: body.answer };
 }
 
-async function readSectionId(env, key, body) {
+async function readPackageId(env, key, body) {
+  if (key !== "ielts-mockup") return null;
+  const raw = String(body.packageId || "").trim();
+  if (!raw) throw new HttpError(400, "Pilih paket soal dulu.", { field: "packageId" });
+  const row = await env.DB.prepare("SELECT id FROM question_packages WHERE id = ? AND test_key = ?").bind(raw, key).first();
+  if (!row) throw new HttpError(400, "Paket soal tidak ditemukan di tes ini.", { field: "packageId" });
+  return row.id;
+}
+
+async function readSectionId(env, key, body, packageId) {
   const raw = String(body.sectionId || "").trim();
   if (!raw) return null;
-  const row = await env.DB.prepare("SELECT id FROM question_sections WHERE id = ? AND test_key = ?").bind(raw, key).first();
-  if (!row) throw new HttpError(400, "Bagian tidak ditemukan di tes ini.", { field: "sectionId" });
+  const row = await env.DB.prepare("SELECT id FROM question_sections WHERE id = ? AND test_key = ? AND package_id IS NOT DISTINCT FROM ?").bind(raw, key, packageId).first();
+  if (!row) throw new HttpError(400, "Bagian tidak ditemukan di paket ini.", { field: "sectionId" });
   return row.id;
 }
 
 async function createQuestion(request, env, user, url, key) {
   const body = await readJson(request);
   const q = readQuestionInput(body);
-  const sectionId = await readSectionId(env, key, body);
+  const packageId = await readPackageId(env, key, body);
+  const sectionId = await readSectionId(env, key, body, packageId);
   const test = await env.DB.prepare("SELECT per_default FROM tests WHERE key = ?").bind(key).first();
-  const max = await env.DB.prepare("SELECT COALESCE(MAX(position), 0) AS p FROM questions WHERE test_key = ?").bind(key).first();
+  const max = await env.DB.prepare("SELECT COALESCE(MAX(position), 0) AS p FROM questions WHERE test_key = ? AND package_id IS NOT DISTINCT FROM ?").bind(key, packageId).first();
   const now = nowSeconds();
-  const r = await env.DB.prepare(`INSERT INTO questions (test_key, position, skill, part, section_id, prompt, passage, option_a, option_b, option_c, option_d, option_e, option_f, answer, seconds, status, type, accepted, created_at, updated_at)
-                                  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id`)
-    .bind(key, max.p + 1, q.skill, q.part, sectionId, q.prompt, q.passage,
+  const r = await env.DB.prepare(`INSERT INTO questions (test_key, package_id, position, skill, part, section_id, prompt, passage, option_a, option_b, option_c, option_d, option_e, option_f, answer, seconds, status, type, accepted, created_at, updated_at)
+                                  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id`)
+    .bind(key, packageId, max.p + 1, q.skill, q.part, sectionId, q.prompt, q.passage,
       q.options.A ?? null, q.options.B ?? null, q.options.C ?? null, q.options.D ?? null, q.options.E ?? null, q.options.F ?? null,
       q.answer, q.seconds ?? test.per_default, q.status, q.type, q.accepted ? JSON.stringify(q.accepted) : null, now, now).first();
   return json({ ok: true, id: r ? r.id : null });
@@ -957,7 +990,7 @@ async function updateQuestion(request, env, user, url, key, id) {
   const row = await getQuestionRow(env, key, Number(id));
   const body = await readJson(request);
   const q = readQuestionInput(body);
-  const sectionId = await readSectionId(env, key, body);
+  const sectionId = await readSectionId(env, key, body, row.package_id);
   await env.DB.prepare(`UPDATE questions SET skill = ?, part = ?, section_id = ?, prompt = ?, passage = ?, option_a = ?, option_b = ?, option_c = ?, option_d = ?, option_e = ?, option_f = ?,
                          answer = ?, seconds = ?, status = ?, type = ?, accepted = ?, updated_at = ? WHERE id = ?`)
     .bind(q.skill, q.part, sectionId, q.prompt, q.passage,
@@ -966,15 +999,15 @@ async function updateQuestion(request, env, user, url, key, id) {
   return json({ ok: true, keyChanged: row.answer !== q.answer });
 }
 
-async function renumber(env, key) {
-  const { results } = await env.DB.prepare("SELECT id FROM questions WHERE test_key = ? ORDER BY position, id").bind(key).all();
+async function renumber(env, key, packageId = null) {
+  const { results } = await env.DB.prepare("SELECT id FROM questions WHERE test_key = ? AND package_id IS NOT DISTINCT FROM ? ORDER BY position, id").bind(key, packageId).all();
   if (results.length) await env.DB.batch(results.map((r, i) => env.DB.prepare("UPDATE questions SET position = ? WHERE id = ?").bind(i + 1, r.id)));
 }
 
 async function deleteQuestion(request, env, user, url, key, id) {
   const row = await getQuestionRow(env, key, Number(id));
   await env.DB.prepare("DELETE FROM questions WHERE id = ?").bind(row.id).run();
-  await renumber(env, key);
+  await renumber(env, key, row.package_id);
   return json({ ok: true });
 }
 
@@ -996,20 +1029,22 @@ function readSectionInput(body) {
   return { title, skill, part, from, to, passage: rawPassage || null, audioUrl: audioUrl || null };
 }
 
-async function assignSectionRange(env, key, sectionId, from, to, part) {
-  await env.DB.prepare("UPDATE questions SET section_id = ?, part = COALESCE(?, part) WHERE test_key = ? AND position BETWEEN ? AND ?")
-    .bind(sectionId, part, key, from, to).run();
+async function assignSectionRange(env, key, sectionId, from, to, part, packageId) {
+  await env.DB.prepare("UPDATE questions SET section_id = ?, part = COALESCE(?, part) WHERE test_key = ? AND package_id IS NOT DISTINCT FROM ? AND position BETWEEN ? AND ?")
+    .bind(sectionId, part, key, packageId, from, to).run();
 }
 
 async function createSection(request, env, user, url, key) {
-  const s = readSectionInput(await readJson(request));
-  const max = await env.DB.prepare("SELECT COALESCE(MAX(position), 0) AS p FROM question_sections WHERE test_key = ?").bind(key).first();
+  const body = await readJson(request);
+  const s = readSectionInput(body);
+  const packageId = await readPackageId(env, key, body);
+  const max = await env.DB.prepare("SELECT COALESCE(MAX(position), 0) AS p FROM question_sections WHERE test_key = ? AND package_id IS NOT DISTINCT FROM ?").bind(key, packageId).first();
   const now = nowSeconds();
   const id = newId("sec");
-  await env.DB.prepare(`INSERT INTO question_sections (id, test_key, position, title, skill, part, passage, audio_url, created_at, updated_at)
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
-    .bind(id, key, max.p + 1, s.title, s.skill, s.part, s.passage, s.audioUrl, now, now).run();
-  await assignSectionRange(env, key, id, s.from, s.to, s.part);
+  await env.DB.prepare(`INSERT INTO question_sections (id, test_key, package_id, position, title, skill, part, passage, audio_url, created_at, updated_at)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+    .bind(id, key, packageId, max.p + 1, s.title, s.skill, s.part, s.passage, s.audioUrl, now, now).run();
+  await assignSectionRange(env, key, id, s.from, s.to, s.part, packageId);
   return json({ ok: true, id });
 }
 
@@ -1027,7 +1062,7 @@ async function updateSection(request, env, user, url, key, id) {
   // Questions outside the new range leave the section; questions inside it join, even when they
   // belonged to another section before.
   await env.DB.prepare("UPDATE questions SET section_id = NULL WHERE section_id = ? AND (position < ? OR position > ?)").bind(row.id, s.from, s.to).run();
-  await assignSectionRange(env, key, row.id, s.from, s.to, s.part);
+  await assignSectionRange(env, key, row.id, s.from, s.to, s.part, row.package_id);
   return json({ ok: true });
 }
 
@@ -1037,22 +1072,52 @@ async function deleteSection(request, env, user, url, key, id) {
   return json({ ok: true });
 }
 
+/* ---------- Question packages: the question set a student gets ---------- */
+
+function readPackageInput(body) {
+  const name = text(body.name, 60);
+  if (!name) throw new HttpError(400, "Nama paket wajib diisi.", { field: "name" });
+  const active = body.active === undefined ? true : Boolean(body.active);
+  return { name, active };
+}
+
+async function createPackage(request, env, user, url, key) {
+  if (key !== "ielts-mockup") throw new HttpError(400, "Paket soal hanya dipakai tes IELTS Mockup.");
+  const p = readPackageInput(await readJson(request));
+  const max = await env.DB.prepare("SELECT COALESCE(MAX(position), 0) AS p FROM question_packages WHERE test_key = ?").bind(key).first();
+  const now = nowSeconds();
+  const id = newId("pkg");
+  await env.DB.prepare("INSERT INTO question_packages (id, test_key, name, position, is_active, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)")
+    .bind(id, key, p.name, max.p + 1, p.active ? 1 : 0, now, now).run();
+  return json({ ok: true, id });
+}
+
+async function updatePackage(request, env, user, url, key, id) {
+  if (key !== "ielts-mockup") throw new HttpError(400, "Paket soal hanya dipakai tes IELTS Mockup.");
+  const row = await env.DB.prepare("SELECT * FROM question_packages WHERE id = ? AND test_key = ?").bind(id, key).first();
+  if (!row) throw new HttpError(404, "Paket soal tidak ditemukan.");
+  const p = readPackageInput(await readJson(request));
+  await env.DB.prepare("UPDATE question_packages SET name = ?, is_active = ?, updated_at = ? WHERE id = ?")
+    .bind(p.name, p.active ? 1 : 0, nowSeconds(), row.id).run();
+  return json({ ok: true });
+}
+
 async function questionAction(request, env, user, url, key, id, action) {
   const row = await getQuestionRow(env, key, Number(id));
   const now = nowSeconds();
-  await renumber(env, key);
+  await renumber(env, key, row.package_id);
   const fresh = await getQuestionRow(env, key, row.id);
   if (action === "toggle") {
     await env.DB.prepare("UPDATE questions SET status = ?, updated_at = ? WHERE id = ?").bind(fresh.status === "aktif" ? "draf" : "aktif", now, fresh.id).run();
   } else if (action === "duplicate") {
     await env.DB.batch([
-      env.DB.prepare("UPDATE questions SET position = position + 1 WHERE test_key = ? AND position > ?").bind(key, fresh.position),
-      env.DB.prepare(`INSERT INTO questions (test_key, position, skill, part, section_id, prompt, passage, option_a, option_b, option_c, option_d, option_e, option_f, answer, seconds, status, type, accepted, created_at, updated_at)
-                      SELECT test_key, position + 1, skill, part, section_id, prompt, passage, option_a, option_b, option_c, option_d, option_e, option_f, answer, seconds, 'draf', type, accepted, ?::bigint, ?::bigint FROM questions WHERE id = ?`).bind(now, now, fresh.id),
+      env.DB.prepare("UPDATE questions SET position = position + 1 WHERE test_key = ? AND package_id IS NOT DISTINCT FROM ? AND position > ?").bind(key, fresh.package_id, fresh.position),
+      env.DB.prepare(`INSERT INTO questions (test_key, package_id, position, skill, part, section_id, prompt, passage, option_a, option_b, option_c, option_d, option_e, option_f, answer, seconds, status, type, accepted, created_at, updated_at)
+                      SELECT test_key, package_id, position + 1, skill, part, section_id, prompt, passage, option_a, option_b, option_c, option_d, option_e, option_f, answer, seconds, 'draf', type, accepted, ?::bigint, ?::bigint FROM questions WHERE id = ?`).bind(now, now, fresh.id),
     ]);
   } else {
-    const other = await env.DB.prepare(`SELECT id, position FROM questions WHERE test_key = ? AND position ${action === "up" ? "< ? ORDER BY position DESC" : "> ? ORDER BY position ASC"} LIMIT 1`)
-      .bind(key, fresh.position).first();
+    const other = await env.DB.prepare(`SELECT id, position FROM questions WHERE test_key = ? AND package_id IS NOT DISTINCT FROM ? AND position ${action === "up" ? "< ? ORDER BY position DESC" : "> ? ORDER BY position ASC"} LIMIT 1`)
+      .bind(key, fresh.package_id, fresh.position).first();
     if (other) {
       await env.DB.batch([
         env.DB.prepare("UPDATE questions SET position = ? WHERE id = ?").bind(other.position, fresh.id),

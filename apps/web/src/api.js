@@ -75,10 +75,24 @@ function spanText(seconds) {
 }
 
 // Read fresh on every request, so a change in the dashboard applies to the next test right away.
-async function liveTest(env, key) {
-  const [test, questions, sections] = await Promise.all([loadTest(env, key), loadQuestions(env, key, { activeOnly: true }), loadSections(env, key)]);
+async function liveTest(env, key, packageId = null) {
+  const [test, questions, sections] = await Promise.all([loadTest(env, key), loadQuestions(env, key, { activeOnly: true, packageId }), loadSections(env, key, { packageId })]);
   const durationSeconds = test.timeMode === "per" ? questions.reduce((sum, q) => sum + q.seconds, 0) : test.totalSeconds;
   return { test, questions, sections, durationSeconds };
+}
+
+/* The mockup package for an attempt: the invite's package when set, otherwise a random active
+   package that still has questions. */
+async function resolvePackage(env, testKey, requestedId) {
+  if (testKey !== "ielts-mockup") return null;
+  const requested = String(requestedId || "").trim();
+  const sql = `SELECT p.id FROM question_packages p
+               WHERE p.test_key = ? AND p.is_active = 1
+                 AND EXISTS (SELECT 1 FROM questions q WHERE q.package_id = p.id AND q.status = 'aktif')
+                 ${requested ? "AND p.id = ?" : ""}
+               ORDER BY RANDOM() LIMIT 1`;
+  const row = requested ? await env.DB.prepare(sql).bind(testKey, requested).first() : await env.DB.prepare(sql).bind(testKey).first();
+  return row ? row.id : null;
 }
 
 // Speaking runs on the placement test only, and only with a question to answer.
@@ -119,7 +133,8 @@ async function findInvite(env, token) {
 
 async function getInvite(env, token) {
   const invite = await findInvite(env, token);
-  const live = await liveTest(env, invite.test_key);
+  const pkg = invite.package_id ? await env.DB.prepare("SELECT name FROM question_packages WHERE id = ?").bind(invite.package_id).first() : null;
+  const live = await liveTest(env, invite.test_key, invite.package_id || null);
   return json({
     ...publicConfig(live),
     invite: {
@@ -127,7 +142,7 @@ async function getInvite(env, token) {
       testName: TEST_NAMES[invite.test_key],
       firstName: String(invite.student_name).split(/\s+/)[0],
       needsCode: Boolean(invite.code),
-      packageName: invite.test_key === "ielts-mockup" ? "December Test 1" : null,
+      packageName: pkg ? pkg.name : null,
     },
   });
 }
@@ -156,7 +171,9 @@ async function createAttempt(request, env) {
       throw new HttpError(403, `Kode belum benar. Sisa ${left} percobaan lagi sebelum undangan terkunci.`, { field: "inviteCode" });
     }
   }
-  const { test, questions, sections, durationSeconds } = await liveTest(env, testKey);
+  const packageId = await resolvePackage(env, testKey, invite?.package_id);
+  if (testKey === "ielts-mockup" && !packageId) throw new HttpError(423, "Paket soal untuk tes ini belum siap. Hubungi admin Titik Nol.");
+  const { test, questions, sections, durationSeconds } = await liveTest(env, testKey, packageId);
   if (!test.open) throw new HttpError(423, "Tes ini sedang ditutup sementara. Silakan coba lagi nanti atau hubungi admin Titik Nol.");
   if (!questions.length) throw new HttpError(423, "Tes ini belum punya soal aktif. Hubungi admin Titik Nol.");
 
@@ -168,13 +185,13 @@ async function createAttempt(request, env) {
   await env.DB.prepare(
     `INSERT INTO attempts
        (id, started_at, expires_at, total, consent_version, consent_at, user_agent, country,
-        test_key, student_id, question_ids, time_mode, limit_seconds, max_violations, pass_score, invite_id)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        test_key, student_id, question_ids, time_mode, limit_seconds, max_violations, pass_score, invite_id, package_id)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   ).bind(
     id, now, expiresAt, questions.length, CONSENT_VERSION, now,
     (request.headers.get("user-agent") || "").slice(0, 300), (request.headers.get("cf-ipcountry") || "").slice(0, 2) || null,
     testKey, invite ? invite.student_id : null, JSON.stringify(questions.map((q) => q.id)), test.timeMode,
-    durationSeconds, test.maxViolations, testKey === "post" ? test.passScore ?? 70 : null, invite ? invite.id : null,
+    durationSeconds, test.maxViolations, testKey === "post" ? test.passScore ?? 70 : null, invite ? invite.id : null, packageId,
   ).run();
 
   // Somebody is testing again, so attempts whose time ran out long ago are cleaned up now.
@@ -321,7 +338,7 @@ async function submitAttempt(request, env, attemptId) {
   const rawAnswers = body?.answers;
   if (!rawAnswers || typeof rawAnswers !== "object") throw new HttpError(400, "Jawaban tidak ditemukan.");
 
-  const all = await loadQuestions(env, attempt.test_key || "placement");
+  const all = await loadQuestions(env, attempt.test_key || "placement", { packageId: attempt.package_id || undefined });
   const byId = new Map(all.map((q) => [q.id, q]));
   const ids = attempt.question_ids ? JSON.parse(attempt.question_ids) : all.filter((q) => q.status === "aktif").map((q) => q.id);
   const list = ids.map((id) => byId.get(id)).filter(Boolean);

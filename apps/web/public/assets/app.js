@@ -407,7 +407,7 @@ function applyInviteCopy(info, config) {
   accent.textContent = spanText(config.durationSeconds);
   $("#intro-title").replaceChildren(
     ielts
-      ? `Halo ${info.firstName}, kerjakan ${name} paket ${info.packageName || "Desember"} dalam `
+      ? `Halo ${info.firstName}, kerjakan ${name} ${info.packageName || "paket Desember"} dalam `
       : `Halo ${info.firstName}, selesaikan ${name} kamu dalam `,
     accent,
     ".",

@@ -120,7 +120,23 @@ export const SISWA_CHIPS = [
 export const testOf = (key) => db.tests[key];
 export const levelByKey = (k) => db.levels.find((l) => l.key === k);
 export function levelForScore(score) { return db.levels.find((l) => score >= l.min && score <= l.max) || db.levels[db.levels.length - 1]; }
-export const activeQuestions = (t) => t.questions.filter((q) => q.status === "aktif");
+/* The mockup bank is split into packages. The selected package drives the bank, the sections,
+   the new-question target, and the position numbers; other tests have no packages. */
+export const packageOf = (t) => {
+  if (t.key !== "ielts-mockup") return null;
+  const list = t.packages || [];
+  const id = ui.package?.[t.key];
+  return list.find((p) => p.id === id) || list[0] || null;
+};
+export const packageQuestions = (t) => {
+  const pkg = packageOf(t);
+  return pkg ? t.questions.filter((q) => q.packageId === pkg.id) : t.questions;
+};
+export const packageSections = (t) => {
+  const pkg = packageOf(t);
+  return pkg ? t.sections.filter((s) => s.packageId === pkg.id) : t.sections;
+};
+export const activeQuestions = (t) => packageQuestions(t).filter((q) => q.status === "aktif");
 export const questionById = (t, id) => t.questions.find((q) => q.id === Number(id));
 export function questionNumber(t, q) { const i = activeQuestions(t).indexOf(q); return i >= 0 ? i + 1 : null; }
 export const studentById = (id) => db.students.find((s) => s.id === id);
@@ -268,13 +284,14 @@ export function greetingFor(s) {
   return `${intro} Saya mau menindaklanjuti minat kamu untuk belajar bahasa Inggris di Titik Nol. Kalau berkenan, saya bisa bantu jelaskan pilihan program dan jadwal kelas terdekat.`;
 }
 
-export function testLinkText(s, key, link, expiresAt, code) {
+export function testLinkText(s, key, link, expiresAt, code, packageName, packageTotal) {
   const t = testOf(key);
-  const facts = `${activeQuestions(t).length} soal dan dikerjakan dalam ${fmtSpan(testSeconds(t))}`;
+  const count = key === "ielts-mockup" && packageTotal ? packageTotal : activeQuestions(t).length;
+  const facts = `${count} soal dan dikerjakan dalam ${fmtSpan(testSeconds(t))}`;
   const first = firstName(s.name);
   const until = expiresAt ? ` Tautan ini khusus untuk kamu dan berlaku sampai ${fmtDateLong(expiresAt)}.` : "";
   if (key === "placement") return `Halo ${first}, ini tautan placement test Titik Nol English Course:\n${link}\n\nTesnya berisi ${facts}. Setelah selesai, rekomendasi level dan program akan dikirim ke email kamu. Kerjakan di tempat yang tenang dengan koneksi internet yang stabil, ya.`;
-  if (key === "ielts-mockup") return `Halo ${first}, ini tautan IELTS Mockup dari Titik Nol English Course:\n${link}\n\nKode akses kamu: ${code}\n\nMasukkan kode itu sebelum tes dimulai. Tesnya berisi ${facts}, audio listening diputar satu kali, dan hasilnya berupa perkiraan band untuk Listening dan Reading. Kerjakan di tempat yang tenang dengan koneksi internet yang stabil, ya.${until}`;
+  if (key === "ielts-mockup") return `Halo ${first}, ini tautan IELTS Mockup dari Titik Nol English Course:\n${link}\n\nKode akses kamu: ${code}\n\n${packageName ? `Paket soal kamu: ${packageName}. ` : ""}Masukkan kode itu sebelum tes dimulai. Tesnya berisi ${facts}, audio listening diputar satu kali, dan hasilnya berupa perkiraan band untuk Listening dan Reading. Kerjakan di tempat yang tenang dengan koneksi internet yang stabil, ya.${until}`;
   if (key === "pre") return `Halo ${first}, sebelum kelas dimulai, silakan kerjakan pre-test lewat tautan ini:\n${link}\n\nPre-test berisi ${facts}. Nilainya kami pakai sebagai titik awal untuk melihat perkembangan kamu selama program.${until}`;
   return `Halo ${first}, program kamu sudah hampir selesai. Silakan kerjakan post-test lewat tautan ini:\n${link}\n\nPost-test berisi ${facts}. Hasilnya kami pakai untuk menentukan apakah kamu sudah siap lanjut ke level berikutnya.${until}`;
 }

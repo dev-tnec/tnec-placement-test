@@ -11,6 +11,7 @@ import {
   classesFor, classLabel, currentPeriod, fmtDate, fmtDateLong, fmtNum, fmtRp, fmtSpan, fmtWa,
   firstName, joinWords, mergeCertValues, nextCertNumber, normalizeWa, periodsSorted, programById,
   questionById, questionNumber, studentById, todayIso, topIssuedSeq, greetingFor, openCertPage,
+  packageOf, packageQuestions, packageSections,
 } from "./lib.js";
 import { certFormatProblem, certPeriodLabel, formatCertNumber } from "./cert-number.js";
 import { Icon, OptList } from "./ui.jsx";
@@ -57,6 +58,7 @@ export function DialogHost() {
   switch (d.kind) {
     case "question": return <QuestionDialog key={d.seq} id={d.id} />;
   case "section": return <SectionDialog key={d.seq} id={d.id} />;
+  case "package": return <PackageDialog key={d.seq} id={d.id} />;
     case "student": return <StudentDialog key={d.seq} id={d.id} />;
     case "daftar": return <DaftarDialog key={d.seq} studentId={d.studentId} />;
     case "pendaftaran": return <PendaftaranDialog key={d.seq} id={d.id} />;
@@ -114,6 +116,7 @@ function QuestionDialog({ id }) {
     if (isIelts) {
       body.part = $("#qe-part").value || null;
       body.sectionId = $("#qe-section")?.value || null;
+      body.packageId = packageOf(t)?.id || null;
     }
 
     if (type === "text") {
@@ -167,7 +170,7 @@ function QuestionDialog({ id }) {
           {isIelts ? <div className="field">
             <label className="label" htmlFor="qe-section">Bagian</label>
             <select className="select" id="qe-section" defaultValue={q && q.sectionId ? q.sectionId : ""}>
-              <OptList list={[["", "Tanpa bagian"], ...t.sections.map((s) => [s.id, s.title])]} />
+              <OptList list={[["", "Tanpa bagian"], ...packageSections(t).map((s) => [s.id, s.title])]} />
             </select>
             <p className="hint">Bacaan dan audio mengikuti bagian ini, jadi keduanya tetap bersama soal saat urutannya diacak. Atur bagiannya di tab Bagian.</p>
           </div> : <>
@@ -258,8 +261,9 @@ function SectionDialog({ id }) {
   const t = T();
   const name = TEST_META[ui.test].name;
   const s = id ? t.sections.find((x) => x.id === id) : null;
-  const max = t.questions.length ? Math.max(...t.questions.map((q) => q.position)) : 0;
-  const own = s ? t.questions.filter((q) => q.sectionId === s.id).map((q) => q.position) : [];
+  const qs = packageQuestions(t);
+  const max = qs.length ? Math.max(...qs.map((q) => q.position)) : 0;
+  const own = s ? qs.filter((q) => q.sectionId === s.id).map((q) => q.position) : [];
   const from = own.length ? Math.min(...own) : "";
   const to = own.length ? Math.max(...own) : "";
 
@@ -283,6 +287,7 @@ function SectionDialog({ id }) {
     const body = {
       title, skill: $("#se-skill").value, part: $("#se-part").value || null, from: start, to: end,
       passage: $("#se-passage").value.trim(), audioUrl,
+      packageId: s ? s.packageId : (packageOf(t)?.id || null),
     };
     const done = busy(form.querySelector('[type="submit"]'), "Menyimpan...");
     const result = await mutate(
@@ -355,6 +360,58 @@ function SectionDialog({ id }) {
           <FootEnd>
             <button className="btn btn--quiet" type="button" onClick={closeDialog}>Batal</button>
             <button className="btn btn--primary" type="submit">Simpan bagian</button>
+          </FootEnd>
+        </footer>
+      </form>
+    </Modal>
+  );
+}
+
+/* ===================== Paket soal (question package) ===================== */
+export function openPackageEditor(id) { openDialog({ kind: "package", id: id || null }); }
+
+function PackageDialog({ id }) {
+  const t = T();
+  const name = TEST_META[ui.test].name;
+  const p = id ? t.packages.find((x) => x.id === id) : null;
+
+  async function save(e) {
+    e.preventDefault();
+    const form = e.currentTarget;
+    clearErrors(form);
+    let first = null;
+    const fail = (input, errId, msg) => { fieldError(input, errId, msg); if (!first) first = input; };
+    const value = $("#pk-name").value.trim();
+    if (!value) fail($("#pk-name"), "pk-name-err", "Nama paket wajib diisi.");
+    if (first) { first.focus(); return; }
+    const body = { name: value, active: $("#pk-active").checked };
+    const done = busy(form.querySelector('[type="submit"]'), "Menyimpan...");
+    const result = await mutate(
+      () => api(p ? `/api/admin/tests/${ui.test}/packages/${p.id}` : `/api/admin/tests/${ui.test}/packages`, { method: p ? "PUT" : "POST", body }),
+      p ? "Paket tersimpan." : "Paket baru tersimpan. Isi soalnya di tab Soal & Jawaban.",
+    );
+    done();
+    if (result) closeDialog("package");
+  }
+
+  return (
+    <Modal id="dlg-package" focus="#pk-name" onClose={closeDialog}>
+      <form className="dialog__form" onSubmit={save} noValidate>
+        <Head title={p ? `Ubah ${p.name}` : "Tambah paket"}
+          sub={`${name}. Satu paket berisi soal dan bagian sendiri, lalu diberikan ke siswa lewat tautan atau pilihan acak.`} />
+        <div className="dialog__body">
+          <div className="field">
+            <label className="label" htmlFor="pk-name">Nama paket</label>
+            <input className="input" id="pk-name" type="text" maxLength="60" defaultValue={p ? p.name : ""} placeholder="Contoh: Paket Demo B" />
+            <p className="error" id="pk-name-err" hidden></p>
+          </div>
+          <label className="switch"><input type="checkbox" id="pk-active" defaultChecked={p ? p.active : true} /><span className="switch__track" aria-hidden="true"></span>Paket aktif dan bisa dipilih acak</label>
+          <p className="hint">Paket nonaktif tetap bisa dibuka di dasbor, tetapi tidak dipilih untuk siswa baru.</p>
+        </div>
+        <footer className="dialog__foot">
+          <FootEnd>
+            <button className="btn btn--quiet" type="button" onClick={closeDialog}>Batal</button>
+            <button className="btn btn--primary" type="submit">Simpan paket</button>
           </FootEnd>
         </footer>
       </form>

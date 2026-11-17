@@ -126,8 +126,8 @@ function currentView(parts, params) {
   }
   if (parts[0] === "tes") {
     const key = TEST_KEYS.includes(parts[1]) ? parts[1] : "placement";
-    const tab = ["soal", "submission", "lead", "bagian", "pengaturan"].includes(parts[2]) ? parts[2] : "soal";
-    const tabLabel = { soal: "Soal & Jawaban", submission: "Submission", lead: "Lead", bagian: "Bagian", pengaturan: "Pengaturan" }[tab];
+    const tab = ["soal", "submission", "lead", "bagian", "paket", "pengaturan"].includes(parts[2]) ? parts[2] : "soal";
+    const tabLabel = { soal: "Soal & Jawaban", submission: "Submission", lead: "Lead", bagian: "Bagian", paket: "Paket", pengaturan: "Pengaturan" }[tab];
     return { view: <TestPage testKey={key} tab={tab} />, nav: TEST_META[key].nav, title: `${TEST_META[key].name}, ${tabLabel}` };
   }
   if (parts[0] === "program") {

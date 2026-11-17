@@ -10,7 +10,7 @@ import {
   classById, classLabel, fmtClock, fmtDate, fmtDateTime, fmtSpan, fmtWa, pad, pct, speakingAudioUrl,
   speakingNeedsAttention, studentById, testOf, testSeconds, nilaiOf, levelByKey, latestAttemptOf,
   latestGraded, leads, isColdLead, lastActivityAt, levelLabel, exportAttempts, exportLeads, periodById,
-  programById, fmtTime, TEST_META,
+  programById, fmtTime, TEST_META, packageOf, packageQuestions, packageSections,
 } from "../lib.js";
 import {
   AttemptStatus, Chip, ClassCell, Empty, Icon, LevelCell, Notice, OptList, PageHead, Pager, PassStatus,
@@ -19,7 +19,7 @@ import {
 } from "../ui.jsx";
 import { MenuBtn } from "../menus.jsx";
 import { resendEmail, speakingRetry, speakingReviewed, speakingSkip } from "../actions.js";
-import { openQuestionEditor, openDaftar, openSectionEditor } from "../dialogs.jsx";
+import { openQuestionEditor, openDaftar, openSectionEditor, openPackageEditor } from "../dialogs.jsx";
 import { $, busy, clearErrors, fieldError, toast } from "../dom.js";
 
 /* Jumlah soal aktif versus the top level threshold. */
@@ -42,16 +42,20 @@ export function TestPage({ testKey, tab }) {
   ui.test = testKey;
   const t = db.tests[testKey], meta = TEST_META[testKey];
   const own = db.attempts.filter((a) => a.test === testKey);
-  const tabs = [["soal", "Soal & Jawaban", t.questions.length], ["submission", "Submission", own.length]];
+  const tabs = [["soal", "Soal & Jawaban", packageQuestions(t).length], ["submission", "Submission", own.length]];
   if (testKey === "placement") tabs.push(["lead", "Lead", leads().length]);
-  if (testKey === "ielts-mockup") tabs.push(["bagian", "Bagian", t.sections.length]);
+  if (testKey === "ielts-mockup") {
+    tabs.push(["bagian", "Bagian", packageSections(t).length]);
+    tabs.push(["paket", "Paket", t.packages.length]);
+  }
   tabs.push(["pengaturan", "Pengaturan", null]);
   if (!tabs.some((x) => x[0] === tab)) tab = "soal";
   const actions = tab === "soal"
     ? <button className="btn btn--primary" type="button" onClick={() => openQuestionEditor(null)}><Icon name="plus" />Tambah soal</button>
     : tab === "submission" ? <button className="btn btn--quiet" type="button" onClick={() => exportAttempts(db.attempts.filter((a) => attemptMatches(a, ui.attempts[testKey], false)))}><Icon name="download" />Ekspor CSV</button>
       : tab === "bagian" ? <button className="btn btn--primary" type="button" onClick={() => openSectionEditor(null)}><Icon name="plus" />Tambah bagian</button>
-        : tab === "lead" ? <button className="btn btn--quiet" type="button" onClick={() => exportLeads()}><Icon name="download" />Ekspor CSV</button> : null;
+        : tab === "paket" ? <button className="btn btn--primary" type="button" onClick={() => openPackageEditor(null)}><Icon name="plus" />Tambah paket</button>
+          : tab === "lead" ? <button className="btn btn--quiet" type="button" onClick={() => exportLeads()}><Icon name="download" />Ekspor CSV</button> : null;
   return <>
     <PageHead title={meta.name}
       desc={t.settings.open ? null : <p className="page-desc"><Status label="Ditutup" kind="ring" muted /></p>}
@@ -61,7 +65,7 @@ export function TestPage({ testKey, tab }) {
         <a key={k} className="seg__item" href={`#/tes/${testKey}/${k}`} {...(k === tab ? { "aria-current": "page" } : {})}>{label}{n === null ? null : <> <span className="seg__n">{n}</span></>}</a>
       ))}
     </nav>
-    {tab === "soal" ? <QuestionsTab /> : tab === "submission" ? <SubmissionsTab /> : tab === "bagian" ? <SectionsTab /> : tab === "lead" ? <LeadTab /> : <SettingsTab testKey={testKey} />}
+    {tab === "soal" ? <QuestionsTab /> : tab === "submission" ? <SubmissionsTab /> : tab === "bagian" ? <SectionsTab /> : tab === "paket" ? <PackagesTab /> : tab === "lead" ? <LeadTab /> : <SettingsTab testKey={testKey} />}
   </>;
 }
 
@@ -73,17 +77,22 @@ function QuestionsTab() {
   const t = db.tests[ui.test], f = ui.questions[ui.test];
   const per = t.settings.timeMode === "per";
   const stats = accuracyMap(ui.test, 30 * 86400000);
+  const qs = packageQuestions(t);
   const q = f.q.trim().toLowerCase();
-  const rows = t.questions.filter((x) => (f.skill === "all" || x.skill === f.skill)
+  const rows = qs.filter((x) => (f.skill === "all" || x.skill === f.skill)
     && (!q || `${x.prompt} ${x.passage} ${Object.values(x.options).join(" ")}`.toLowerCase().includes(q)));
-  const counts = { all: t.questions.length };
-  const skills = [...new Set(t.questions.map((x) => x.skill))];
-  skills.forEach((k) => { counts[k] = t.questions.filter((x) => x.skill === k).length; });
+  const counts = { all: qs.length };
+  const skills = [...new Set(qs.map((x) => x.skill))];
+  skills.forEach((k) => { counts[k] = qs.filter((x) => x.skill === k).length; });
 
   return <div className="stack">
     {ui.test === "placement" ? <LevelMismatchNotice /> : null}
     <section className="panel">
       <div className="toolbar toolbar--last">
+        {ui.test === "ielts-mockup" ? <select className="select select--auto" aria-label="Paket soal" value={packageOf(t)?.id || ""}
+          onChange={(e) => { ui.package[ui.test] = e.target.value; notify(); }}>
+          <OptList list={t.packages.map((p) => [p.id, p.name])} />
+        </select> : null}
         <label className="search"><span className="sr-only">Cari soal</span><Icon name="search" />
           <input className="input" type="search" placeholder="Cari teks soal atau pilihan jawaban" value={f.q} autoComplete="off"
             onChange={(e) => { clearTimeout(questionTimer); const v = e.target.value; questionTimer = setTimeout(() => { f.q = v; notify(); }, 140); }} />
@@ -151,14 +160,19 @@ function QuestionsTab() {
 function SectionsTab() {
   useVersion();
   const t = db.tests[ui.test];
-  const rows = t.sections.map((s) => {
-    const own = t.questions.filter((q) => q.sectionId === s.id).map((q) => q.position).sort((a, b) => a - b);
+  const qs = packageQuestions(t);
+  const rows = packageSections(t).map((s) => {
+    const own = qs.filter((q) => q.sectionId === s.id).map((q) => q.position).sort((a, b) => a - b);
     return { ...s, from: own[0] || null, to: own[own.length - 1] || null, n: own.length };
   });
 
   return <div className="stack">
     <section className="panel">
       <div className="toolbar toolbar--last">
+        <select className="select select--auto" aria-label="Paket soal" value={packageOf(t)?.id || ""}
+          onChange={(e) => { ui.package[ui.test] = e.target.value; notify(); }}>
+          <OptList list={t.packages.map((p) => [p.id, p.name])} />
+        </select>
         <p className="toolbar__meta">Setiap bagian memegang satu rentang soal beserta bacaan dan audionya. Saat soal diacak nanti, bagian ini tetap bersama soalnya.</p>
       </div>
       {rows.length ? <div className="table-wrap"><table className="table">
@@ -180,6 +194,42 @@ function SectionsTab() {
         ))}</tbody>
       </table></div>
         : <Empty title="Belum ada bagian." desc="Tambahkan bagian untuk mengikat bacaan dan audio ke satu rentang soal." />}
+    </section>
+  </div>;
+}
+
+/* ===================== Paket soal ===================== */
+
+function PackagesTab() {
+  useVersion();
+  const t = db.tests[ui.test];
+  const rows = t.packages.map((p) => {
+    const qs = t.questions.filter((q) => q.packageId === p.id);
+    return { ...p, n: qs.length, activeN: qs.filter((q) => q.status === "aktif").length, sections: t.sections.filter((s) => s.packageId === p.id).length };
+  });
+
+  return <div className="stack">
+    <section className="panel">
+      <div className="toolbar toolbar--last">
+        <p className="toolbar__meta">Setiap paket punya soal dan bagian sendiri. Siswa mendapat paket yang dipilih saat tautan dikirim, atau paket aktif yang dipilih acak.</p>
+      </div>
+      {rows.length ? <div className="table-wrap"><table className="table">
+        <caption className="sr-only">Paket soal {TEST_META[ui.test].name}</caption>
+        <thead><tr>
+          <th scope="col">Paket</th><th scope="col">Soal aktif</th><th scope="col" className="hide-sm">Bagian</th>
+          <th scope="col">Status</th><th scope="col" className="is-action"><span className="sr-only">Aksi</span></th>
+        </tr></thead>
+        <tbody>{rows.map((p) => (
+          <tr key={p.id} onClick={rowRun(() => openPackageEditor(p.id))}>
+            <td><p className="q-prompt">{p.name}</p></td>
+            <td className="tnum">{p.activeN} dari {p.n}</td>
+            <td className="hide-sm">{p.sections}</td>
+            <td>{p.active ? <Status label="Aktif" kind="navy" /> : <Status label="Nonaktif" kind="ring" muted />}</td>
+            <td className="is-action"><button className="btn btn--quiet" type="button" onClick={(e) => { e.stopPropagation(); openPackageEditor(p.id); }}>Ubah</button></td>
+          </tr>
+        ))}</tbody>
+      </table></div>
+        : <Empty title="Belum ada paket." desc="Tambahkan paket pertama, lalu isi soalnya di tab Soal & Jawaban." />}
     </section>
   </div>;
 }
@@ -278,9 +328,10 @@ function AttemptRow({ a, sel, onToggle }) {
     const bands = a.bands || { skills: [], overall: 0 };
     const listen = bands.skills.find((x) => x.skill === "Listening");
     const read = bands.skills.find((x) => x.skill === "Reading");
+    const pkg = a.packageId ? db.tests["ielts-mockup"].packages.find((p) => p.id === a.packageId) : null;
     return <tr className={sel ? "is-selected" : ""} onClick={rowClick(href)}>
       <td className="is-check"><input type="checkbox" checked={sel} aria-label={`Pilih submission ${s ? s.name : a.contactName || a.short}`} onChange={(e) => onToggle(a.id, e.target.checked)} /></td>
-      <td>{person}</td>
+      <td>{person}{pkg ? <span className="cell-sub">{pkg.name}</span> : null}</td>
       <td className="nowrap tnum">{listen ? `${listen.raw} / 40, band ${listen.band}` : <span className="muted">Tidak ada</span>}</td>
       <td className="nowrap tnum">{read ? `${read.raw} / 40, band ${read.band}` : <span className="muted">Tidak ada</span>}</td>
       <td><strong className="tnum">{bands.overall || "-"}</strong></td>
@@ -719,6 +770,8 @@ export function AttemptDetail({ testKey, id }) {
   const cells = [];
   if (testKey === "ielts-mockup") {
     const bands = a.bands || { skills: [], overall: 0 };
+    const pkg = a.packageId ? db.tests["ielts-mockup"].packages.find((p) => p.id === a.packageId) : null;
+    cells.push(cell("Paket", pkg ? pkg.name : "-", "paket soal yang dikerjakan"));
     cells.push(cell("Band keseluruhan", bands.overall || "-", "perkiraan dari Listening dan Reading"));
     for (const sk of bands.skills) {
       cells.push(cell(`${sk.skill} (band ${sk.band})`, <>{sk.raw}<small> / 40</small></>, `benar ${sk.raw} dari 40`));

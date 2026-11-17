@@ -71,7 +71,7 @@ export async function reload() {
   db.publicUrl = data.publicUrl;
   db.whatsapp = data.whatsapp;
   db.levels = data.levels;
-  db.tests = Object.fromEntries(TEST_KEYS.map((k) => [k, { key: k, settings: data.tests[k].settings, questions: data.tests[k].questions, sections: data.tests[k].sections || [], stats: data.tests[k].stats }]));
+  db.tests = Object.fromEntries(TEST_KEYS.map((k) => [k, { key: k, settings: data.tests[k].settings, questions: data.tests[k].questions, sections: data.tests[k].sections || [], packages: data.tests[k].packages || [], stats: data.tests[k].stats }]));
   db.students = data.students;
   db.attempts = data.attempts;
   db.enrolledAt = data.enrolledAt;
@@ -108,6 +108,7 @@ const attemptFilter = (days) => ({ q: "", status: "all", speaking: "all", level:
 export const ui = {
   ringkasanPeriode: "",
   test: "placement",
+  package: {},
   pendaftaran: { q: "", studentId: null },
   students: { q: "", stage: "all", level: "", program: "", period: "", tutor: "", sort: "activity", dir: "desc", page: 1, selected: new Set() },
   questions: { placement: { q: "", skill: "all" }, pre: { q: "", skill: "all" }, post: { q: "", skill: "all" }, "ielts-mockup": { q: "", skill: "all" } },
