@@ -88,6 +88,7 @@ The full flow passes in a headless browser against the `dev` branch: first admin
 | `tests/smoke.mjs` | `npm test`, no database needed |
 | `.env.example` | Every setting. `.env` holds the real values and is never committed |
 | `dashboard-prototype.html` | Approved single file prototype of the dashboard. Not served |
+| `ielts-mockup-result.html` | Standalone sample of the IELTS mockup result page with the logo embedded and CSS inline, for printing or sharing. Not served |
 | `assets/code.html`, `placement-test-questions.*` | Source material. Do not edit |
 
 ## Running
