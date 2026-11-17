@@ -508,220 +508,140 @@ function viewOverview() {
 }
 
 
-/* ===================== View: Pendaftaran ===================== */
+/* ===================== Pendaftaran dialog and Database Siswa ===================== */
 const COLD_DAYS = 90;
 const isColdLead = (s) => s.stage !== "lepas" && s.daftarCount === 0 && lastActivityAt(s) < NOW - COLD_DAYS * DAY;
 const leads = () => db.students.filter((s) => s.daftarCount === 0);
 const isRegistered = (s) => s.daftarCount > 0;
 
-function viewPendaftaran() {
+/** The person part of the registration dialog: search hits, or the picked person with a change button. */
+function renderDaftarHits() {
   const f = ui.pendaftaran;
   const person = f.studentId ? studentById(f.studentId) : null;
+  $("#df-search-field").hidden = Boolean(person);
+  $("#df-hits").hidden = Boolean(person);
+  $("#df-person-chip").hidden = !person;
+  $("#df-person-fields").hidden = Boolean(person);
+  if (person) {
+    $("#df-person-chip").innerHTML = `<p class="hint">${isRegistered(person) ? "Sudah pernah daftar" : "Belum pernah daftar"}: <strong>${esc(person.name)}</strong>${person.email ? `, ${esc(person.email)}` : ""}, ${esc(fmtWa(person.wa))}. Data lamanya tidak berubah.</p>
+      <button class="btn btn--quiet btn--sm" type="button" data-action="daftar-new">Ganti orang</button>`;
+    return;
+  }
   const q = f.q.trim().toLowerCase();
   const digits = q.replace(/\D/g, "");
   const hits = q ? db.students.filter((s) => {
     const text = `${s.name} ${s.email}`.toLowerCase();
-    const waHit = digits.length >= 3 && (s.wa.includes(digits) || `0${s.wa.slice(2)}`.includes(digits));
+    const waHit = digits.length >= 3 && (s.wa.includes(digits) || `0${s.wa.slice(2)}`).includes(digits);
     return text.includes(q) || waHit;
   }).slice(0, 6) : [];
-  const recent = [...db.pendaftaran].sort((a, b) => b.registeredAt - a.registeredAt).slice(0, 12);
-
-  main.innerHTML = `
-    ${pageHead({
-      title: "Pendaftaran",
-      desc: `<p class="meta-line"><span>Orang yang didaftarkan ke satu program masuk ke Database Siswa, dan orang yang sama bisa didaftarkan lagi ke program dan periode berikutnya.</span></p>`,
-    })}
-    <div class="stack">
-      <section class="panel" aria-label="Formulir pendaftaran">
-        <header class="panel__head"><div>
-          <h2 class="panel__title">Daftarkan ke program</h2>
-          <p class="panel__desc">Cari dulu nama, email, atau nomor WhatsApp. Orang yang sudah ada datanya tidak ditimpa; orang baru dibuatkan profil sekaligus.</p>
-        </div></header>
-        <div class="panel__body">
-          <div class="form-grid">
-            <p class="form-section span-all">Siapa yang didaftarkan</p>
-            ${person ? `<div class="field span-all">
-                <p class="hint">${isRegistered(person) ? "Sudah pernah daftar" : "Belum pernah daftar"}: <strong>${esc(person.name)}</strong>${person.email ? `, ${esc(person.email)}` : ""}, ${esc(fmtWa(person.wa))}. Data lamanya tidak berubah.</p>
-                <button class="btn btn--quiet btn--sm" type="button" data-action="pendaftaran-new">Ganti orang</button>
-              </div>` : `<div class="field span-all">
-                <label class="label" for="pf-q">Cari orang yang sudah ada</label>
-                <input class="input" id="pf-q" type="search" data-input="pf-q" placeholder="Nama, email, atau nomor WhatsApp" value="${esc(f.q)}" autocomplete="off">
-              </div>
-              ${hits.length ? `<div class="span-all pf-hits">${hits.map((s) => `
-                <button class="btn btn--quiet btn--sm" type="button" data-action="pendaftaran-person" data-id="${s.id}">
-                  ${esc(s.name)}<span class="cell-sub">${esc(s.email || fmtWa(s.wa))}${s.daftarCount ? ", sudah daftar" : ", lead"}</span>
-                </button>`).join("")}
-                <p class="hint">Atau isi data orang baru di bawah.</p></div>` : `<p class="hint span-all">${q ? "Tidak ada yang cocok. Isi data orang baru di bawah." : "Atau langsung isi data orang baru di bawah."}</p>`}
-              <div class="field">
-                <label class="label" for="pf-name">Nama lengkap</label>
-                <input class="input" id="pf-name" type="text" autocomplete="off" placeholder="Wajib untuk orang baru">
-                <p class="error" id="pf-name-err" hidden></p>
-              </div>
-              <div class="field">
-                <label class="label" for="pf-wa">WhatsApp</label>
-                <input class="input" id="pf-wa" type="tel" inputmode="tel" autocomplete="off" placeholder="0812 3456 7890">
-                <p class="error" id="pf-wa-err" hidden></p>
-              </div>
-              <div class="field">
-                <label class="label" for="pf-email">Email, opsional</label>
-                <input class="input" id="pf-email" type="email" autocomplete="off" placeholder="nama@email.com">
-                <p class="error" id="pf-email-err" hidden></p>
-              </div>
-              <div class="field">
-                <label class="label" for="pf-city">Kota/Kabupaten</label>
-                <input class="input" id="pf-city" type="text" autocomplete="off" placeholder="Contoh: Malang">
-              </div>`}
-
-            <p class="form-section span-all">Identitas</p>
-            <div class="field">
-              <label class="label" for="pf-birthplace">Tempat lahir</label>
-              <input class="input" id="pf-birthplace" type="text" autocomplete="off" placeholder="Contoh: Kediri" value="${esc(person?.tempatLahir || "")}">
-            </div>
-            <div class="field">
-              <label class="label" for="pf-birthdate">Tanggal lahir</label>
-              <input class="input" id="pf-birthdate" type="date" autocomplete="off" value="${esc(person?.tanggalLahir || "")}">
-              <p class="error" id="pf-birthdate-err" hidden></p>
-            </div>
-            <div class="field">
-              <label class="label" for="pf-provinsi">Provinsi</label>
-              <input class="input" id="pf-provinsi" type="text" autocomplete="off" placeholder="Jawa Timur" value="${esc(person?.provinsi || "")}">
-            </div>
-            <div class="field">
-              <label class="label" for="pf-postal">Kode pos</label>
-              <input class="input" id="pf-postal" type="text" inputmode="numeric" autocomplete="off" placeholder="64111" value="${esc(person?.kodePos || "")}">
-            </div>
-            <div class="field">
-              <label class="label" for="pf-jenjang">Jenjang pendidikan</label>
-              <select class="select" id="pf-jenjang">${options([["", "Pilih"], ...db.jenjang.map((j) => [j, j])], person?.jenjang || "")}</select>
-            </div>
-            <div class="field">
-              <label class="label" for="pf-tahudari">Tahu Titik Nol dari mana?</label>
-              <select class="select" id="pf-tahudari">${options([["", "Pilih"], ...db.tahuDari.map((t) => [t, t])], person?.tahuDari || "")}</select>
-            </div>
-
-            <p class="form-section span-all">Program dan kelas</p>
-            <div class="field">
-              <label class="label" for="pf-program">Program</label>
-              <select class="select" id="pf-program" data-change="pf-program">${options([["", "Pilih program"], ...db.programs.filter((p) => p.status === "aktif").map((p) => [p.id, `${p.name}, ${p.mode}`])], "")}</select>
-              <p class="error" id="pf-program-err" hidden></p>
-            </div>
-            <div class="field">
-              <label class="label" for="pf-duration">Durasi</label>
-              <select class="select" id="pf-duration" disabled></select>
-            </div>
-            <div class="field">
-              <label class="label" for="pf-period">Periode</label>
-              <select class="select" id="pf-period" data-change="pf-period">${options(periodOptions("Pilih periode"), "")}</select>
-              <p class="error" id="pf-period-err" hidden></p>
-            </div>
-            <div class="field">
-              <label class="label" for="pf-class">Tutor / Kelas, opsional</label>
-              <select class="select" id="pf-class" disabled></select>
-            </div>
-            <div class="field span-all">
-              <label class="label" for="pf-note">Catatan, opsional</label>
-              <textarea class="textarea" id="pf-note" rows="2" placeholder="Contoh: lanjut dari level sebelumnya, minta jadwal malam."></textarea>
-            </div>
-          </div>
-          <p class="error" id="pf-err" hidden></p>
-        </div>
-        <div class="panel__foot panel__foot--end">
-          <button class="btn btn--primary" type="button" data-action="pendaftaran-save" id="pf-save">Simpan pendaftaran</button>
-        </div>
-      </section>
-
-      <section class="panel" aria-label="Pendaftaran terbaru">
-        <header class="panel__head"><div>
-          <h2 class="panel__title">Pendaftaran terbaru</h2>
-          <p class="panel__desc">Dua belas pendaftaran terakhir, diurut dari yang paling baru.</p>
-        </div></header>
-        ${recent.length ? `<div class="table-wrap"><table class="table">
-          <thead><tr><th scope="col">Siswa</th><th scope="col">Program</th><th scope="col">Periode</th><th scope="col" class="hide-sm">Status</th><th scope="col" class="hide-md">Didaftarkan</th></tr></thead>
-          <tbody>${recent.map((p) => { const s = studentById(p.studentId); return `<tr data-href="#/siswa/${p.studentId}">
-            <td><a class="cell-main" href="#/siswa/${p.studentId}">${esc(s ? s.name : "Terhapus")}</a></td>
-            <td>${esc(programById(p.programId)?.name || "-")}</td>
-            <td class="nowrap">${esc(periodLabel(p.periodId))}</td>
-            <td class="hide-sm">${pendaftaranStatusHtml(p)}</td>
-            <td class="hide-md cell-sub">${esc(fmtDate(p.registeredAt))}<span>oleh ${esc(p.registeredBy || "-")}</span></td>
-          </tr>`; }).join("")}</tbody></table></div>` : emptyHtml("Belum ada pendaftaran.", "Pendaftaran pertama yang disimpan muncul di sini.")}
-      </section>
-    </div>`;
-  fillPfOptions();
-  return "Pendaftaran";
+  $("#df-hits").innerHTML = hits.length ? hits.map((s) => `
+      <button class="btn btn--quiet btn--sm" type="button" data-action="daftar-person" data-id="${s.id}">
+        ${esc(s.name)}<span class="cell-sub">${esc(s.email || fmtWa(s.wa))}${s.daftarCount ? ", sudah daftar" : ", lead"}</span>
+      </button>`).join("") + `<p class="hint">Atau isi data orang baru di bawah.</p>`
+    : `<p class="hint">${q ? "Tidak ada yang cocok. Isi data orang baru di bawah." : "Atau langsung isi data orang baru di bawah."}</p>`;
 }
 
-function pendaftaranStatusHtml(p) {
-  const map = { aktif: ["Aktif", "done"], selesai: ["Selesai", "ring"], batal: ["Batal", "ban"] };
-  const [label, dot] = map[p.status] || map.aktif;
-  return `<span class="status${p.status === "batal" ? " status--muted" : ""}">${dotHtml(dot)}${label}</span>`;
+function fillDaftarOptions() {
+  const prog = programById($("#df-program").value || "");
+  const per = $("#df-period").value || "";
+  $("#df-duration").innerHTML = prog ? options(prog.durations.map((d) => [d.id, `${d.label}${d.price ? `, ${fmtRp(d.price)}` : ""}`]), "") : `<option value="">Pilih program dulu</option>`;
+  $("#df-duration").disabled = !prog;
+  const list = prog && per ? classesFor(prog.id, per) : [];
+  $("#df-class").innerHTML = prog && per
+    ? options([["", list.length ? "Belum ada kelas" : "Belum ada kelas untuk program dan periode ini"], ...list.map((c) => [c.id, classLabel(c)])], "")
+    : `<option value="">Pilih program dan periode dulu</option>`;
+  $("#df-class").disabled = !(prog && per);
 }
 
-function fillPfOptions() {
-  const p = programById($("#pf-program")?.value || "");
-  const per = $("#pf-period")?.value || "";
-  if ($("#pf-duration")) {
-    $("#pf-duration").innerHTML = p ? options(p.durations.map((d) => [d.id, `${d.label}${d.price ? `, ${fmtRp(d.price)}` : ""}`]), "") : `<option value="">Pilih program dulu</option>`;
-    $("#pf-duration").disabled = !p;
+function openDaftar(studentId = null) {
+  const dlg = $("#dlg-daftar");
+  clearErrors(dlg);
+  ui.pendaftaran = { q: "", studentId: studentId || null };
+  const person = studentId ? studentById(studentId) : null;
+  $("#df-q").value = "";
+  $("#df-name").value = "";
+  $("#df-wa").value = "";
+  $("#df-email").value = "";
+  $("#df-city").value = "";
+  $("#df-birthplace").value = person?.tempatLahir || "";
+  $("#df-birthdate").value = person?.tanggalLahir || "";
+  $("#df-provinsi").value = person?.provinsi || "";
+  $("#df-postal").value = person?.kodePos || "";
+  $("#df-jenjang").innerHTML = options([["", "Pilih"], ...db.jenjang.map((j) => [j, j])], person?.jenjang || "");
+  $("#df-tahudari").innerHTML = options([["", "Pilih"], ...db.tahuDari.map((t) => [t, t])], person?.tahuDari || "");
+  $("#df-program").innerHTML = options([["", "Pilih program"], ...db.programs.filter((p) => p.status === "aktif").map((p) => [p.id, `${p.name}, ${p.mode}`])], "");
+  $("#df-period").innerHTML = options(periodOptions("Pilih periode"), "");
+  $("#df-note").value = "";
+  fillDaftarOptions();
+  renderDaftarHits();
+  dlg.showModal();
+  (person ? $("#df-program") : $("#df-q")).focus();
+}
+
+function daftarPerson(id) {
+  ui.pendaftaran.studentId = id;
+  const person = studentById(id);
+  if (person) {
+    $("#df-birthplace").value = person.tempatLahir || "";
+    $("#df-birthdate").value = person.tanggalLahir || "";
+    $("#df-provinsi").value = person.provinsi || "";
+    $("#df-postal").value = person.kodePos || "";
+    $("#df-jenjang").value = person.jenjang || "";
+    $("#df-tahudari").value = person.tahuDari || "";
   }
-  if ($("#pf-class")) {
-    const list = p && per ? classesFor(p.id, per) : [];
-    $("#pf-class").innerHTML = p && per
-      ? options([["", list.length ? "Belum ada kelas" : "Belum ada kelas untuk program dan periode ini"], ...list.map((c) => [c.id, classLabel(c)])], "")
-      : `<option value="">Pilih program dan periode dulu</option>`;
-    $("#pf-class").disabled = !(p && per);
-  }
+  renderDaftarHits();
+  $("#df-program").focus();
 }
 
-async function savePendaftaran(btn) {
+async function saveDaftar(form) {
   const f = ui.pendaftaran;
-  clearErrors($("#pf-err")?.closest(".panel"));
-  const programId = $("#pf-program").value || null;
-  const periodId = $("#pf-period").value || null;
+  clearErrors(form);
+  const programId = $("#df-program").value || null;
+  const periodId = $("#df-period").value || null;
   let first = null;
   const fail = (el, errId, msg) => { fieldError(el, errId, msg); if (!first) first = el; };
-  if (!programId) fail($("#pf-program"), "pf-program-err", "Program wajib dipilih.");
-  if (!periodId) fail($("#pf-period"), "pf-period-err", "Periode wajib dipilih.");
-  const birthdate = $("#pf-birthdate").value;
-  if (birthdate && !/^\d{4}-\d{2}-\d{2}$/.test(birthdate)) fail($("#pf-birthdate"), "pf-birthdate-err", "Tanggal lahir belum benar.");
+  if (!programId) fail($("#df-program"), "df-program-err", "Program wajib dipilih.");
+  if (!periodId) fail($("#df-period"), "df-period-err", "Periode wajib dipilih.");
+  const birthdate = $("#df-birthdate").value;
+  if (birthdate && !/^\d{4}-\d{2}-\d{2}$/.test(birthdate)) fail($("#df-birthdate"), "df-birthdate-err", "Tanggal lahir belum benar.");
   const body = {
     programId, periodId,
-    durationId: $("#pf-duration").value || null,
-    classId: $("#pf-class").value || null,
-    note: $("#pf-note").value.trim(),
-    tempatLahir: $("#pf-birthplace").value.trim(),
-    tanggalLahir: birthdate || "",
-    provinsi: $("#pf-provinsi").value.trim(),
-    kodePos: $("#pf-postal").value.trim(),
-    jenjang: $("#pf-jenjang").value,
-    tahuDari: $("#pf-tahudari").value,
+    durationId: $("#df-duration").value || null,
+    classId: $("#df-class").value || null,
+    note: $("#df-note").value.trim(),
+    tempatLahir: $("#df-birthplace").value.trim(),
+    tanggalLahir: birthdate,
+    provinsi: $("#df-provinsi").value.trim(),
+    kodePos: $("#df-postal").value.trim(),
+    jenjang: $("#df-jenjang").value,
+    tahuDari: $("#df-tahudari").value,
   };
   if (f.studentId) {
     body.studentId = f.studentId;
   } else {
-    const name = $("#pf-name").value.trim().replace(/\s+/g, " ");
-    const waRaw = $("#pf-wa").value.trim();
+    const name = $("#df-name").value.trim().replace(/\s+/g, " ");
+    const waRaw = $("#df-wa").value.trim();
     const wa = normalizeWa(waRaw);
-    if (name.length < 2) fail($("#pf-name"), "pf-name-err", "Nama minimal 2 karakter, atau pilih orang yang sudah ada.");
-    if (!waRaw) fail($("#pf-wa"), "pf-wa-err", "Nomor WhatsApp wajib diisi untuk orang baru.");
-    else if (!/^62\d{8,13}$/.test(wa)) fail($("#pf-wa"), "pf-wa-err", "Nomor WhatsApp terlihat belum lengkap.");
+    if (name.length < 2) fail($("#df-name"), "df-name-err", "Nama minimal 2 karakter, atau pilih orang yang sudah ada.");
+    if (!waRaw) fail($("#df-wa"), "df-wa-err", "Nomor WhatsApp wajib diisi untuk orang baru.");
+    else if (!/^62\d{8,13}$/.test(wa)) fail($("#df-wa"), "df-wa-err", "Nomor WhatsApp terlihat belum lengkap.");
     body.name = name; body.wa = wa;
-    body.email = $("#pf-email").value.trim().toLowerCase();
-    body.city = $("#pf-city").value.trim();
+    body.email = $("#df-email").value.trim().toLowerCase();
+    body.city = $("#df-city").value.trim();
   }
   if (first) { first.focus(); return; }
-  const done = busy(btn, "Menyimpan...");
+  const done = busy($("#df-save"), "Menyimpan...");
   try {
     const r = await api("/api/admin/pendaftaran", { method: "POST", body });
+    $("#dlg-daftar").close();
     await loadData();
-    f.studentId = null; f.q = "";
     render();
     toast(`Pendaftaran tersimpan${r.studentId ? ` untuk ${firstName(studentById(r.studentId)?.name || "")}` : ""}.`, { label: "Buka profil", run: () => { location.hash = `#/siswa/${r.studentId}`; } });
   } catch (error) {
-    if (error.field === "wa") fieldError($("#pf-wa"), "pf-wa-err", error.message);
-    else if (error.field === "email") fieldError($("#pf-email"), "pf-email-err", error.message);
-    else if (error.field === "tanggalLahir") fieldError($("#pf-birthdate"), "pf-birthdate-err", error.message);
-    else if (error.field === "programId" || error.field === "periodId") fieldError(null, "pf-err", error.message);
-    else fieldError(null, "pf-err", error.message);
+    if (error.field === "wa") fieldError($("#df-wa"), "df-wa-err", error.message);
+    else if (error.field === "email") fieldError($("#df-email"), "df-email-err", error.message);
+    else if (error.field === "tanggalLahir") fieldError($("#df-birthdate"), "df-birthdate-err", error.message);
+    else fieldError(null, "df-err", error.message);
   } finally {
     done();
   }
@@ -745,6 +665,11 @@ function siswaStatusHtml(s) {
   const map = { aktif: ["Aktif", "done"], selesai: ["Selesai", "ring"] };
   const [label, dot] = map[siswaChipOf(s)] || map.aktif;
   return `<span class="status">${dotHtml(dot)}${label}</span>`;
+}
+function pendaftaranStatusHtml(p) {
+  const map = { aktif: ["Aktif", "done"], selesai: ["Selesai", "ring"], batal: ["Batal", "ban"] };
+  const [label, dot] = map[p.status] || map.aktif;
+  return `<span class="status${p.status === "batal" ? " status--muted" : ""}">${dotHtml(dot)}${label}</span>`;
 }
 
 function studentMatches(s, f, ignoreStage) {
@@ -773,25 +698,45 @@ function viewStudents(params) {
   if (st && (st === "all" || SISWA_CHIPS.some(([k]) => k === st))) { f.stage = st; f.page = 1; history.replaceState(null, "", "#/siswa"); }
   const per = params.get("periode");
   if (per && periodById(per)) { Object.assign(f, { period: per, stage: "all", page: 1 }); history.replaceState(null, "", "#/siswa"); }
+  const recent = [...db.pendaftaran].sort((a, b) => b.registeredAt - a.registeredAt).slice(0, 8);
   main.innerHTML = `
     ${pageHead({
       title: "Database Siswa",
       desc: `<p class="meta-line"><span>Hanya orang yang sudah didaftarkan ke satu program. Calon siswa dari placement test ada di Placement Test, Lead.</span></p>`,
       actions: `<button class="btn btn--quiet" type="button" data-action="export-students">${icon("download")}Ekspor CSV</button>
-        <button class="btn btn--primary" type="button" data-action="open-pendaftaran">${icon("plus")}Daftarkan siswa</button>`,
+        <button class="btn btn--primary" type="button" data-action="open-daftar">${icon("plus")}Daftarkan siswa</button>`,
     })}
-    <section class="panel">
-      <div class="toolbar"><div class="chips" id="students-chips" role="group" aria-label="Saring status"></div></div>
-      <div class="toolbar toolbar--last">
-        <label class="search"><span class="sr-only">Cari siswa</span>${icon("search")}<input class="input" type="search" data-input="students-q" placeholder="Cari nama, email, WhatsApp, atau kelas" value="${esc(f.q)}" autocomplete="off"></label>
-        <select class="select select--auto" data-change="students-period" aria-label="Saring periode">${options([...periodOptions("Semua periode"), ["none", "Belum ditentukan"]], f.period)}</select>
-        <select class="select select--auto" data-change="students-program" aria-label="Saring program">${options(programOptions("Semua program"), f.program)}</select>
-        <select class="select select--auto hide-sm" data-change="students-tutor" aria-label="Saring tutor">${options([["", "Semua tutor"], ["none", "Belum ada kelas"], ...db.tutors.map((t) => [t, t])], f.tutor)}</select>
-        <select class="select select--auto hide-sm" data-change="students-level" aria-label="Saring level placement">${options([["", "Semua level"], ["none", "Belum tes"], ...db.levels.map((l) => [l.key, l.label])], f.level)}</select>
-        <button class="link-btn" type="button" data-action="students-reset" id="students-reset">Hapus filter</button>
-      </div>
-      <div id="students-results"></div>
-    </section>`;
+    <div class="stack">
+      <section class="panel">
+        <div class="toolbar"><div class="chips" id="students-chips" role="group" aria-label="Saring status"></div></div>
+        <div class="toolbar toolbar--last">
+          <label class="search"><span class="sr-only">Cari siswa</span>${icon("search")}<input class="input" type="search" data-input="students-q" placeholder="Cari nama, email, WhatsApp, atau kelas" value="${esc(f.q)}" autocomplete="off"></label>
+          <select class="select select--auto" data-change="students-period" aria-label="Saring periode">${options([...periodOptions("Semua periode"), ["none", "Belum ditentukan"]], f.period)}</select>
+          <select class="select select--auto" data-change="students-program" aria-label="Saring program">${options(programOptions("Semua program"), f.program)}</select>
+          <select class="select select--auto hide-sm" data-change="students-tutor" aria-label="Saring tutor">${options([["", "Semua tutor"], ["none", "Belum ada kelas"], ...db.tutors.map((t) => [t, t])], f.tutor)}</select>
+          <select class="select select--auto hide-sm" data-change="students-level" aria-label="Saring level placement">${options([["", "Semua level"], ["none", "Belum tes"], ...db.levels.map((l) => [l.key, l.label])], f.level)}</select>
+          <button class="link-btn" type="button" data-action="students-reset" id="students-reset">Hapus filter</button>
+        </div>
+        <div id="students-results"></div>
+      </section>
+
+      <section class="panel" aria-label="Pendaftaran terbaru">
+        <header class="panel__head"><div>
+          <h2 class="panel__title">Pendaftaran terbaru</h2>
+          <p class="panel__desc">Delapan pendaftaran terakhir. Perjalanan lengkap tiap siswa ada di halaman profilnya.</p>
+        </div></header>
+        ${recent.length ? `<div class="table-wrap"><table class="table">
+          <thead><tr><th scope="col">Siswa</th><th scope="col">Program</th><th scope="col">Periode</th><th scope="col" class="hide-sm">Status</th><th scope="col" class="hide-md">Didaftarkan</th></tr></thead>
+          <tbody>${recent.map((p) => { const s = studentById(p.studentId); return `<tr data-href="#/siswa/${p.studentId}">
+            <td><a class="cell-main" href="#/siswa/${p.studentId}">${esc(s ? s.name : "Terhapus")}</a></td>
+            <td>${esc(programById(p.programId)?.name || "-")}</td>
+            <td class="nowrap">${esc(periodLabel(p.periodId))}</td>
+            <td class="hide-sm">${pendaftaranStatusHtml(p)}</td>
+            <td class="hide-md cell-sub">${esc(fmtDate(p.registeredAt))}<span>oleh ${esc(p.registeredBy || "-")}</span></td>
+          </tr>`; }).join("")}</tbody></table></div>`
+          : emptyHtml("Belum ada pendaftaran.", "Tekan Daftarkan siswa untuk memasukkan orang pertama ke sebuah program.")}
+      </section>
+    </div>`;
   renderStudentsResults();
   return "Database Siswa";
 }
@@ -1993,7 +1938,6 @@ function render() {
   let title, nav;
   if (parts[0] === "siswa" && parts[1]) { title = viewStudent(parts[1]); nav = "siswa"; }
   else if (parts[0] === "siswa") { title = viewStudents(params); nav = "siswa"; }
-  else if (parts[0] === "pendaftaran") { title = viewPendaftaran(); nav = "pendaftaran"; }
   else if (parts[0] === "tes" && parts[2] === "submission" && parts[3]) { title = viewAttempt(parts[1], parts[3]); nav = TEST_META[parts[1]].nav; }
   else if (parts[0] === "tes") { title = viewTest(parts[1], parts[2] || "soal"); nav = TEST_META[parts[1]].nav; }
   else if (parts[0] === "program") { title = viewPrograms(parts[1] || "program"); nav = "program"; }
@@ -3186,11 +3130,10 @@ const ACTIONS = {
   "students-stage": (el) => { ui.students.stage = el.dataset.value; ui.students.page = 1; renderStudentsResults(); $(`#students-chips [data-value="${el.dataset.value}"]`)?.focus(); },
   "students-reset": () => { Object.assign(ui.students, { q: "", stage: "all", level: "", program: "", period: "", tutor: "", page: 1 }); render(); },
   "new-student": () => openStudentForm(null),
-  "open-pendaftaran": () => { location.hash = "#/pendaftaran"; },
-  "pendaftaran-save": (el) => savePendaftaran(el),
-  "pendaftaran-new": () => { ui.pendaftaran = { q: "", studentId: null }; render(); $("#pf-q")?.focus(); },
-  "pendaftaran-person": (el) => { ui.pendaftaran.studentId = el.dataset.id; render(); },
-  "lead-daftarkan": (el) => { ui.pendaftaran = { q: "", studentId: el.dataset.id }; location.hash = "#/pendaftaran"; },
+  "open-daftar": () => openDaftar(),
+  "daftar-person": (el) => daftarPerson(el.dataset.id),
+  "daftar-new": () => { ui.pendaftaran = { q: "", studentId: null }; $("#df-q").value = ""; renderDaftarHits(); $("#df-q").focus(); },
+  "lead-daftarkan": (el) => openDaftar(el.dataset.id),
   "edit-pendaftaran": (el) => openPendaftaranForm(el.dataset.id),
   "export-leads": () => exportLeads(),
   "edit-student": (el) => openStudentForm(el.dataset.id),
@@ -3355,8 +3298,8 @@ const CHANGES = {
   "students-period": (el) => { ui.students.period = el.value; ui.students.page = 1; renderStudentsResults(); },
   "students-tutor": (el) => { ui.students.tutor = el.value; ui.students.page = 1; renderStudentsResults(); },
   "attempts-level": (el) => { const f = ui.attempts[ui.test]; f.level = el.value; f.page = 1; renderAttemptsResults(); },
-  "pf-program": () => fillPfOptions(),
-  "pf-period": () => fillPfOptions(),
+  "df-program": () => fillDaftarOptions(),
+  "df-period": () => fillDaftarOptions(),
   "attempts-days": (el) => { const f = ui.attempts[ui.test]; f.days = el.value; f.page = 1; renderAttemptsResults(); },
   "attempts-period": (el) => { const f = ui.attempts[ui.test]; f.period = el.value; f.page = 1; renderAttemptsResults(); },
   "attempts-program": (el) => { const f = ui.attempts[ui.test]; f.program = el.value; f.page = 1; renderAttemptsResults(); },
@@ -3400,7 +3343,7 @@ const CHANGES = {
 let searchTimer = null;
 const INPUTS = {
   "students-q": (el) => { clearTimeout(searchTimer); searchTimer = setTimeout(() => { ui.students.q = el.value; ui.students.page = 1; renderStudentsResults(); }, 140); },
-  "pf-q": (el) => { clearTimeout(searchTimer); searchTimer = setTimeout(() => { ui.pendaftaran.q = el.value; render(); }, 140); },
+  "df-q": (el) => { clearTimeout(searchTimer); searchTimer = setTimeout(() => { ui.pendaftaran.q = el.value; renderDaftarHits(); }, 140); },
   "questions-q": (el) => { clearTimeout(searchTimer); searchTimer = setTimeout(() => { ui.questions[ui.test].q = el.value; renderQuestionsResults(); }, 140); },
   "attempts-q": (el) => { clearTimeout(searchTimer); searchTimer = setTimeout(() => { const f = ui.attempts[ui.test]; f.q = el.value; f.page = 1; renderAttemptsResults(); }, 140); },
   "time-dirty": () => { clearErrors($("#panel-time")); syncTimeForm(); },
@@ -3417,6 +3360,7 @@ const INPUTS = {
 const FORMS = {
   question: (form) => saveQuestion(form),
   student: (form) => saveStudent(form),
+  daftar: (form) => saveDaftar(form),
   pendaftaran: (form) => savePendaftaranForm(form),
   program: (form) => saveProgram(form),
   wa: (form) => sendWa(form),

@@ -70,7 +70,6 @@
     </div>
     <nav class="nav" id="main-nav" aria-label="Menu utama">
       <a class="nav__link" href="#/ringkasan" data-nav="ringkasan" title="Ringkasan"><svg class="icon" aria-hidden="true"><use href="#i-dashboard"></use></svg><span class="nav__label">Ringkasan</span></a>
-      <a class="nav__link" href="#/pendaftaran" data-nav="pendaftaran" title="Pendaftaran"><svg class="icon" aria-hidden="true"><use href="#i-plus"></use></svg><span class="nav__label">Pendaftaran</span></a>
       <a class="nav__link" href="#/siswa" data-nav="siswa" title="Database Siswa"><svg class="icon" aria-hidden="true"><use href="#i-users"></use></svg><span class="nav__label">Database Siswa</span><span class="nav__count" id="nav-new" title="Calon siswa baru yang belum dihubungi"></span></a>
       <a class="nav__link" href="#/sertifikat" data-nav="sertifikat" title="Sertifikat"><svg class="icon" aria-hidden="true"><use href="#i-award"></use></svg><span class="nav__label">Sertifikat</span></a>
       <p class="nav__group">Tes</p><span class="nav__sep" aria-hidden="true"></span>
@@ -222,6 +221,105 @@
       <div class="dialog__foot-end">
         <button class="btn btn--quiet" type="button" data-action="close-dialog">Batal</button>
         <button class="btn btn--primary" type="submit" id="sf-save">Simpan siswa</button>
+      </div>
+    </footer>
+  </form>
+</dialog>
+
+<dialog class="dialog dialog--daftar" id="dlg-daftar" aria-labelledby="df-title">
+  <form class="dialog__form" data-form="daftar" novalidate>
+    <header class="dialog__head">
+      <div><h2 class="dialog__title" id="df-title">Daftarkan siswa</h2><p class="dialog__sub">Cari orang yang sudah ada dulu. Orang yang sudah ada datanya tidak ditimpa; orang baru dibuatkan profil sekaligus.</p></div>
+      <button class="icon-btn" type="button" data-action="close-dialog" aria-label="Tutup"><svg class="icon" aria-hidden="true"><use href="#i-x"></use></svg></button>
+    </header>
+    <div class="dialog__body">
+      <div class="form-grid">
+        <p class="form-section span-all">Siapa yang didaftarkan</p>
+        <div class="field span-all" id="df-search-field">
+          <label class="label" for="df-q">Cari orang yang sudah ada</label>
+          <input class="input" id="df-q" type="search" data-input="df-q" placeholder="Nama, email, atau nomor WhatsApp" autocomplete="off">
+        </div>
+        <div class="span-all pf-hits" id="df-hits"></div>
+        <div class="field span-all" id="df-person-chip" hidden></div>
+        <div id="df-person-fields">
+          <div class="field">
+            <label class="label" for="df-name">Nama lengkap</label>
+            <input class="input" id="df-name" type="text" autocomplete="off" placeholder="Wajib untuk orang baru">
+            <p class="error" id="df-name-err" hidden></p>
+          </div>
+          <div class="field">
+            <label class="label" for="df-wa">WhatsApp</label>
+            <input class="input" id="df-wa" type="tel" inputmode="tel" autocomplete="off" placeholder="0812 3456 7890">
+            <p class="error" id="df-wa-err" hidden></p>
+          </div>
+          <div class="field">
+            <label class="label" for="df-email">Email, opsional</label>
+            <input class="input" id="df-email" type="email" autocomplete="off" placeholder="nama@email.com">
+            <p class="error" id="df-email-err" hidden></p>
+          </div>
+          <div class="field">
+            <label class="label" for="df-city">Kota/Kabupaten</label>
+            <input class="input" id="df-city" type="text" autocomplete="off" placeholder="Contoh: Malang">
+          </div>
+        </div>
+
+        <p class="form-section span-all">Identitas</p>
+        <div class="field">
+          <label class="label" for="df-birthplace">Tempat lahir</label>
+          <input class="input" id="df-birthplace" type="text" autocomplete="off" placeholder="Contoh: Kediri">
+        </div>
+        <div class="field">
+          <label class="label" for="df-birthdate">Tanggal lahir</label>
+          <input class="input" id="df-birthdate" type="date" autocomplete="off">
+          <p class="error" id="df-birthdate-err" hidden></p>
+        </div>
+        <div class="field">
+          <label class="label" for="df-provinsi">Provinsi</label>
+          <input class="input" id="df-provinsi" type="text" autocomplete="off" placeholder="Jawa Timur">
+        </div>
+        <div class="field">
+          <label class="label" for="df-postal">Kode pos</label>
+          <input class="input" id="df-postal" type="text" inputmode="numeric" autocomplete="off" placeholder="64111">
+        </div>
+        <div class="field">
+          <label class="label" for="df-jenjang">Jenjang pendidikan</label>
+          <select class="select" id="df-jenjang"></select>
+        </div>
+        <div class="field">
+          <label class="label" for="df-tahudari">Tahu Titik Nol dari mana?</label>
+          <select class="select" id="df-tahudari"></select>
+        </div>
+
+        <p class="form-section span-all">Program dan kelas</p>
+        <div class="field">
+          <label class="label" for="df-program">Program</label>
+          <select class="select" id="df-program" data-change="df-program"></select>
+          <p class="error" id="df-program-err" hidden></p>
+        </div>
+        <div class="field">
+          <label class="label" for="df-duration">Durasi</label>
+          <select class="select" id="df-duration" disabled></select>
+        </div>
+        <div class="field">
+          <label class="label" for="df-period">Periode</label>
+          <select class="select" id="df-period" data-change="df-period"></select>
+          <p class="error" id="df-period-err" hidden></p>
+        </div>
+        <div class="field">
+          <label class="label" for="df-class">Tutor / Kelas, opsional</label>
+          <select class="select" id="df-class" disabled></select>
+        </div>
+        <div class="field span-all">
+          <label class="label" for="df-note">Catatan, opsional</label>
+          <textarea class="textarea" id="df-note" rows="2" placeholder="Contoh: lanjut dari level sebelumnya, minta jadwal malam."></textarea>
+        </div>
+      </div>
+      <p class="error" id="df-err" hidden></p>
+    </div>
+    <footer class="dialog__foot">
+      <div class="dialog__foot-end">
+        <button class="btn btn--quiet" type="button" data-action="close-dialog">Batal</button>
+        <button class="btn btn--primary" type="submit" id="df-save">Simpan pendaftaran</button>
       </div>
     </footer>
   </form>

@@ -112,8 +112,7 @@ Every response is `no-store`. JSON bodies are capped at 16 KB and the speaking u
 | Sidebar menu | Content |
 |---|---|
 | Ringkasan | Metric strip, follow-up queue for status Baru (leads only, cold leads excluded), placement level spread, hardest placement questions |
-| Pendaftaran | One form to register a person into a program: search an existing lead or student first, then identity fields, program, durasi, periode, kelas. Recent registrations below |
-| Database Siswa | Only students with at least one non-cancelled registration. Chips filter Aktif, Selesai, Tidak lanjut. CRM search, filters, bulk actions, CSV export, and a full record page per student |
+| Database Siswa | Only students with at least one non-cancelled registration. Chips filter Aktif, Selesai, Tidak lanjut. CRM search, filters, bulk actions, CSV export, a full record page per student, the Daftarkan siswa dialog that registers a person into a program (search an existing lead or student first, then identity fields, program, durasi, periode, kelas), and a recent registrations panel below the table |
 | Sertifikat | Sertifikat terbit lists every issued certificate with search, a type filter, and status chips. Pengaturan lists the certificate types with their template, number format, reset rule, last number, and signer. Each student page also has a Sertifikat panel |
 | Placement Test | Soal & Jawaban, Submission, Lead (placement contacts without a registration), and Pengaturan |
 | Pre-test, Post-test | Soal & Jawaban, Submission, and Pengaturan |

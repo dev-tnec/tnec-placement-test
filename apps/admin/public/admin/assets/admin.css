@@ -691,3 +691,6 @@ body.nav-collapsed .account__out { margin-left: 0; }
 /* ---------- Pendaftaran ---------- */
 .pf-hits { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
 .pf-hits .btn .cell-sub { display: block; text-align: left; font-size: 11px; color: var(--text-secondary); font-weight: 400; }
+
+/* ---------- Daftar dialog ---------- */
+.dialog--daftar { width: min(760px, calc(100vw - 32px)); }
