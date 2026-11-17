@@ -6,6 +6,10 @@ import { fileURLToPath } from "node:url";
 import { HttpError, json, readJson, nowSeconds, normalizeWhatsapp, isEmail, text, multiline, int } from "@tnec/core/http";
 import { randomToken, sha256Hex, verifyPassword, hashPassword } from "@tnec/core/crypto";
 import { TEST_KEYS, TEST_NAMES, mapTest, mapQuestion, loadQuestions, loadLevels, publicLevel, attemptStatus, focusStrikes, addActivity, newId } from "@tnec/core/store";
+import {
+  latestPendaftaran, daftarCount, normalizeBirthDate, normalizeOption,
+  JENJANG_PENDIDIKAN, TAHU_DARI, PENDAFTARAN_STATUS,
+} from "@tnec/core/pendaftaran";
 import { sendWhatsApp, whatsappConfigured } from "@tnec/core/whatsapp";
 import { buildResultEmail } from "@tnec/core/email";
 import { staticResponse, textResponse } from "@tnec/core/node-server";
@@ -225,6 +229,8 @@ const ROUTES = [
   ["POST", /^\/api\/admin\/students\/([\w-]+)\/notes$/, addNote],
   ["POST", /^\/api\/admin\/students\/([\w-]+)\/whatsapp$/, sendStudentWhatsApp],
   ["POST", /^\/api\/admin\/students\/([\w-]+)\/invite$/, createInvite],
+  ["POST", /^\/api\/admin\/pendaftaran$/, createPendaftaran],
+  ["PUT", /^\/api\/admin\/pendaftaran\/([\w-]+)$/, updatePendaftaran],
   ["PUT", /^\/api\/admin\/tests\/(placement|pre|post)$/, updateTestSettings],
   ["POST", /^\/api\/admin\/tests\/(placement|pre|post)\/questions$/, createQuestion],
   ["PUT", /^\/api\/admin\/tests\/(placement|pre|post)\/questions\/(\d+)$/, updateQuestion],
@@ -300,7 +306,7 @@ async function bootstrap(request, env, user, url) {
                  violation_log, duration_seconds, limit_seconds, max_violations, email_status, pass_score, passed,
                  voided_at, voided_by, void_reason, user_agent, country FROM attempts ORDER BY started_at DESC LIMIT 5000`),
     stmt("SELECT student_id, MAX(at) AS last_at FROM activities GROUP BY student_id"),
-    stmt("SELECT at FROM activities WHERE type = 'stage' AND meta LIKE '%\"to\":\"terdaftar\"%' AND at >= ?", now - 60 * 86400),
+    stmt("SELECT MIN(registered_at) AS at FROM pendaftaran WHERE status != 'batal' GROUP BY student_id"),
     stmt("SELECT * FROM programs ORDER BY name"),
     stmt("SELECT * FROM program_durations ORDER BY program_id, position"),
     stmt("SELECT pt.program_id, t.name FROM program_tutors pt JOIN tutors t ON t.id = pt.tutor_id"),
@@ -311,10 +317,24 @@ async function bootstrap(request, env, user, url) {
     stmt(statSql, now - 30 * 86400),
     stmt(`SELECT id, attempt_id, status, needs_review, cefr_overall, ielts_overall, graded_at, created_at
             FROM speaking_submissions ORDER BY created_at DESC LIMIT 5000`),
+    stmt("SELECT * FROM pendaftaran ORDER BY registered_at, id"),
   ]), certificateData(env)]);
-  const [tests, questions, levels, students, attempts, lastActs, enrolled, programs, durations, programTutors, tutors, periods, classes, s7, s30, speaking] = res.map((r) => r.results);
+  const [tests, questions, levels, students, attempts, lastActs, enrolled, programs, durations, programTutors, tutors, periods, classes, s7, s30, speaking, pendaftaran] = res.map((r) => r.results);
   const speakingByAttempt = new Map(speaking.map((s) => [s.attempt_id, s]));
   const last = new Map(lastActs.map((r) => [r.student_id, r.last_at]));
+  // Registrations per student, oldest to newest: they drive the registered filter and the count.
+  const rowsByStudent = new Map();
+  const pendaftaranRows = pendaftaran.map((p) => {
+    const row = {
+      id: p.id, studentId: p.student_id, programId: p.program_id, durationId: p.duration_id || null,
+      periodId: p.period_id, classId: p.class_id || null, status: p.status, note: p.note || "",
+      registeredAt: ms(p.registered_at), registeredBy: p.registered_by || "",
+    };
+    const list = rowsByStudent.get(p.student_id) ?? [];
+    list.push(row);
+    rowsByStudent.set(p.student_id, list);
+    return row;
+  });
   const stats = {};
   for (const [bucket, rows] of [["d7", s7], ["d30", s30]]) {
     for (const r of rows) {
@@ -328,6 +348,8 @@ async function bootstrap(request, env, user, url) {
     publicUrl: env.PUBLIC_WEB_URL,
     whatsapp: { configured: whatsappConfigured(env) },
     speakingCefr: MANUAL_CEFR,
+    jenjang: JENJANG_PENDIDIKAN,
+    tahuDari: TAHU_DARI,
     tests: Object.fromEntries(TEST_KEYS.map((key) => [key, {
       key,
       settings: mapTest(tests.find((t) => t.key === key)),
@@ -338,8 +360,13 @@ async function bootstrap(request, env, user, url) {
     students: students.map((s) => ({
       id: s.id, name: s.name, email: s.email || "", wa: s.whatsapp || "", city: s.city || "", source: s.source, stage: s.stage,
       programId: s.program_id, durationId: s.duration_id, periodId: s.period_id, classId: s.class_id,
+      tempatLahir: s.tempat_lahir || "", tanggalLahir: s.tanggal_lahir || "", provinsi: s.provinsi || "",
+      kodePos: s.kode_pos || "", jenjang: s.jenjang_pendidikan || "", tahuDari: s.tahu_dari || "",
+      daftarCount: daftarCount(rowsByStudent.get(s.id)),
+      pendaftaranStatus: latestPendaftaran(rowsByStudent.get(s.id))?.status || null,
       createdAt: ms(s.created_at), lastActivityAt: ms(Math.max(s.updated_at || 0, last.get(s.id) || 0, s.created_at)),
     })),
+    pendaftaran: pendaftaranRows,
     attempts: attempts.map((a) => mapAttempt(a, now, speakingByAttempt.get(a.id))),
     speaking: speakingSummary(env, speaking, now),
     enrolledAt: enrolled.map((r) => ms(r.at)),
@@ -411,15 +438,34 @@ async function getStudentRow(env, id) {
 
 async function getStudent(request, env, user, url, id) {
   const s = await getStudentRow(env, id);
-  const [acts, msgs, speaking] = await env.DB.batch([
+  const [acts, msgs, speaking, journey] = await env.DB.batch([
     env.DB.prepare("SELECT * FROM activities WHERE student_id = ? ORDER BY at DESC, id DESC LIMIT 300").bind(id),
     env.DB.prepare("SELECT id, text, status, error, created_at, created_by FROM wa_messages WHERE student_id = ? ORDER BY created_at DESC LIMIT 50").bind(id),
     env.DB.prepare(`SELECT sp.id, sp.attempt_id, sp.status, sp.needs_review, sp.cefr_overall, sp.ielts_overall, sp.scores, sp.created_at
                       FROM speaking_submissions sp JOIN attempts a ON a.id = sp.attempt_id
                      WHERE a.student_id = ? ORDER BY sp.created_at DESC LIMIT 20`).bind(id),
+    env.DB.prepare(`SELECT pd.id, pd.program_id, pd.duration_id, pd.period_id, pd.class_id, pd.status, pd.note, pd.registered_at, pd.registered_by,
+                           p.name AS program_name, d.label AS duration_label, pr.start_date AS period_start, c.code AS class_code, t.name AS tutor_name
+                      FROM pendaftaran pd
+                      JOIN programs p ON p.id = pd.program_id
+                      LEFT JOIN program_durations d ON d.id = pd.duration_id
+                      JOIN periods pr ON pr.id = pd.period_id
+                      LEFT JOIN classes c ON c.id = pd.class_id
+                      LEFT JOIN tutors t ON t.id = c.tutor_id
+                     WHERE pd.student_id = ? ORDER BY pd.registered_at, pd.id`).bind(id),
   ]);
   return json({
     id: s.id,
+    identity: {
+      tempatLahir: s.tempat_lahir || "", tanggalLahir: s.tanggal_lahir || "", provinsi: s.provinsi || "",
+      kodePos: s.kode_pos || "", jenjang: s.jenjang_pendidikan || "", tahuDari: s.tahu_dari || "",
+    },
+    pendaftaran: journey.results.map((r) => ({
+      id: r.id, programId: r.program_id, programName: r.program_name, durationId: r.duration_id || null,
+      durationLabel: r.duration_label || "", periodId: r.period_id, periodStart: r.period_start,
+      classId: r.class_id || null, classCode: r.class_code || "", tutorName: r.tutor_name || "",
+      status: r.status, note: r.note || "", registeredAt: ms(r.registered_at), registeredBy: r.registered_by || "",
+    })),
     activities: acts.results.map((a) => ({ id: a.id, at: ms(a.at), type: a.type, text: a.text, by: a.by_name })),
     messages: msgs.results.map((m) => ({ id: m.id, at: ms(m.created_at), text: m.text, status: m.status, error: m.error, by: m.created_by })),
     speaking: speaking.results.map((sp) => {
@@ -470,6 +516,24 @@ function readStudentInput(body, partial) {
   if (has("source")) { out.source = SOURCES.includes(body.source) ? body.source : "WhatsApp"; }
   if (has("stage")) { if (!STAGES[body.stage]) throw new HttpError(400, "Status tidak dikenal."); out.stage = body.stage; }
   for (const k of ["programId", "durationId", "periodId", "classId"]) if (has(k)) out[k] = body[k] ? String(body[k]) : null;
+  if (has("tempatLahir")) out.tempatLahir = text(body.tempatLahir, 80) || null;
+  if (has("tanggalLahir")) {
+    const v = normalizeBirthDate(body.tanggalLahir);
+    if (v === null) throw new HttpError(400, "Tanggal lahir belum benar. Contohnya 2005-08-17.", { field: "tanggalLahir" });
+    out.tanggalLahir = v || null;
+  }
+  if (has("provinsi")) out.provinsi = text(body.provinsi, 60) || null;
+  if (has("kodePos")) out.kodePos = text(body.kodePos, 12) || null;
+  if (has("jenjang")) {
+    const v = normalizeOption(body.jenjang, JENJANG_PENDIDIKAN);
+    if (v === null) throw new HttpError(400, `Jenjang pendidikan pilih salah satu: ${JENJANG_PENDIDIKAN.join(", ")}.`, { field: "jenjang" });
+    out.jenjang = v || null;
+  }
+  if (has("tahuDari")) {
+    const v = normalizeOption(body.tahuDari, TAHU_DARI);
+    if (v === null) throw new HttpError(400, `Asal informasi pilih salah satu: ${TAHU_DARI.join(", ")}.`, { field: "tahuDari" });
+    out.tahuDari = v || null;
+  }
   return out;
 }
 
@@ -518,8 +582,10 @@ async function updateStudent(request, env, user, url, id) {
   await checkEnrollment(env, next);
   const now = nowSeconds();
   const stmts = [env.DB.prepare(`UPDATE students SET name = ?, whatsapp = ?, email = ?, city = ?, source = ?, stage = ?, program_id = ?, duration_id = ?,
-                                  period_id = ?, class_id = ?, updated_at = ? WHERE id = ?`)
-    .bind(next.name, next.wa, next.email, next.city, next.source, next.stage, next.programId, next.durationId, next.periodId, next.classId, now, id)];
+                                  period_id = ?, class_id = ?, tempat_lahir = ?, tanggal_lahir = ?, provinsi = ?, kode_pos = ?, jenjang_pendidikan = ?, tahu_dari = ?, updated_at = ? WHERE id = ?`)
+    .bind(next.name, next.wa, next.email, next.city, next.source, next.stage, next.programId, next.durationId, next.periodId, next.classId,
+      patch.tempatLahir ?? s.tempat_lahir, patch.tanggalLahir ?? s.tanggal_lahir, patch.provinsi ?? s.provinsi, patch.kodePos ?? s.kode_pos,
+      patch.jenjang ?? s.jenjang_pendidikan, patch.tahuDari ?? s.tahu_dari, now, id)];
   if (next.stage !== s.stage) stmts.push(addActivity(env, id, "stage", `Mengubah status dari ${STAGES[s.stage]} ke ${STAGES[next.stage]}.`, user.name, { from: s.stage, to: next.stage }, now));
   if (next.classId !== s.class_id) stmts.push(addActivity(env, id, "class", next.classId ? await classText(env, next.classId) : "Dikeluarkan dari kelas.", user.name, null, now));
   if (next.periodId !== s.period_id && !next.classId) {
@@ -534,8 +600,123 @@ async function updateStudent(request, env, user, url, id) {
   return json({ ok: true });
 }
 
-function deleteStudentStatements(env, id) {
-  return [
+/* ===================== Pendaftaran ===================== */
+
+/** Reads the six identity fields from a registration body, filling only what is still empty. */
+function identityPatch(body, student) {
+  const data = readStudentInput(body, true);
+  const patch = {};
+  for (const [key, column] of [
+    ["tempatLahir", "tempat_lahir"], ["tanggalLahir", "tanggal_lahir"], ["provinsi", "provinsi"],
+    ["kodePos", "kode_pos"], ["jenjang", "jenjang_pendidikan"], ["tahuDari", "tahu_dari"],
+  ]) {
+    if (data[key] === undefined) continue;
+    if (data[key] && !student[column]) patch[column] = data[key]; // never overwrite what the team already wrote
+    else if (!data[key] && student[column]) delete patch[column]; // keep existing data when the form sends blanks
+  }
+  return patch;
+}
+
+/**
+ * Registers a person into a program. An existing lead or student is linked and keeps its data; an
+ * unknown person is created first. The new row is by definition the latest registration, so the
+ * program columns on the student follow it, and the stage moves to terdaftar.
+ */
+async function createPendaftaran(request, env, user) {
+  const body = await readJson(request);
+  const programId = String(body.programId || "");
+  const periodId = String(body.periodId || "");
+  const durationId = body.durationId ? String(body.durationId) : null;
+  const classId = body.classId ? String(body.classId) : null;
+  if (!programId || !periodId) throw new HttpError(400, "Program dan periode wajib dipilih.", { field: "programId" });
+  await checkEnrollment(env, { programId, durationId, periodId, classId, stage: "terdaftar" });
+
+  const now = nowSeconds();
+  const stmts = [];
+  let studentId = body.studentId ? String(body.studentId) : "";
+  let patch = {};
+  if (studentId) {
+    const student = await getStudentRow(env, studentId);
+    patch = identityPatch(body, student);
+    const keys = Object.keys(patch);
+    if (keys.length) {
+      stmts.push(env.DB.prepare(`UPDATE students SET ${keys.map((k) => `${k} = ?`).join(", ")}, updated_at = ? WHERE id = ?`)
+        .bind(...keys.map((k) => patch[k]), now, studentId));
+    }
+  } else {
+    const data = readStudentInput({ ...body, stage: "baru" }, false); // a fresh registration starts as a lead that immediately registers
+    if (!data.wa) throw new HttpError(400, "Nomor WhatsApp wajib diisi.", { field: "wa" });
+    if (data.source === "WhatsApp" && !body.source) data.source = "Datang langsung"; // pendaftaran walk-in default
+    await assertUnique(env, data);
+    studentId = newId("stu");
+    stmts.push(env.DB.prepare(`INSERT INTO students (id, name, email, whatsapp, city, source, stage, created_at, updated_at,
+                                tempat_lahir, tanggal_lahir, provinsi, kode_pos, jenjang_pendidikan, tahu_dari)
+                               VALUES (?, ?, ?, ?, ?, ?, 'baru', ?, ?, ?, ?, ?, ?, ?, ?)`)
+      .bind(studentId, data.name, data.email, data.wa, data.city, data.source, now, now,
+        data.tempatLahir ?? null, data.tanggalLahir ?? null, data.provinsi ?? null, data.kodePos ?? null, data.jenjang ?? null, data.tahuDari ?? null));
+    stmts.push(addActivity(env, studentId, "system", `Ditambahkan saat pendaftaran oleh ${user.name}.`, user.name, null, now));
+  }
+
+  const program = await env.DB.prepare("SELECT name FROM programs WHERE id = ?").bind(programId).first();
+  const period = await env.DB.prepare("SELECT start_date FROM periods WHERE id = ?").bind(periodId).first();
+  const note = multiline(body.note, 2000);
+  const id = newId("pdf");
+  stmts.push(env.DB.prepare(`INSERT INTO pendaftaran (id, student_id, program_id, duration_id, period_id, class_id, status, note, registered_at, registered_by)
+                             VALUES (?, ?, ?, ?, ?, ?, 'aktif', ?, ?, ?)`)
+    .bind(id, studentId, programId, durationId, periodId, classId, note || null, now, user.name));
+  stmts.push(env.DB.prepare(`UPDATE students SET program_id = ?, duration_id = ?, period_id = ?, class_id = ?, stage = 'terdaftar', updated_at = ? WHERE id = ?`)
+    .bind(programId, durationId, periodId, classId, now, studentId));
+  stmts.push(addActivity(env, studentId, "system",
+    `Mendaftar ke program ${program.name} periode ${fmtDate(dateToSeconds(period.start_date))}.`, user.name, { pendaftaranId: id }, now));
+  if (classId) stmts.push(addActivity(env, studentId, "class", await classText(env, classId), user.name, { pendaftaranId: id }, now));
+  await env.DB.batch(stmts);
+  return json({ ok: true, id, studentId });
+}
+
+/** Edits a registration, then mirrors the latest non-cancelled row back onto the student. */
+async function updatePendaftaran(request, env, user, url, id) {
+  const row = await env.DB.prepare("SELECT * FROM pendaftaran WHERE id = ?").bind(id).first();
+  if (!row) throw new HttpError(404, "Pendaftaran tidak ditemukan.");
+  const body = await readJson(request);
+  const next = {
+    programId: body.programId !== undefined ? String(body.programId || "") : row.program_id,
+    durationId: body.durationId !== undefined ? (body.durationId ? String(body.durationId) : null) : row.duration_id,
+    periodId: body.periodId !== undefined ? String(body.periodId || "") : row.period_id,
+    classId: body.classId !== undefined ? (body.classId ? String(body.classId) : null) : row.class_id,
+    status: body.status !== undefined ? String(body.status) : row.status,
+    note: body.note !== undefined ? (multiline(body.note, 2000) || null) : row.note,
+  };
+  if (!PENDAFTARAN_STATUS.includes(next.status)) throw new HttpError(400, "Status pendaftaran tidak dikenal.", { field: "status" });
+  if (!next.programId || !next.periodId) throw new HttpError(400, "Program dan periode wajib dipilih.", { field: "programId" });
+  await checkEnrollment(env, { programId: next.programId, durationId: next.durationId, periodId: next.periodId, classId: next.classId, stage: "terdaftar" });
+
+  const now = nowSeconds();
+  const stmts = [env.DB.prepare(`UPDATE pendaftaran SET program_id = ?, duration_id = ?, period_id = ?, class_id = ?, status = ?, note = ? WHERE id = ?`)
+    .bind(next.programId, next.durationId, next.periodId, next.classId, next.status, next.note, id)];
+  if (next.status !== row.status) {
+    const label = { aktif: "aktif", selesai: "selesai", batal: "batal" }[next.status];
+    stmts.push(addActivity(env, row.student_id, "system", `Status pendaftaran diubah menjadi ${label}.`, user.name, { pendaftaranId: id }, now));
+  }
+
+  // The student row shows the newest registration that still counts. Cancelling the only one
+  // returns the person to the lead side.
+  const { results } = await env.DB.prepare("SELECT * FROM pendaftaran WHERE student_id = ? ORDER BY registered_at, id").bind(row.student_id).all();
+  const rows = results.map((r) => ({ ...r, status: r.id === id ? next.status : r.status }));
+  const latest = latestPendaftaran(rows);
+  if (latest) {
+    stmts.push(env.DB.prepare(`UPDATE students SET program_id = ?, duration_id = ?, period_id = ?, class_id = ?,
+        stage = CASE WHEN stage IN ('baru', 'dihubungi', 'konsultasi') THEN 'terdaftar' ELSE stage END, updated_at = ? WHERE id = ?`)
+      .bind(latest.program_id, latest.duration_id, latest.period_id, latest.class_id, now, row.student_id));
+  } else {
+    stmts.push(env.DB.prepare(`UPDATE students SET program_id = NULL, duration_id = NULL, period_id = NULL, class_id = NULL,
+        stage = CASE WHEN stage = 'terdaftar' THEN 'konsultasi' ELSE stage END, updated_at = ? WHERE id = ?`)
+      .bind(now, row.student_id));
+  }
+  await env.DB.batch(stmts);
+  return json({ ok: true });
+}
+
+function deleteStudentStatements(env, id) {  return [
     // The placement attempt stays for the statistics, so its speaking scores stay too, but the
     // voice, the transcript, and the raw response are personal data and go with the student.
     env.DB.prepare(`UPDATE speaking_submissions SET audio = NULL, transcript = NULL, provider_response = NULL, student_id = NULL

@@ -7,7 +7,7 @@
   <title>Dasbor Titik Nol</title>
   <link rel="icon" href="/favicon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="/admin/assets/admin.css?v=3">
-  <script src="/admin/assets/admin.js?v=5" defer></script>
+  <script src="/admin/assets/admin.js?v=8" defer></script>
 </head>
 <body>
 <svg width="0" height="0" class="sr-only" aria-hidden="true" focusable="false">
@@ -70,6 +70,7 @@
     </div>
     <nav class="nav" id="main-nav" aria-label="Menu utama">
       <a class="nav__link" href="#/ringkasan" data-nav="ringkasan" title="Ringkasan"><svg class="icon" aria-hidden="true"><use href="#i-dashboard"></use></svg><span class="nav__label">Ringkasan</span></a>
+      <a class="nav__link" href="#/pendaftaran" data-nav="pendaftaran" title="Pendaftaran"><svg class="icon" aria-hidden="true"><use href="#i-plus"></use></svg><span class="nav__label">Pendaftaran</span></a>
       <a class="nav__link" href="#/siswa" data-nav="siswa" title="Database Siswa"><svg class="icon" aria-hidden="true"><use href="#i-users"></use></svg><span class="nav__label">Database Siswa</span><span class="nav__count" id="nav-new" title="Calon siswa baru yang belum dihubungi"></span></a>
       <a class="nav__link" href="#/sertifikat" data-nav="sertifikat" title="Sertifikat"><svg class="icon" aria-hidden="true"><use href="#i-award"></use></svg><span class="nav__label">Sertifikat</span></a>
       <p class="nav__group">Tes</p><span class="nav__sep" aria-hidden="true"></span>
@@ -173,35 +174,44 @@
           <p class="error" id="sf-email-err" hidden></p>
         </div>
         <div class="field">
-          <label class="label" for="sf-city">Domisili</label>
+          <label class="label" for="sf-city">Kota/Kabupaten</label>
           <input class="input" id="sf-city" type="text" autocomplete="off" placeholder="Contoh: Malang">
         </div>
         <div class="field">
           <label class="label" for="sf-source">Sumber</label>
           <select class="select" id="sf-source"></select>
         </div>
+        <p class="form-section span-all">Identitas</p>
+        <div class="field">
+          <label class="label" for="sf-birthplace">Tempat lahir</label>
+          <input class="input" id="sf-birthplace" type="text" autocomplete="off" placeholder="Contoh: Kediri">
+        </div>
+        <div class="field">
+          <label class="label" for="sf-birthdate">Tanggal lahir</label>
+          <input class="input" id="sf-birthdate" type="date" autocomplete="off">
+          <p class="error" id="sf-birthdate-err" hidden></p>
+        </div>
+        <div class="field">
+          <label class="label" for="sf-provinsi">Provinsi</label>
+          <input class="input" id="sf-provinsi" type="text" autocomplete="off" placeholder="Contoh: Jawa Timur">
+        </div>
+        <div class="field">
+          <label class="label" for="sf-postal">Kode pos</label>
+          <input class="input" id="sf-postal" type="text" inputmode="numeric" autocomplete="off" placeholder="64111">
+        </div>
+        <div class="field">
+          <label class="label" for="sf-jenjang">Jenjang pendidikan</label>
+          <select class="select" id="sf-jenjang"></select>
+        </div>
+        <div class="field">
+          <label class="label" for="sf-tahudari">Tahu Titik Nol dari mana?</label>
+          <select class="select" id="sf-tahudari"></select>
+        </div>
         <div class="field span-all">
           <label class="label" for="sf-stage">Status</label>
           <select class="select" id="sf-stage"></select>
+          <p class="hint">Status Terdaftar diberikan otomatis lewat menu Pendaftaran, jadi tidak ada di daftar ini.</p>
         </div>
-        <p class="form-section span-all">Program dan kelas</p>
-        <div class="field">
-          <label class="label" for="sf-program">Program</label>
-          <select class="select" id="sf-program" data-change="sf-program"></select>
-        </div>
-        <div class="field">
-          <label class="label" for="sf-duration">Durasi</label>
-          <select class="select" id="sf-duration"></select>
-        </div>
-        <div class="field">
-          <label class="label" for="sf-period">Periode</label>
-          <select class="select" id="sf-period" data-change="sf-period"></select>
-        </div>
-        <div class="field">
-          <label class="label" for="sf-class">Tutor / Kelas</label>
-          <select class="select" id="sf-class"></select>
-        </div>
-        <p class="hint span-all" id="sf-class-hint">Pilihan kelas mengikuti program dan periode. Kelas baru dibuat di menu Program &amp; Kelas.</p>
         <div class="field span-all" id="sf-note-field">
           <label class="label" for="sf-note">Catatan awal</label>
           <textarea class="textarea" id="sf-note" rows="3" placeholder="Contoh: datang ke kantor bersama orang tua, ingin kelas offline mulai Desember."></textarea>
@@ -212,6 +222,50 @@
       <div class="dialog__foot-end">
         <button class="btn btn--quiet" type="button" data-action="close-dialog">Batal</button>
         <button class="btn btn--primary" type="submit" id="sf-save">Simpan siswa</button>
+      </div>
+    </footer>
+  </form>
+</dialog>
+
+<dialog class="dialog" id="dlg-pendaftaran" aria-labelledby="pdf-title">
+  <form class="dialog__form" data-form="pendaftaran" novalidate>
+    <header class="dialog__head">
+      <div><h2 class="dialog__title" id="pdf-title">Ubah pendaftaran</h2><p class="dialog__sub" id="pdf-sub"></p></div>
+      <button class="icon-btn" type="button" data-action="close-dialog" aria-label="Tutup"><svg class="icon" aria-hidden="true"><use href="#i-x"></use></svg></button>
+    </header>
+    <div class="dialog__body">
+      <div class="form-grid">
+        <div class="field">
+          <label class="label" for="pdf-program">Program</label>
+          <select class="select" id="pdf-program" data-change="pdf-program"></select>
+        </div>
+        <div class="field">
+          <label class="label" for="pdf-duration">Durasi</label>
+          <select class="select" id="pdf-duration"></select>
+        </div>
+        <div class="field">
+          <label class="label" for="pdf-period">Periode</label>
+          <select class="select" id="pdf-period" data-change="pdf-period"></select>
+        </div>
+        <div class="field">
+          <label class="label" for="pdf-class">Tutor / Kelas</label>
+          <select class="select" id="pdf-class"></select>
+        </div>
+        <div class="field">
+          <label class="label" for="pdf-status">Status pendaftaran</label>
+          <select class="select" id="pdf-status"></select>
+          <p class="hint">Membatalkan pendaftaran mengembalikan orang ini ke daftar Lead kalau tidak ada pendaftaran lain.</p>
+        </div>
+        <div class="field span-all">
+          <label class="label" for="pdf-note">Catatan</label>
+          <textarea class="textarea" id="pdf-note" rows="2" placeholder="Contoh: lanjut ke level berikutnya, minta jadwal malam."></textarea>
+        </div>
+      </div>
+    </div>
+    <footer class="dialog__foot">
+      <div class="dialog__foot-end">
+        <button class="btn btn--quiet" type="button" data-action="close-dialog">Batal</button>
+        <button class="btn btn--primary" type="submit" id="pdf-save">Simpan pendaftaran</button>
       </div>
     </footer>
   </form>

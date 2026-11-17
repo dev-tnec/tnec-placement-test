@@ -195,7 +195,7 @@ function certFormatProblem(format, reset) {
 }
 
 /* ===================== Database (loaded from the server) ===================== */
-const db = { tests: {}, levels: [], programs: [], tutors: [], tutorIds: new Map(), periods: [], classes: [], students: [], attempts: [], enrolledAt: [], publicUrl: location.origin, whatsapp: { configured: false }, certs: { templates: [], types: [], issued: [] }, speaking: { configured: false, waiting: 0, review: 0, failed: 0, manual: 0, graded30: 0, avgSeconds: null, failedLastHour: 0 }, speakingCefr: [] };
+const db = { tests: {}, levels: [], programs: [], tutors: [], tutorIds: new Map(), periods: [], classes: [], students: [], attempts: [], enrolledAt: [], pendaftaran: [], publicUrl: location.origin, whatsapp: { configured: false }, certs: { templates: [], types: [], issued: [] }, speaking: { configured: false, waiting: 0, review: 0, failed: 0, manual: 0, graded30: 0, avgSeconds: null, failedLastHour: 0 }, speakingCefr: [] };
 let dataReady = false;
 // Detail caches keep the last loaded copy while a fresh copy loads, so pages do not flicker after a change.
 const studentDetails = new Map();
@@ -219,8 +219,11 @@ async function loadData() {
   db.periods = data.catalog.periods;
   db.classes = data.catalog.classes;
   db.certs = data.certificates;
+  db.pendaftaran = data.pendaftaran || [];
   db.speaking = data.speaking || db.speaking;
   db.speakingCefr = data.speakingCefr || [];
+  db.jenjang = data.jenjang || [];
+  db.tahuDari = data.tahuDari || [];
   for (const entry of studentDetails.values()) entry.stale = true;
   for (const entry of attemptDetails.values()) entry.stale = true;
   dataReady = true;
@@ -238,6 +241,7 @@ function questionNumber(t, q) { const i = activeQuestions(t).indexOf(q); return 
 const studentById = (id) => db.students.find((s) => s.id === id);
 const attemptById = (id) => db.attempts.find((a) => a.id === id);
 const attemptsOf = (sid, testKey) => db.attempts.filter((a) => a.studentId === sid && (!testKey || a.test === testKey)).sort((x, y) => y.startedAt - x.startedAt);
+const latestAttemptOf = (sid, testKey) => attemptsOf(sid, testKey)[0] || null;
 const isGraded = (a) => a.status === "done" || a.status === "nocontact";
 const isSubmitted = (a) => isGraded(a) || a.status === "void";
 const latestGraded = (sid, testKey = "placement") => attemptsOf(sid, testKey).find((a) => a.status === "done");
@@ -293,7 +297,7 @@ function loadDetail(cache, key, url, shape, isCurrent) {
 function studentFeed(id) {
   const d = loadDetail(studentDetails, id, `/api/admin/students/${encodeURIComponent(id)}`, (raw) => raw,
     () => route().parts[0] === "siswa" && route().parts[1] === id);
-  return d ? d.activities : null;
+  return d || null;
 }
 
 /* Answers, the speaking recording, and the system log load when a submission page opens. */
@@ -310,6 +314,7 @@ const attemptFilter = (days) => ({ q: "", status: "all", speaking: "all", level:
 const ui = {
   period: 7,
   test: "placement",
+  pendaftaran: { q: "", studentId: null },
   students: { q: "", stage: "all", level: "", program: "", period: "", tutor: "", sort: "activity", dir: "desc", page: 1, selected: new Set() },
   questions: { placement: { q: "", skill: "all" }, pre: { q: "", skill: "all" }, post: { q: "", skill: "all" } },
   attempts: { placement: attemptFilter("30"), pre: attemptFilter("all"), post: attemptFilter("all") },
@@ -331,6 +336,9 @@ const personHtml = (name, text) => `<span class="person"><span class="avatar ava
 const classCell = (s) => { const c = classById(s.classId); return c ? personHtml(c.tutor, classLabel(c)) : `<span class="muted nowrap">Belum ada kelas</span>`; };
 const programCell = (s) => { const p = programById(s.programId), d = durationOf(s); return p ? `${esc(p.name)}<span class="cell-sub">${esc(d ? d.label : "Durasi belum dipilih")}</span>` : `<span class="muted">Belum dipilih</span>`; };
 const periodCell = (s) => { const p = periodById(s.periodId); return p ? `<span class="nowrap">${esc(fmtDate(p.start))}</span>` : `<span class="muted nowrap">Belum ditentukan</span>`; };
+const periodLabel = (pid) => { const p = periodById(pid); return p ? fmtDate(p.start) : "-"; };
+// fmtDate takes milliseconds, and the journey and identity fields carry plain ISO date strings.
+const dateToMs = (d) => Date.parse(`${d}T00:00:00`);
 const options = (list, current) => list.map(([v, label]) => `<option value="${esc(v)}"${String(v) === String(current) ? " selected" : ""}>${esc(label)}</option>`).join("");
 const chip = (action, value, label, n, pressed) => `<button class="chip" type="button" data-action="${action}" data-value="${esc(value)}" aria-pressed="${pressed}">${esc(label)}${n === null ? "" : ` <span class="chip__n">${n}</span>`}</button>`;
 const periodOptions = (first) => [["", first], ...periodsSorted().map((p) => [p.id, `${fmtDate(p.start)}${p.start > NOW ? ", akan datang" : ""}`])];
@@ -400,7 +408,7 @@ function viewOverview() {
   const diff = submitted - submittedPrev;
   const deltaText = diff === 0 ? `sama dengan ${P} hari sebelumnya` : `${diff > 0 ? "naik" : "turun"} ${Math.abs(diff)} dibanding ${P} hari sebelumnya`;
   const stopText = timeouts + stopped === 0 ? "tidak ada tes yang berhenti di tengah jalan" : `${timeouts} berhenti karena waktu habis dan ${stopped} karena pelanggaran`;
-  const queue = db.students.filter((s) => s.stage === "baru").sort((a, b) => a.createdAt - b.createdAt);
+  const queue = leads().filter((s) => s.stage === "baru" && !isColdLead(s)).sort((a, b) => a.createdAt - b.createdAt);
   const stats = accuracyMap("placement", since);
   const hardest = activeQuestions(placement).map((q) => ({ q, st: stats.get(q.id) })).filter((x) => x.st && x.st.n >= 5)
     .sort((a, b) => a.st.correct / a.st.n - b.st.correct / b.st.n).slice(0, 5);
@@ -452,15 +460,15 @@ function viewOverview() {
         <header class="panel__head">
           <div>
             <h2 class="panel__title">Perlu dihubungi <span class="count-pill">${queue.length}</span></h2>
-            <p class="panel__desc">Calon siswa berstatus Baru, diurutkan dari yang paling lama menunggu. Tandai setelah menghubungi supaya tidak ada yang dihubungi dua kali.</p>
+            <p class="panel__desc">Lead berstatus Baru, diurutkan dari yang paling lama menunggu. Tandai setelah menghubungi supaya tidak ada yang dihubungi dua kali. Lead yang tidak ditindaklanjuti 90 hari menjadi dingin dan keluar dari antrean.</p>
           </div>
-          <a class="btn btn--quiet btn--sm" href="#/siswa?status=baru">Buka di Database Siswa</a>
+          <a class="btn btn--quiet btn--sm" href="#/tes/placement/lead">Buka tab Lead</a>
         </header>
         ${queue.length ? `<div class="table-wrap"><table class="table">
           <thead><tr><th scope="col">Calon siswa</th><th scope="col">Hasil placement</th><th scope="col" class="hide-md">Program diminati</th><th scope="col">Menunggu</th><th scope="col" class="hide-lg">Sumber</th><th scope="col" class="is-action"><span class="sr-only">Aksi</span></th></tr></thead>
           <tbody>${queueRows}</tbody></table></div>
-          ${queue.length > 6 ? `<div class="panel__foot"><span>${queue.length - 6} calon siswa lain masih menunggu.</span><a class="link-btn" href="#/siswa?status=baru">Lihat semuanya</a></div>` : ""}`
-          : emptyHtml("Semua calon siswa baru sudah dihubungi.", "Calon siswa yang baru mengisi kontak setelah placement test akan muncul di sini.")}
+          ${queue.length > 6 ? `<div class="panel__foot"><span>${queue.length - 6} lead lain masih menunggu.</span><a class="link-btn" href="#/tes/placement/lead">Lihat semuanya</a></div>` : ""}`
+          : emptyHtml("Semua lead baru sudah dihubungi.", "Calon siswa yang baru mengisi kontak setelah placement test muncul di tab Lead.")}
       </section>
 
       <div class="grid-2">
@@ -500,9 +508,247 @@ function viewOverview() {
 }
 
 
+/* ===================== View: Pendaftaran ===================== */
+const COLD_DAYS = 90;
+const isColdLead = (s) => s.stage !== "lepas" && s.daftarCount === 0 && lastActivityAt(s) < NOW - COLD_DAYS * DAY;
+const leads = () => db.students.filter((s) => s.daftarCount === 0);
+const isRegistered = (s) => s.daftarCount > 0;
+
+function viewPendaftaran() {
+  const f = ui.pendaftaran;
+  const person = f.studentId ? studentById(f.studentId) : null;
+  const q = f.q.trim().toLowerCase();
+  const digits = q.replace(/\D/g, "");
+  const hits = q ? db.students.filter((s) => {
+    const text = `${s.name} ${s.email}`.toLowerCase();
+    const waHit = digits.length >= 3 && (s.wa.includes(digits) || `0${s.wa.slice(2)}`.includes(digits));
+    return text.includes(q) || waHit;
+  }).slice(0, 6) : [];
+  const recent = [...db.pendaftaran].sort((a, b) => b.registeredAt - a.registeredAt).slice(0, 12);
+
+  main.innerHTML = `
+    ${pageHead({
+      title: "Pendaftaran",
+      desc: `<p class="meta-line"><span>Orang yang didaftarkan ke satu program masuk ke Database Siswa, dan orang yang sama bisa didaftarkan lagi ke program dan periode berikutnya.</span></p>`,
+    })}
+    <div class="stack">
+      <section class="panel" aria-label="Formulir pendaftaran">
+        <header class="panel__head"><div>
+          <h2 class="panel__title">Daftarkan ke program</h2>
+          <p class="panel__desc">Cari dulu nama, email, atau nomor WhatsApp. Orang yang sudah ada datanya tidak ditimpa; orang baru dibuatkan profil sekaligus.</p>
+        </div></header>
+        <div class="panel__body">
+          <div class="form-grid">
+            <p class="form-section span-all">Siapa yang didaftarkan</p>
+            ${person ? `<div class="field span-all">
+                <p class="hint">${isRegistered(person) ? "Sudah pernah daftar" : "Belum pernah daftar"}: <strong>${esc(person.name)}</strong>${person.email ? `, ${esc(person.email)}` : ""}, ${esc(fmtWa(person.wa))}. Data lamanya tidak berubah.</p>
+                <button class="btn btn--quiet btn--sm" type="button" data-action="pendaftaran-new">Ganti orang</button>
+              </div>` : `<div class="field span-all">
+                <label class="label" for="pf-q">Cari orang yang sudah ada</label>
+                <input class="input" id="pf-q" type="search" data-input="pf-q" placeholder="Nama, email, atau nomor WhatsApp" value="${esc(f.q)}" autocomplete="off">
+              </div>
+              ${hits.length ? `<div class="span-all pf-hits">${hits.map((s) => `
+                <button class="btn btn--quiet btn--sm" type="button" data-action="pendaftaran-person" data-id="${s.id}">
+                  ${esc(s.name)}<span class="cell-sub">${esc(s.email || fmtWa(s.wa))}${s.daftarCount ? ", sudah daftar" : ", lead"}</span>
+                </button>`).join("")}
+                <p class="hint">Atau isi data orang baru di bawah.</p></div>` : `<p class="hint span-all">${q ? "Tidak ada yang cocok. Isi data orang baru di bawah." : "Atau langsung isi data orang baru di bawah."}</p>`}
+              <div class="field">
+                <label class="label" for="pf-name">Nama lengkap</label>
+                <input class="input" id="pf-name" type="text" autocomplete="off" placeholder="Wajib untuk orang baru">
+                <p class="error" id="pf-name-err" hidden></p>
+              </div>
+              <div class="field">
+                <label class="label" for="pf-wa">WhatsApp</label>
+                <input class="input" id="pf-wa" type="tel" inputmode="tel" autocomplete="off" placeholder="0812 3456 7890">
+                <p class="error" id="pf-wa-err" hidden></p>
+              </div>
+              <div class="field">
+                <label class="label" for="pf-email">Email, opsional</label>
+                <input class="input" id="pf-email" type="email" autocomplete="off" placeholder="nama@email.com">
+                <p class="error" id="pf-email-err" hidden></p>
+              </div>
+              <div class="field">
+                <label class="label" for="pf-city">Kota/Kabupaten</label>
+                <input class="input" id="pf-city" type="text" autocomplete="off" placeholder="Contoh: Malang">
+              </div>`}
+
+            <p class="form-section span-all">Identitas</p>
+            <div class="field">
+              <label class="label" for="pf-birthplace">Tempat lahir</label>
+              <input class="input" id="pf-birthplace" type="text" autocomplete="off" placeholder="Contoh: Kediri" value="${esc(person?.tempatLahir || "")}">
+            </div>
+            <div class="field">
+              <label class="label" for="pf-birthdate">Tanggal lahir</label>
+              <input class="input" id="pf-birthdate" type="date" autocomplete="off" value="${esc(person?.tanggalLahir || "")}">
+              <p class="error" id="pf-birthdate-err" hidden></p>
+            </div>
+            <div class="field">
+              <label class="label" for="pf-provinsi">Provinsi</label>
+              <input class="input" id="pf-provinsi" type="text" autocomplete="off" placeholder="Jawa Timur" value="${esc(person?.provinsi || "")}">
+            </div>
+            <div class="field">
+              <label class="label" for="pf-postal">Kode pos</label>
+              <input class="input" id="pf-postal" type="text" inputmode="numeric" autocomplete="off" placeholder="64111" value="${esc(person?.kodePos || "")}">
+            </div>
+            <div class="field">
+              <label class="label" for="pf-jenjang">Jenjang pendidikan</label>
+              <select class="select" id="pf-jenjang">${options([["", "Pilih"], ...db.jenjang.map((j) => [j, j])], person?.jenjang || "")}</select>
+            </div>
+            <div class="field">
+              <label class="label" for="pf-tahudari">Tahu Titik Nol dari mana?</label>
+              <select class="select" id="pf-tahudari">${options([["", "Pilih"], ...db.tahuDari.map((t) => [t, t])], person?.tahuDari || "")}</select>
+            </div>
+
+            <p class="form-section span-all">Program dan kelas</p>
+            <div class="field">
+              <label class="label" for="pf-program">Program</label>
+              <select class="select" id="pf-program" data-change="pf-program">${options([["", "Pilih program"], ...db.programs.filter((p) => p.status === "aktif").map((p) => [p.id, `${p.name}, ${p.mode}`])], "")}</select>
+              <p class="error" id="pf-program-err" hidden></p>
+            </div>
+            <div class="field">
+              <label class="label" for="pf-duration">Durasi</label>
+              <select class="select" id="pf-duration" disabled></select>
+            </div>
+            <div class="field">
+              <label class="label" for="pf-period">Periode</label>
+              <select class="select" id="pf-period" data-change="pf-period">${options(periodOptions("Pilih periode"), "")}</select>
+              <p class="error" id="pf-period-err" hidden></p>
+            </div>
+            <div class="field">
+              <label class="label" for="pf-class">Tutor / Kelas, opsional</label>
+              <select class="select" id="pf-class" disabled></select>
+            </div>
+            <div class="field span-all">
+              <label class="label" for="pf-note">Catatan, opsional</label>
+              <textarea class="textarea" id="pf-note" rows="2" placeholder="Contoh: lanjut dari level sebelumnya, minta jadwal malam."></textarea>
+            </div>
+          </div>
+          <p class="error" id="pf-err" hidden></p>
+        </div>
+        <div class="panel__foot panel__foot--end">
+          <button class="btn btn--primary" type="button" data-action="pendaftaran-save" id="pf-save">Simpan pendaftaran</button>
+        </div>
+      </section>
+
+      <section class="panel" aria-label="Pendaftaran terbaru">
+        <header class="panel__head"><div>
+          <h2 class="panel__title">Pendaftaran terbaru</h2>
+          <p class="panel__desc">Dua belas pendaftaran terakhir, diurut dari yang paling baru.</p>
+        </div></header>
+        ${recent.length ? `<div class="table-wrap"><table class="table">
+          <thead><tr><th scope="col">Siswa</th><th scope="col">Program</th><th scope="col">Periode</th><th scope="col" class="hide-sm">Status</th><th scope="col" class="hide-md">Didaftarkan</th></tr></thead>
+          <tbody>${recent.map((p) => { const s = studentById(p.studentId); return `<tr data-href="#/siswa/${p.studentId}">
+            <td><a class="cell-main" href="#/siswa/${p.studentId}">${esc(s ? s.name : "Terhapus")}</a></td>
+            <td>${esc(programById(p.programId)?.name || "-")}</td>
+            <td class="nowrap">${esc(periodLabel(p.periodId))}</td>
+            <td class="hide-sm">${pendaftaranStatusHtml(p)}</td>
+            <td class="hide-md cell-sub">${esc(fmtDate(p.registeredAt))}<span>oleh ${esc(p.registeredBy || "-")}</span></td>
+          </tr>`; }).join("")}</tbody></table></div>` : emptyHtml("Belum ada pendaftaran.", "Pendaftaran pertama yang disimpan muncul di sini.")}
+      </section>
+    </div>`;
+  fillPfOptions();
+  return "Pendaftaran";
+}
+
+function pendaftaranStatusHtml(p) {
+  const map = { aktif: ["Aktif", "done"], selesai: ["Selesai", "ring"], batal: ["Batal", "ban"] };
+  const [label, dot] = map[p.status] || map.aktif;
+  return `<span class="status${p.status === "batal" ? " status--muted" : ""}">${dotHtml(dot)}${label}</span>`;
+}
+
+function fillPfOptions() {
+  const p = programById($("#pf-program")?.value || "");
+  const per = $("#pf-period")?.value || "";
+  if ($("#pf-duration")) {
+    $("#pf-duration").innerHTML = p ? options(p.durations.map((d) => [d.id, `${d.label}${d.price ? `, ${fmtRp(d.price)}` : ""}`]), "") : `<option value="">Pilih program dulu</option>`;
+    $("#pf-duration").disabled = !p;
+  }
+  if ($("#pf-class")) {
+    const list = p && per ? classesFor(p.id, per) : [];
+    $("#pf-class").innerHTML = p && per
+      ? options([["", list.length ? "Belum ada kelas" : "Belum ada kelas untuk program dan periode ini"], ...list.map((c) => [c.id, classLabel(c)])], "")
+      : `<option value="">Pilih program dan periode dulu</option>`;
+    $("#pf-class").disabled = !(p && per);
+  }
+}
+
+async function savePendaftaran(btn) {
+  const f = ui.pendaftaran;
+  clearErrors($("#pf-err")?.closest(".panel"));
+  const programId = $("#pf-program").value || null;
+  const periodId = $("#pf-period").value || null;
+  let first = null;
+  const fail = (el, errId, msg) => { fieldError(el, errId, msg); if (!first) first = el; };
+  if (!programId) fail($("#pf-program"), "pf-program-err", "Program wajib dipilih.");
+  if (!periodId) fail($("#pf-period"), "pf-period-err", "Periode wajib dipilih.");
+  const birthdate = $("#pf-birthdate").value;
+  if (birthdate && !/^\d{4}-\d{2}-\d{2}$/.test(birthdate)) fail($("#pf-birthdate"), "pf-birthdate-err", "Tanggal lahir belum benar.");
+  const body = {
+    programId, periodId,
+    durationId: $("#pf-duration").value || null,
+    classId: $("#pf-class").value || null,
+    note: $("#pf-note").value.trim(),
+    tempatLahir: $("#pf-birthplace").value.trim(),
+    tanggalLahir: birthdate || "",
+    provinsi: $("#pf-provinsi").value.trim(),
+    kodePos: $("#pf-postal").value.trim(),
+    jenjang: $("#pf-jenjang").value,
+    tahuDari: $("#pf-tahudari").value,
+  };
+  if (f.studentId) {
+    body.studentId = f.studentId;
+  } else {
+    const name = $("#pf-name").value.trim().replace(/\s+/g, " ");
+    const waRaw = $("#pf-wa").value.trim();
+    const wa = normalizeWa(waRaw);
+    if (name.length < 2) fail($("#pf-name"), "pf-name-err", "Nama minimal 2 karakter, atau pilih orang yang sudah ada.");
+    if (!waRaw) fail($("#pf-wa"), "pf-wa-err", "Nomor WhatsApp wajib diisi untuk orang baru.");
+    else if (!/^62\d{8,13}$/.test(wa)) fail($("#pf-wa"), "pf-wa-err", "Nomor WhatsApp terlihat belum lengkap.");
+    body.name = name; body.wa = wa;
+    body.email = $("#pf-email").value.trim().toLowerCase();
+    body.city = $("#pf-city").value.trim();
+  }
+  if (first) { first.focus(); return; }
+  const done = busy(btn, "Menyimpan...");
+  try {
+    const r = await api("/api/admin/pendaftaran", { method: "POST", body });
+    await loadData();
+    f.studentId = null; f.q = "";
+    render();
+    toast(`Pendaftaran tersimpan${r.studentId ? ` untuk ${firstName(studentById(r.studentId)?.name || "")}` : ""}.`, { label: "Buka profil", run: () => { location.hash = `#/siswa/${r.studentId}`; } });
+  } catch (error) {
+    if (error.field === "wa") fieldError($("#pf-wa"), "pf-wa-err", error.message);
+    else if (error.field === "email") fieldError($("#pf-email"), "pf-email-err", error.message);
+    else if (error.field === "tanggalLahir") fieldError($("#pf-birthdate"), "pf-birthdate-err", error.message);
+    else if (error.field === "programId" || error.field === "periodId") fieldError(null, "pf-err", error.message);
+    else fieldError(null, "pf-err", error.message);
+  } finally {
+    done();
+  }
+}
+
 /* ===================== View: Database Siswa ===================== */
+// The four list chips of the registered-only Database Siswa: the latest registration's status,
+// with Lepas for someone who stopped mid program.
+const SISWA_CHIPS = [
+  ["all", "Semua"],
+  ["aktif", "Aktif"],
+  ["selesai", "Selesai"],
+  ["lepas", "Tidak lanjut"],
+];
+function siswaChipOf(s) {
+  if (s.stage === "lepas") return "lepas";
+  return s.pendaftaranStatus === "selesai" ? "selesai" : "aktif";
+}
+function siswaStatusHtml(s) {
+  if (s.stage === "lepas") return stageHtml("lepas");
+  const map = { aktif: ["Aktif", "done"], selesai: ["Selesai", "ring"] };
+  const [label, dot] = map[siswaChipOf(s)] || map.aktif;
+  return `<span class="status">${dotHtml(dot)}${label}</span>`;
+}
+
 function studentMatches(s, f, ignoreStage) {
-  if (!ignoreStage && f.stage !== "all" && s.stage !== f.stage) return false;
+  if (!ignoreStage && f.stage !== "all" && siswaChipOf(s) !== f.stage) return false;
   if (f.program && s.programId !== f.program) return false;
   if (f.period === "none") { if (s.periodId) return false; } else if (f.period && s.periodId !== f.period) return false;
   if (f.tutor) { const c = classById(s.classId); if (f.tutor === "none" ? c : !c || c.tutor !== f.tutor) return false; }
@@ -524,14 +770,15 @@ function studentMatches(s, f, ignoreStage) {
 function viewStudents(params) {
   const f = ui.students;
   const st = params.get("status");
-  if (st && (st === "all" || STAGES.some((s) => s.key === st))) { f.stage = st; f.page = 1; history.replaceState(null, "", "#/siswa"); }
+  if (st && (st === "all" || SISWA_CHIPS.some(([k]) => k === st))) { f.stage = st; f.page = 1; history.replaceState(null, "", "#/siswa"); }
   const per = params.get("periode");
-  if (per && periodById(per)) { Object.assign(f, { period: per, stage: "terdaftar", page: 1 }); history.replaceState(null, "", "#/siswa"); }
+  if (per && periodById(per)) { Object.assign(f, { period: per, stage: "all", page: 1 }); history.replaceState(null, "", "#/siswa"); }
   main.innerHTML = `
     ${pageHead({
       title: "Database Siswa",
+      desc: `<p class="meta-line"><span>Hanya orang yang sudah didaftarkan ke satu program. Calon siswa dari placement test ada di Placement Test, Lead.</span></p>`,
       actions: `<button class="btn btn--quiet" type="button" data-action="export-students">${icon("download")}Ekspor CSV</button>
-        <button class="btn btn--primary" type="button" data-action="new-student">${icon("plus")}Tambah siswa</button>`,
+        <button class="btn btn--primary" type="button" data-action="open-pendaftaran">${icon("plus")}Daftarkan siswa</button>`,
     })}
     <section class="panel">
       <div class="toolbar"><div class="chips" id="students-chips" role="group" aria-label="Saring status"></div></div>
@@ -553,10 +800,10 @@ function renderStudentsResults() {
   const f = ui.students;
   const box = $("#students-results");
   if (!box) return;
-  const base = db.students.filter((s) => studentMatches(s, f, true));
+  const base = db.students.filter((s) => s.daftarCount > 0 && studentMatches(s, f, true));
   const counts = { all: base.length };
-  STAGES.forEach((st) => { counts[st.key] = base.filter((s) => s.stage === st.key).length; });
-  $("#students-chips").innerHTML = [["all", "Semua"], ...STAGES.map((s) => [s.key, s.label])].map(([k, label]) => chip("students-stage", k, label, counts[k], f.stage === k)).join("");
+  SISWA_CHIPS.slice(1).forEach(([k]) => { counts[k] = base.filter((s) => siswaChipOf(s) === k).length; });
+  $("#students-chips").innerHTML = SISWA_CHIPS.map(([k, label]) => chip("students-stage", k, label, counts[k], f.stage === k)).join("");
   $("#students-reset").hidden = !(f.q || f.level || f.program || f.period || f.tutor || f.stage !== "all");
 
   const last = new Map(db.students.map((s) => [s.id, lastActivityAt(s)]));
@@ -567,7 +814,7 @@ function renderStudentsResults() {
     activity: (a, b) => last.get(a.id) - last.get(b.id),
     period: (a, b) => (periodById(a.periodId)?.start || 0) - (periodById(b.periodId)?.start || 0),
   };
-  const rows = (f.stage === "all" ? base : base.filter((s) => s.stage === f.stage)).sort((a, b) => sorters[f.sort](a, b) * (f.dir === "asc" ? 1 : -1));
+  const rows = (f.stage === "all" ? base : base.filter((s) => siswaChipOf(s) === f.stage)).sort((a, b) => sorters[f.sort](a, b) * (f.dir === "asc" ? 1 : -1));
   const pages = Math.max(1, Math.ceil(rows.length / PAGE_SIZE));
   f.page = Math.min(Math.max(1, f.page), pages);
   const pageRows = rows.slice((f.page - 1) * PAGE_SIZE, f.page * PAGE_SIZE);
@@ -595,7 +842,7 @@ function renderStudentsResults() {
       <td class="hide-md">${periodCell(s)}</td>
       <td class="hide-tab">${classCell(s)}</td>
       <td class="hide-lg">${levelCell(s)}</td>
-      <td>${stageHtml(s.stage)}</td>
+      <td>${siswaStatusHtml(s)}</td>
       <td class="hide-tab">${esc(fmtRelative(last.get(s.id)))}</td>
       <td class="is-action chev hide-xl">${icon("chevron-right")}</td>
     </tr>`).join("")}</tbody></table></div>
@@ -631,7 +878,10 @@ function viewStudent(id) {
   const attempts = attemptsOf(s.id);
   const certs = certsOfStudent(s.id);
   const feedData = studentFeed(s.id);
-  const feed = feedData || [];
+  const feed = feedData?.activities || [];
+  const journey = feedData?.pendaftaran || [];
+  const identity = feedData?.identity;
+  const registered = s.daftarCount > 0;
   const prog = programById(s.programId), dur = durationOf(s), per = periodById(s.periodId), cls = classById(s.classId);
   const end = endOf(s);
   const choices = prog && per ? classesFor(prog.id, per.id) : [];
@@ -656,16 +906,38 @@ function viewStudent(id) {
     <div class="stack">
       <section class="panel" aria-label="Data utama siswa">
         <div class="props">
-          <div class="prop"><label class="prop__label" for="rec-stage">Status</label><select class="select" id="rec-stage" data-change="student-stage" data-id="${s.id}">${options(STAGES.map((x) => [x.key, x.label]), s.stage)}</select></div>
+          <div class="prop"><label class="prop__label" for="rec-stage">Status</label><select class="select" id="rec-stage" data-change="student-stage" data-id="${s.id}">${options((registered ? STAGES : STAGES.filter((x) => x.key !== "terdaftar")).map((x) => [x.key, x.label]), s.stage)}</select></div>
           <div class="prop"><label class="prop__label" for="rec-class">Tutor / Kelas</label>${classSelect}</div>
-          <div class="prop"><span class="prop__label">Program</span>${prog ? `<span class="prop__value">${esc(prog.name)}</span><span class="prop__sub">${esc(dur ? dur.label : "Durasi belum dipilih")}, ${esc(prog.mode)}</span>` : `<span class="prop__value muted">Belum dipilih</span>`}</div>
+          <div class="prop"><span class="prop__label">Program terkini</span>${prog ? `<span class="prop__value">${esc(prog.name)}</span><span class="prop__sub">${esc(dur ? dur.label : "Durasi belum dipilih")}, ${esc(prog.mode)}</span>` : `<span class="prop__value muted">Belum terdaftar</span>`}</div>
           <div class="prop"><span class="prop__label">Periode</span>${per ? `<span class="prop__value">Mulai ${esc(fmtDate(per.start))}</span><span class="prop__sub">${end ? `selesai ${esc(fmtDate(end))}` : "tanggal selesai mengikuti durasi"}</span>` : `<span class="prop__value muted">Belum ditentukan</span>`}</div>
+          <div class="prop"><span class="prop__label">Daftar TN</span><span class="prop__value tnum">${s.daftarCount} kali</span><span class="prop__sub">${registered ? "lihat perjalanan belajar di bawah" : "belum pernah daftar program"}</span></div>
           <div class="prop"><span class="prop__label">Level placement</span>${level ? `<span class="prop__value">${esc(level.label)}</span><span class="prop__sub">${placement.score} dari ${attemptTotal(placement)}, tes ${esc(fmtDate(placement.startedAt))}</span>` : `<span class="prop__value muted">Belum tes</span>`}</div>
+          <div class="prop"><span class="prop__label">Tempat, tanggal lahir</span>${identity && (identity.tempatLahir || identity.tanggalLahir) ? `<span class="prop__value">${esc(identity.tempatLahir || "-")}</span><span class="prop__sub">${identity.tanggalLahir ? esc(fmtDate(dateToMs(identity.tanggalLahir))) : "tanggal belum diisi"}</span>` : `<span class="prop__value muted">Belum diisi</span>`}</div>
+          <div class="prop"><span class="prop__label">Kota/Kab, provinsi, kode pos</span>${s.city || (identity && (identity.provinsi || identity.kodePos)) ? `<span class="prop__value">${esc(s.city || "-")}</span><span class="prop__sub">${esc(identity ? [identity.provinsi, identity.kodePos].filter(Boolean).join(", ") || "lengkapi di Ubah data" : "")}</span>` : `<span class="prop__value muted">Belum diisi</span>`}</div>
+          <div class="prop"><span class="prop__label">Jenjang pendidikan</span>${identity?.jenjang ? `<span class="prop__value">${esc(identity.jenjang)}</span>` : `<span class="prop__value muted">Belum diisi</span>`}</div>
+          <div class="prop"><span class="prop__label">Tahu TN dari</span>${identity?.tahuDari ? `<span class="prop__value">${esc(identity.tahuDari)}</span>` : `<span class="prop__value muted">Belum diisi</span>`}</div>
           <div class="prop"><span class="prop__label">Sumber</span><span class="prop__value">${esc(s.source)}</span></div>
-          <div class="prop"><span class="prop__label">Domisili</span><span class="prop__value">${esc(s.city || "Belum diisi")}</span></div>
           <div class="prop"><span class="prop__label">Masuk database</span><span class="prop__value">${esc(fmtDate(s.createdAt))}</span><span class="prop__sub">pukul ${esc(fmtTime(s.createdAt))}</span></div>
         </div>
       </section>
+
+      ${journey.length ? `<section class="panel" aria-label="Perjalanan belajar">
+        <header class="panel__head"><div>
+          <h2 class="panel__title">Perjalanan belajar <span class="count-pill">${journey.filter((p) => p.status !== "batal").length}</span></h2>
+          <p class="panel__desc">Semua pendaftaran ${esc(firstName(s.name))}, dari yang paling lama ke paling baru. Program terkini di atas mengikuti baris paling bawah yang tidak dibatalkan.</p>
+        </div></header>
+        <div class="table-wrap"><table class="table">
+          <thead><tr><th scope="col">Program</th><th scope="col">Periode</th><th scope="col" class="hide-sm">Tutor / Kelas</th><th scope="col">Status</th><th scope="col" class="hide-md">Didaftarkan</th><th scope="col" class="is-action"><span class="sr-only">Aksi</span></th></tr></thead>
+          <tbody>${journey.map((p) => `<tr class="${p.status === "batal" ? "is-draft" : ""}">
+            <td><span class="cell-main">${esc(p.programName)}</span><span class="cell-sub">${esc(p.durationLabel || "durasi belum dipilih")}${p.note ? `, ${esc(p.note)}` : ""}</span></td>
+            <td class="nowrap">${esc(fmtDate(dateToMs(p.periodStart)))}</td>
+            <td class="hide-sm">${p.classCode ? `${esc(p.tutorName)} / ${esc(p.classCode)}` : `<span class="muted">Belum ada</span>`}</td>
+            <td>${pendaftaranStatusHtml(p)}</td>
+            <td class="hide-md cell-sub">${esc(fmtDate(p.registeredAt))}<span>oleh ${esc(p.registeredBy || "-")}</span></td>
+            <td class="is-action"><button class="btn btn--quiet btn--sm" type="button" data-action="edit-pendaftaran" data-id="${p.id}">Ubah</button></td>
+          </tr>`).join("")}</tbody>
+        </table></div>
+      </section>` : ""}
 
       <section class="panel">
         <header class="panel__head"><div>
@@ -878,11 +1150,14 @@ function viewTest(key, tab) {
   ui.test = key;
   const t = T(), meta = TEST_META[key];
   const own = db.attempts.filter((a) => a.test === key);
-  const tabs = [["soal", "Soal & Jawaban", t.questions.length], ["submission", "Submission", own.length], ["pengaturan", "Pengaturan", null]];
+  const tabs = [["soal", "Soal & Jawaban", t.questions.length], ["submission", "Submission", own.length]];
+  if (key === "placement") tabs.push(["lead", "Lead", leads().length]);
+  tabs.push(["pengaturan", "Pengaturan", null]);
   if (!tabs.some((x) => x[0] === tab)) tab = "soal";
   const actions = tab === "soal"
     ? `<button class="btn btn--primary" type="button" data-action="new-question">${icon("plus")}Tambah soal</button>`
-    : tab === "submission" ? `<button class="btn btn--quiet" type="button" data-action="export-attempts">${icon("download")}Ekspor CSV</button>` : "";
+    : tab === "submission" ? `<button class="btn btn--quiet" type="button" data-action="export-attempts">${icon("download")}Ekspor CSV</button>`
+    : tab === "lead" ? `<button class="btn btn--quiet" type="button" data-action="export-leads">${icon("download")}Ekspor CSV</button>` : "";
   main.innerHTML = `
     ${pageHead({ title: meta.name, desc: testStatus(t), actions })}
     <nav class="seg tabs" aria-label="Bagian ${esc(meta.name)}">
@@ -891,8 +1166,46 @@ function viewTest(key, tab) {
     <div id="tab-body"></div>`;
   if (tab === "soal") renderQuestionsTab();
   else if (tab === "submission") renderAttemptsTab();
+  else if (tab === "lead") renderLeadTab();
   else renderSettingsTab();
-  return `${meta.name}, ${{ soal: "Soal & Jawaban", submission: "Submission", pengaturan: "Pengaturan" }[tab]}`;
+  return `${meta.name}, ${{ soal: "Soal & Jawaban", submission: "Submission", lead: "Lead", pengaturan: "Pengaturan" }[tab]}`;
+}
+
+/* --- Lead tab: placement test contacts that never joined a program --- */
+function renderLeadTab() {
+  const rows = leads().sort((a, b) => lastActivityAt(b) - lastActivityAt(a));
+  const cold = rows.filter(isColdLead);
+  main.querySelector("#tab-body").innerHTML = `<section class="panel">
+    <header class="panel__head"><div>
+      <h2 class="panel__title">Lead dari placement test</h2>
+      <p class="panel__desc">Setiap orang yang mengisi kontak di placement test tetapi belum didaftarkan ke satu program pun. Setelah didaftarkan, profilnya pindah ke Database Siswa. Lead yang tidak ditindaklanjuti 90 hari menjadi dingin dan keluar dari antrean Ringkasan.</p>
+    </div></header>
+    ${rows.length ? `<div class="table-wrap"><table class="table">
+      <thead><tr>
+        <th scope="col">Lead</th>
+        <th scope="col">Hasil placement</th>
+        <th scope="col" class="hide-md">Sumber</th>
+        <th scope="col">Tindak lanjut</th>
+        <th scope="col" class="hide-lg">Tes terakhir</th>
+        <th scope="col" class="is-action"><span class="sr-only">Aksi</span></th>
+      </tr></thead>
+      <tbody>${rows.map((s) => {
+        const a = latestGraded(s.id, "placement");
+        const coldness = isColdLead(s);
+        return `<tr data-href="#/siswa/${s.id}">
+          <td><a class="cell-main" href="#/siswa/${s.id}">${esc(s.name)}</a><span class="cell-sub cell-ellipsis">${esc(s.email || fmtWa(s.wa))}</span>${coldness ? `<span class="cell-sub"><span class="is-wrong">Dingin</span></span>` : ""}</td>
+          <td>${a ? `<strong class="tnum">${a.score}</strong><span class="muted tnum"> / ${attemptTotal(a)}</span><span class="cell-sub">${esc(levelByKey(a.levelKey)?.label || "")}</span>` : `<span class="muted">Belum selesai</span>`}</td>
+          <td class="hide-md">${esc(s.source)}</td>
+          <td>${stageHtml(s.stage)}</td>
+          <td class="hide-lg">${esc(fmtDate(latestAttemptOf(s.id)?.startedAt || s.createdAt))}</td>
+          <td class="is-action"><span class="row-actions">
+            <button class="btn btn--primary btn--sm" type="button" data-action="lead-daftarkan" data-id="${s.id}">Daftarkan</button>
+          </span></td>
+        </tr>`;
+      }).join("")}</tbody></table></div>
+      ${cold.length ? `<div class="panel__foot"><span>${cold.length} lead dingin, tidak muncul di antrean Ringkasan tapi tetap bisa dicari dan didaftarkan.</span></div>` : ""}`
+      : emptyHtml("Tidak ada lead.", "Setiap kontak placement test yang belum didaftarkan muncul di sini.")}
+  </section>`;
 }
 
 function levelMismatchNotice() {
@@ -1680,13 +1993,14 @@ function render() {
   let title, nav;
   if (parts[0] === "siswa" && parts[1]) { title = viewStudent(parts[1]); nav = "siswa"; }
   else if (parts[0] === "siswa") { title = viewStudents(params); nav = "siswa"; }
+  else if (parts[0] === "pendaftaran") { title = viewPendaftaran(); nav = "pendaftaran"; }
   else if (parts[0] === "tes" && parts[2] === "submission" && parts[3]) { title = viewAttempt(parts[1], parts[3]); nav = TEST_META[parts[1]].nav; }
   else if (parts[0] === "tes") { title = viewTest(parts[1], parts[2] || "soal"); nav = TEST_META[parts[1]].nav; }
   else if (parts[0] === "program") { title = viewPrograms(parts[1] || "program"); nav = "program"; }
   else if (parts[0] === "sertifikat") { title = viewCertificates(parts[1] || "daftar"); nav = "sertifikat"; }
   else { title = viewOverview(); nav = "ringkasan"; }
   $$(".nav__link").forEach((a) => { if (a.dataset.nav === nav) a.setAttribute("aria-current", "page"); else a.removeAttribute("aria-current"); });
-  const fresh = db.students.filter((s) => s.stage === "baru").length;
+  const fresh = leads().filter((s) => s.stage === "baru" && !isColdLead(s)).length;
   $("#nav-new").innerHTML = fresh ? `<span aria-hidden="true">${fresh}</span><span class="sr-only">, ${fresh} calon siswa baru</span>` : "";
   $("#nav-new").hidden = !fresh;
   document.title = `${title} | Dasbor Titik Nol`;
@@ -1796,7 +2110,7 @@ function contextMenu(el) {
     items.push({ label: "Hapus submission", icon: "trash", danger: true, run: () => deleteAttempts([a.id], true) });
     return items;
   }
-  if (kind === "bulk-stage") return [{ heading: "Ubah status menjadi" }, ...STAGES.map((st) => ({ label: st.label, run: () => bulkStudents("stage", st.key, `Status siswa terpilih sekarang ${st.label}.`) }))];
+  if (kind === "bulk-stage") return [{ heading: "Ubah status menjadi" }, ...STAGES.filter((st) => st.key !== "terdaftar").map((st) => ({ label: st.label, run: () => bulkStudents("stage", st.key, `Status siswa terpilih sekarang ${st.label}.`) }))];
   if (kind === "bulk-period") return [{ heading: "Atur periode menjadi" }, ...periodsSorted().filter((p) => p.start > NOW - 20 * DAY).map((p) => ({ label: fmtDate(p.start), run: () => bulkStudents("period", p.id, `Siswa terpilih diatur ke periode ${fmtDate(p.start)}. Atur kelasnya dari halaman siswa.`) })), { sep: true }, { label: "Kosongkan periode", run: () => bulkStudents("period", null, "Periode siswa terpilih dikosongkan.") }];
   if (kind === "program") {
     const p = programById(id);
@@ -2004,6 +2318,7 @@ async function deleteQuestion(q) {
 /* ===================== Students ===================== */
 let editingStudentId = null;
 function fillClassOptions(classId) {
+  if (!$("#sf-program")) return; // the pendaftaran flow owns program fields now; this dialog no longer has them
   const pid = $("#sf-program").value, per = $("#sf-period").value;
   const list = pid && per ? classesFor(pid, per) : [];
   $("#sf-class").innerHTML = pid && per
@@ -2012,6 +2327,7 @@ function fillClassOptions(classId) {
   $("#sf-class").disabled = !(pid && per);
 }
 function fillDurationOptions(durationId) {
+  if (!$("#sf-program")) return;
   const p = programById($("#sf-program").value);
   $("#sf-duration").innerHTML = p ? options(p.durations.map((d) => [d.id, `${d.label}${d.price ? `, ${fmtRp(d.price)}` : ""}`]), durationId || "") : `<option value="">Pilih program dulu</option>`;
   $("#sf-duration").disabled = !p;
@@ -2028,11 +2344,13 @@ function openStudentForm(id) {
   $("#sf-email").value = s ? s.email : "";
   $("#sf-city").value = s ? s.city : "";
   $("#sf-source").innerHTML = options(SOURCES.map((x) => [x, x]), s ? s.source : "WhatsApp");
-  $("#sf-stage").innerHTML = options(STAGES.map((x) => [x.key, x.label]), s ? s.stage : "baru");
-  $("#sf-program").innerHTML = options([["", "Belum dipilih"], ...db.programs.filter((p) => p.status === "aktif" || (s && p.id === s.programId)).map((p) => [p.id, `${p.name}, ${p.mode}`])], s ? s.programId || "" : "");
-  fillDurationOptions(s ? s.durationId : "");
-  $("#sf-period").innerHTML = options(periodOptions("Belum ditentukan"), s ? s.periodId || "" : "");
-  fillClassOptions(s ? s.classId : "");
+  $("#sf-stage").innerHTML = options(STAGES.filter((x) => x.key !== "terdaftar").map((x) => [x.key, x.label]), s && s.stage !== "terdaftar" ? s.stage : "baru");
+  $("#sf-birthplace").value = s ? s.tempatLahir : "";
+  $("#sf-birthdate").value = s ? s.tanggalLahir : "";
+  $("#sf-provinsi").value = s ? s.provinsi : "";
+  $("#sf-postal").value = s ? s.kodePos : "";
+  $("#sf-jenjang").innerHTML = options([["", "Pilih"], ...db.jenjang.map((j) => [j, j])], s ? s.jenjang : "");
+  $("#sf-tahudari").innerHTML = options([["", "Pilih"], ...db.tahuDari.map((t) => [t, t])], s ? s.tahuDari : "");
   $("#sf-note-field").hidden = !!s;
   $("#sf-note").value = "";
   $("#sf-save").textContent = s ? "Simpan perubahan" : "Simpan siswa";
@@ -2047,23 +2365,23 @@ async function saveStudent(form) {
   const wa = normalizeWa(waRaw);
   const email = $("#sf-email").value.trim().toLowerCase();
   const stage = $("#sf-stage").value;
-  const programId = $("#sf-program").value || null, periodId = $("#sf-period").value || null;
   let first = null;
   const fail = (input, errId, msg) => { fieldError(input, errId, msg); if (!first) first = input; };
   if (name.length < 2) fail($("#sf-name"), "sf-name-err", "Nama minimal 2 karakter.");
   if (!waRaw) fail($("#sf-wa"), "sf-wa-err", "Nomor WhatsApp wajib diisi.");
   else if (!/^62\d{8,13}$/.test(wa)) fail($("#sf-wa"), "sf-wa-err", "Nomor WhatsApp terlihat belum lengkap. Periksa lagi jumlah digitnya.");
   if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email)) fail($("#sf-email"), "sf-email-err", "Format email belum benar.");
-  if (stage === "terdaftar" && (!programId || !periodId)) {
-    const target = !programId ? $("#sf-program") : $("#sf-period");
-    target.classList.add("is-invalid");
-    if (!first) first = target;
-    toast("Siswa berstatus Terdaftar perlu program dan periode.");
-  }
+  const birthdate = $("#sf-birthdate").value;
+  if (birthdate && !/^\d{4}-\d{2}-\d{2}$/.test(birthdate)) fail($("#sf-birthdate"), "sf-birthdate-err", "Tanggal lahir belum benar.");
   if (first) { first.focus(); return; }
   const body = {
     name, wa, email, city: $("#sf-city").value.trim(), source: $("#sf-source").value, stage,
-    programId, durationId: programId ? $("#sf-duration").value || null : null, periodId, classId: $("#sf-class").value || null,
+    tempatLahir: $("#sf-birthplace").value.trim(),
+    tanggalLahir: birthdate,
+    provinsi: $("#sf-provinsi").value.trim(),
+    kodePos: $("#sf-postal").value.trim(),
+    jenjang: $("#sf-jenjang").value,
+    tahuDari: $("#sf-tahudari").value,
   };
   if (!editingStudentId) body.note = $("#sf-note").value.trim();
   const done = busy($("#sf-save"), "Menyimpan...");
@@ -2087,7 +2405,77 @@ async function saveStudent(form) {
 function patchStudent(s, body, success) {
   return mutate(() => api(`/api/admin/students/${s.id}`, { method: "PATCH", body }), success);
 }
-function markContacted(s) {
+
+/* ===================== Pendaftaran: edit dialog and CSV ===================== */
+let editingPendaftaranId = null;
+
+function fillPdfOptions(p) {
+  const programId = $("#pdf-program").value, per = $("#pdf-period").value;
+  const prog = programById(programId);
+  $("#pdf-duration").innerHTML = prog ? options(prog.durations.map((d) => [d.id, `${d.label}${d.price ? `, ${fmtRp(d.price)}` : ""}`]), p?.durationId || "") : `<option value="">Pilih program dulu</option>`;
+  $("#pdf-duration").disabled = !prog;
+  const list = prog && per ? classesFor(prog.id, per) : [];
+  $("#pdf-class").innerHTML = prog && per
+    ? options([["", list.length ? "Belum ada kelas" : "Belum ada kelas untuk program dan periode ini"], ...list.map((c) => [c.id, classLabel(c)])], p?.classId || "")
+    : `<option value="">Pilih program dan periode dulu</option>`;
+  $("#pdf-class").disabled = !(prog && per);
+}
+
+function openPendaftaranForm(id) {
+  const p = db.pendaftaran.find((x) => x.id === id);
+  if (!p) return;
+  editingPendaftaranId = p.id;
+  const dlg = $("#dlg-pendaftaran");
+  clearErrors(dlg);
+  const s = studentById(p.studentId);
+  $("#pdf-sub").textContent = `Pendaftaran ${firstName(s ? s.name : "siswa ini")} di ${programById(p.programId)?.name || "-"}.`;
+  $("#pdf-program").innerHTML = options([["", "Pilih program"], ...db.programs.filter((x) => x.status === "aktif" || x.id === p.programId).map((x) => [x.id, `${x.name}, ${x.mode}`])], p.programId);
+  $("#pdf-period").innerHTML = options(periodOptions("Pilih periode"), p.periodId);
+  $("#pdf-status").innerHTML = options([["aktif", "Aktif"], ["selesai", "Selesai"], ["batal", "Batal"]], p.status);
+  $("#pdf-note").value = p.note;
+  fillPdfOptions(p);
+  dlg.showModal();
+}
+
+async function savePendaftaranForm(form) {
+  clearErrors(form);
+  if (!editingPendaftaranId) return;
+  const body = {
+    programId: $("#pdf-program").value || "",
+    durationId: $("#pdf-duration").value || null,
+    periodId: $("#pdf-period").value || "",
+    classId: $("#pdf-class").value || null,
+    status: $("#pdf-status").value,
+    note: $("#pdf-note").value.trim(),
+  };
+  if (!body.programId || !body.periodId) { toast("Program dan periode wajib dipilih."); return; }
+  const done = busy($("#pdf-save"), "Menyimpan...");
+  try {
+    await api(`/api/admin/pendaftaran/${editingPendaftaranId}`, { method: "PUT", body });
+    $("#dlg-pendaftaran").close();
+    await loadData();
+    render();
+    toast("Pendaftaran diperbarui.");
+  } catch (error) {
+    if (!sessionEnded(error)) toast(error.message);
+  } finally {
+    done();
+  }
+}
+
+function exportLeads() {
+  const list = leads().sort((a, b) => lastActivityAt(b) - lastActivityAt(a));
+  downloadCsv(`lead-placement-${toDateInput(NOW)}.csv`, [
+    ["Nama", "Email", "WhatsApp", "Kota", "Sumber", "Status tindak lanjut", "Skor placement", "Level", "Tes terakhir", "Dingin", "Masuk database"],
+    ...list.map((s) => {
+      const a = latestGraded(s.id, "placement");
+      return [s.name, s.email, fmtWa(s.wa), s.city, s.source, stageOf(s.stage).label,
+        a ? a.score : "", a ? levelLabel(a.levelKey) : "", a ? fmtDateTime(a.startedAt) : "",
+        isColdLead(s) ? "Ya" : "", fmtDateTime(s.createdAt)];
+    }),
+  ]);
+  toast(`${list.length} lead diekspor ke CSV.`);
+}function markContacted(s) {
   const before = s.stage;
   return patchStudent(s, { stage: "dihubungi" }).then((ok) => {
     if (ok) toast(`${firstName(s.name)} ditandai sudah dihubungi.`, { label: "Urungkan", run: () => patchStudent(s, { stage: before }, "Status dikembalikan.") });
@@ -2745,10 +3133,12 @@ function downloadCsv(filename, rows) {
 const levelLabel = (key) => (key && levelByKey(key) ? levelByKey(key).label : "");
 function exportStudents(list) {
   downloadCsv(`database-siswa-${toDateInput(NOW)}.csv`, [
-    ["ID", "Nama", "Email", "WhatsApp", "Domisili", "Sumber", "Status", "Program", "Durasi", "Periode", "Tutor / Kelas", "Level placement", "Pre-test", "Post-test", "Masuk database"],
+    ["ID", "Nama", "Email", "WhatsApp", "Tempat lahir", "Tanggal lahir", "Kota/Kabupaten", "Provinsi", "Kode pos", "Jenjang pendidikan", "Tahu TN dari", "Jumlah daftar", "Sumber", "Status", "Program", "Durasi", "Periode", "Tutor / Kelas", "Level placement", "Pre-test", "Post-test", "Masuk database"],
     ...list.map((s) => {
       const a = latestGraded(s.id), p = programById(s.programId), d = durationOf(s), per = periodById(s.periodId), c = classById(s.classId);
-      return [s.id, s.name, s.email, fmtWa(s.wa), s.city, s.source, stageOf(s.stage).label, p ? p.name : "", d ? d.label : "", per ? fmtDate(per.start) : "", classLabel(c), a ? levelLabel(a.levelKey) : "", nilaiOf(latestGraded(s.id, "pre")) ?? "", nilaiOf(latestGraded(s.id, "post")) ?? "", fmtDateTime(s.createdAt)];
+      return [s.id, s.name, s.email, fmtWa(s.wa), s.tempatLahir, s.tanggalLahir, s.city, s.provinsi, s.kodePos, s.jenjang, s.tahuDari, s.daftarCount, s.source,
+        siswaChipOf(s) === "lepas" ? "Tidak lanjut" : siswaChipOf(s) === "selesai" ? "Selesai" : "Aktif",
+        p ? p.name : "", d ? d.label : "", per ? fmtDate(per.start) : "", classLabel(c), a ? levelLabel(a.levelKey) : "", nilaiOf(latestGraded(s.id, "pre")) ?? "", nilaiOf(latestGraded(s.id, "post")) ?? "", fmtDateTime(s.createdAt)];
     }),
   ]);
   toast(`${list.length} baris siswa diekspor ke CSV.`);
@@ -2796,6 +3186,13 @@ const ACTIONS = {
   "students-stage": (el) => { ui.students.stage = el.dataset.value; ui.students.page = 1; renderStudentsResults(); $(`#students-chips [data-value="${el.dataset.value}"]`)?.focus(); },
   "students-reset": () => { Object.assign(ui.students, { q: "", stage: "all", level: "", program: "", period: "", tutor: "", page: 1 }); render(); },
   "new-student": () => openStudentForm(null),
+  "open-pendaftaran": () => { location.hash = "#/pendaftaran"; },
+  "pendaftaran-save": (el) => savePendaftaran(el),
+  "pendaftaran-new": () => { ui.pendaftaran = { q: "", studentId: null }; render(); $("#pf-q")?.focus(); },
+  "pendaftaran-person": (el) => { ui.pendaftaran.studentId = el.dataset.id; render(); },
+  "lead-daftarkan": (el) => { ui.pendaftaran = { q: "", studentId: el.dataset.id }; location.hash = "#/pendaftaran"; },
+  "edit-pendaftaran": (el) => openPendaftaranForm(el.dataset.id),
+  "export-leads": () => exportLeads(),
   "edit-student": (el) => openStudentForm(el.dataset.id),
   "export-students": () => exportStudents(db.students.filter((s) => studentMatches(s, ui.students, false))),
   "mark-contacted": (el) => markContacted(studentById(el.dataset.id)),
@@ -2958,6 +3355,8 @@ const CHANGES = {
   "students-period": (el) => { ui.students.period = el.value; ui.students.page = 1; renderStudentsResults(); },
   "students-tutor": (el) => { ui.students.tutor = el.value; ui.students.page = 1; renderStudentsResults(); },
   "attempts-level": (el) => { const f = ui.attempts[ui.test]; f.level = el.value; f.page = 1; renderAttemptsResults(); },
+  "pf-program": () => fillPfOptions(),
+  "pf-period": () => fillPfOptions(),
   "attempts-days": (el) => { const f = ui.attempts[ui.test]; f.days = el.value; f.page = 1; renderAttemptsResults(); },
   "attempts-period": (el) => { const f = ui.attempts[ui.test]; f.period = el.value; f.page = 1; renderAttemptsResults(); },
   "attempts-program": (el) => { const f = ui.attempts[ui.test]; f.program = el.value; f.page = 1; renderAttemptsResults(); },
@@ -3001,6 +3400,7 @@ const CHANGES = {
 let searchTimer = null;
 const INPUTS = {
   "students-q": (el) => { clearTimeout(searchTimer); searchTimer = setTimeout(() => { ui.students.q = el.value; ui.students.page = 1; renderStudentsResults(); }, 140); },
+  "pf-q": (el) => { clearTimeout(searchTimer); searchTimer = setTimeout(() => { ui.pendaftaran.q = el.value; render(); }, 140); },
   "questions-q": (el) => { clearTimeout(searchTimer); searchTimer = setTimeout(() => { ui.questions[ui.test].q = el.value; renderQuestionsResults(); }, 140); },
   "attempts-q": (el) => { clearTimeout(searchTimer); searchTimer = setTimeout(() => { const f = ui.attempts[ui.test]; f.q = el.value; f.page = 1; renderAttemptsResults(); }, 140); },
   "time-dirty": () => { clearErrors($("#panel-time")); syncTimeForm(); },
@@ -3017,6 +3417,7 @@ const INPUTS = {
 const FORMS = {
   question: (form) => saveQuestion(form),
   student: (form) => saveStudent(form),
+  pendaftaran: (form) => savePendaftaranForm(form),
   program: (form) => saveProgram(form),
   wa: (form) => sendWa(form),
   certtype: (form) => saveCertType(form),

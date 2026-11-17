@@ -111,10 +111,12 @@ Every response is `no-store`. JSON bodies are capped at 16 KB and the speaking u
 
 | Sidebar menu | Content |
 |---|---|
-| Ringkasan | Metric strip, follow-up queue for status Baru, placement level spread, hardest placement questions |
-| Database Siswa | CRM table with status chips, search, filters for periode, program, tutor, and level, bulk actions, CSV export, and a full record page per student |
+| Ringkasan | Metric strip, follow-up queue for status Baru (leads only, cold leads excluded), placement level spread, hardest placement questions |
+| Pendaftaran | One form to register a person into a program: search an existing lead or student first, then identity fields, program, durasi, periode, kelas. Recent registrations below |
+| Database Siswa | Only students with at least one non-cancelled registration. Chips filter Aktif, Selesai, Tidak lanjut. CRM search, filters, bulk actions, CSV export, and a full record page per student |
 | Sertifikat | Sertifikat terbit lists every issued certificate with search, a type filter, and status chips. Pengaturan lists the certificate types with their template, number format, reset rule, last number, and signer. Each student page also has a Sertifikat panel |
-| Placement Test, Pre-test, Post-test | Soal & Jawaban, Submission, and Pengaturan for each test |
+| Placement Test | Soal & Jawaban, Submission, Lead (placement contacts without a registration), and Pengaturan |
+| Pre-test, Post-test | Soal & Jawaban, Submission, and Pengaturan |
 | Program & Kelas | Program catalog with durations and prices, intake periods, classes, and tutors |
 
 The sidebar stays on the left at every width and collapses to an icon rail; the choice is saved in localStorage under `tnec-nav-collapsed`. The team does not use a PIC. Each enrolled student has a class shown as Tutor / Kelas, for example Aldo / C1. A class is one program, one period, and one tutor, and the tutor must be ticked on that program. Notes and activity on the student page sit in a folded section that is closed by default.
@@ -123,7 +125,15 @@ The user rejected five earlier versions. Rejected patterns: a generic stat card 
 
 The client loads everything from `GET /api/admin/bootstrap`, then loads a student's activities and a submission's answers when those pages open. Every change goes through the API, then the client reloads. Test links point at `PUBLIC_WEB_URL`.
 
-Admin routes, all under `/api/admin`, need a session except `login` and `setup`, and reject writes whose `Origin` is not the admin app's own origin: `bootstrap`, `logout`, `students` (create, bulk, get, patch, delete, notes, whatsapp, invite), `tests/:key` (settings, questions, reorder, duplicate, toggle, apply-seconds), `levels`, `attempts/:id` (detail, void, restore, resend-email, delete, bulk-delete), `speaking/:id` (audio, grade, retry, skip, reviewed), the catalog (`programs`, `periods`, `classes`, `tutors`), and certificates (`certificate-types` create, update, delete; `certificates` issue, update, revoke, restore). The printable page `/admin/certificates/<id>` needs a session too; only the template CSS and SVG files next to it are served without one.
+Admin routes, all under `/api/admin`, need a session except `login` and `setup`, and reject writes whose `Origin` is not the admin app's own origin: `bootstrap`, `logout`, `students` (create, bulk, get, patch, delete, notes, whatsapp, invite), `pendaftaran` (create, update), `tests/:key` (settings, questions, reorder, duplicate, toggle, apply-seconds), `levels`, `attempts/:id` (detail, void, restore, resend-email, delete, bulk-delete), `speaking/:id` (audio, grade, retry, skip, reviewed), the catalog (`programs`, `periods`, `classes`, `tutors`), and certificates (`certificate-types` create, update, delete; `certificates` issue, update, revoke, restore). The printable page `/admin/certificates/<id>` needs a session too; only the template CSS and SVG files next to it are served without one.
+
+## Pendaftaran and the lead model
+
+A registration is one row in `pendaftaran`: a student, a program, a period, an optional duration and class, a status (`aktif`, `selesai`, `batal`), and who registered it. One student can have many rows, one per program and period, and the student row's program columns always mirror the newest non-cancelled registration. The profile's Perjalanan belajar lists every registration oldest to newest, editable through a dialog; cancelling the last non-cancelled row returns the person to the lead side and resets the stage.
+
+Database Siswa only lists students with at least one non-cancelled registration. Everyone else is a lead: a placement test contact that never joined a program. Leads live in the Placement Test Lead tab, carry the follow-up stages Baru, Dihubungi, Konsultasi, Lepas, go cold (Dingin) after 90 days without activity, and leave the Ringkasan queue when cold. Registering a lead moves it into Database Siswa and sets the stage to Terdaftar. The old stage chips are gone from the student list; the student form no longer sets program or stage Terdaftar directly, because a registration is the only way in.
+
+The student row also carries the identity fields collected at registration: tempat lahir, tanggal lahir (ISO date), kota (the old city column, now labelled Kota/Kabupaten), provinsi, kode pos, jenjang pendidikan, and tahu TN dari mana. They are filled in the Pendaftaran form and editable on the profile. "Daftar TN berapa kali" counts the non-cancelled registrations.
 
 ## Speaking, scored by Speechace
 
@@ -167,7 +177,8 @@ Times are Unix seconds in BIGINT columns, flags are 0 or 1 in INTEGER columns, a
 | `attempts`, `answers` | One row per attempt for all three tests; one row per question with the key used at grading time. `result_token` is the private result link |
 | `tests`, `questions`, `levels` | Settings, question banks (status `aktif` or `draf`), placement thresholds with `program_url` and `program_image` for the result page cards |
 | `speaking_submissions` | One recording per placement attempt: the audio as `bytea`, its work queue status, the five scores, the transcript, and the Speechace response |
-| `students`, `activities` | The student database and its history |
+| `students`, `activities` | The student database and its history. The identity fields live here, filled at registration |
+| `pendaftaran` | One row per program joined, per period: student, program, duration, period, class, status, note, who registered, when. Cancelling keeps the row |
 | `programs`, `program_durations`, `program_tutors`, `tutors`, `periods`, `classes` | The catalog |
 | `invites` | Personal pre-test and post-test links; only the token hash is stored |
 | `wa_messages` | Every WhatsApp send attempt |

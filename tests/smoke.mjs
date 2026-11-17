@@ -362,7 +362,31 @@ assert.ok(emailWithLink.html.includes("Buka hasil lengkap di web"));
 const emailNoLink = buildResultEmail({ name: "Rani", email: "rani@example.com", score: 13, total: 25, level: levelForScore(13) });
 assert.equal(emailNoLink.html.includes("Halaman hasil lengkap"), false, "without a token the panel stays away");
 
-/* ---------- Speaking: the upload the browser sends ---------- */
+/* ---------- Pendaftaran: the shared rules ---------- */
+import { latestPendaftaran, daftarCount, isColdLead, normalizeBirthDate, normalizeOption, LEAD_COLD_DAYS } from "@tnec/core/pendaftaran";
+const pdfRows = [
+  { status: "aktif", registered_at: 1_700_000_000, program_id: "prg_a" },
+  { status: "batal", registered_at: 1_710_000_000, program_id: "prg_b" },
+  { status: "selesai", registered_at: 1_720_000_000, program_id: "prg_c" },
+];
+const latest = latestPendaftaran(pdfRows);
+assert.equal(latest.program_id, "prg_c", "a cancelled row never becomes the latest");
+assert.equal(latestPendaftaran([{ status: "batal", registered_at: 5 }]), null);
+assert.equal(daftarCount(pdfRows), 2, "cancelled rows still count as a registration");
+assert.equal(daftarCount([]), 0);
+assert.equal(isColdLead({ stage: "baru" }, 1_000_000, 1_000_000 + (LEAD_COLD_DAYS + 1) * 86400), true, "a lead untouched past 90 days goes cold");
+assert.equal(isColdLead({ stage: "baru" }, 1_000_000, 1_000_000 + (LEAD_COLD_DAYS - 1) * 86400), false);
+assert.equal(isColdLead({ stage: "lepas" }, 1, 1_000_000_000), false, "lepas is never cold");
+assert.equal(normalizeBirthDate("2005-08-17"), "2005-08-17");
+assert.equal(normalizeBirthDate(""), "");
+assert.equal(normalizeBirthDate("17-08-2005"), null);
+assert.equal(normalizeBirthDate("2005-02-30"), null, "31 February does not exist");
+assert.equal(normalizeBirthDate("3000-01-01"), null, "a birthdate in the future is refused");
+assert.equal(normalizeOption("S1", ["SD", "SMP", "SMA/SMK", "D3", "S1", "S2", "S3"]), "S1");
+assert.equal(normalizeOption("", ["S1"]), "");
+assert.equal(normalizeOption("S4", ["S1"]), null);
+
+
 assert.equal(SPEAKING_MAX_BYTES, 3 * 1024 * 1024);
 assert.equal(speakingType("audio/webm;codecs=opus"), "audio/webm");
 assert.equal(speakingType("Audio/MP4"), "audio/mp4");

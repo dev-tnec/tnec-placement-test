@@ -687,3 +687,7 @@ body.nav-collapsed .account__out { margin-left: 0; }
 .speak-grade__grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px 20px; }
 @media (max-width: 1180px) { .speak-columns { grid-template-columns: 1fr; gap: 24px; } }
 @media (max-width: 767px) { .speak-grade__grid { grid-template-columns: 1fr 1fr; } }
+
+/* ---------- Pendaftaran ---------- */
+.pf-hits { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.pf-hits .btn .cell-sub { display: block; text-align: left; font-size: 11px; color: var(--text-secondary); font-weight: 400; }
