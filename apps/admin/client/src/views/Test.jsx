@@ -339,7 +339,7 @@ function AttemptRow({ a, sel, onToggle }) {
       <td className="nowrap tnum">{listen ? `${listen.raw} / 40, band ${listen.band}` : <span className="muted">Tidak ada</span>}</td>
       <td className="nowrap tnum">{read ? `${read.raw} / 40, band ${read.band}` : <span className="muted">Tidak ada</span>}</td>
       <td className="nowrap tnum">{write ? `band ${write.band}` : <span className="muted">Belum dinilai</span>}</td>
-      <td className="nowrap tnum">{speak ? `band ${speak.band}` : <span className="muted">{a.speakingStatus === "failed" ? "Gagal" : "Belum"}</span>}</td>
+      <td className="nowrap tnum">{speak ? `band ${speak.band}` : <span className="muted">{a.speakingStatus === "skipped" ? "Dilewati" : a.speakingStatus === "failed" ? "Gagal" : "Belum"}</span>}</td>
       <td><strong className="tnum">{bands.overall || "-"}</strong></td>
       <td className="hide-md">{a.audioPlayedAt ? <><Icon name="clock" cls="icon--sm" /> {fmtDateTime(a.audioPlayedAt)}</> : <span className="muted">Belum diputar</span>}</td>
       {tail}
@@ -792,7 +792,7 @@ export function AttemptDetail({ testKey, id }) {
       }
     }
     if (!bands.skills.some((s) => s.skill === "Speaking")) {
-      cells.push(cell("Speaking", a.speakingStatus === "failed" ? "Gagal" : "Belum dinilai", "dinilai otomatis dari rekaman"));
+      cells.push(cell("Speaking", a.speakingStatus === "skipped" ? "Dilewati" : a.speakingStatus === "failed" ? "Gagal" : "Belum dinilai", "dinilai otomatis dari rekaman"));
     }
     cells.push(cell("Audio", a.audioPlayedAt ? "Diputar" : "Belum diputar", a.audioPlayedAt ? fmtDateTime(a.audioPlayedAt) : "aturan mock: sekali per attempt"));
   } else if (testKey === "placement") {
@@ -954,7 +954,7 @@ function MockupSpeakingPanel({ a }) {
     setBusy(false);
   }
 
-  if (!answers.length && !speaking) return null;
+  if (!answers.length && !speaking && a.speakingStatus !== "skipped") return null;
   return <section className="panel" aria-label="Speaking">
     <header className="panel__head"><div>
       <h2 className="panel__title">Speaking</h2>
@@ -963,6 +963,7 @@ function MockupSpeakingPanel({ a }) {
     {hasFailed ? <button className="btn btn--quiet btn--sm" type="button" disabled={busy || a.loading} onClick={retry}>{busy ? "Mengantrekan..." : "Nilai ulang yang gagal"}</button> : null}
     </header>
     {a.loading ? <p className="loading-line" role="status">Memuat rekaman...</p> : <>
+      {a.speakingStatus === "skipped" ? <Notice icon="user" neutral>Peserta melewati bagian speaking, jadi tidak ada rekaman yang dinilai.</Notice> : null}
       {a.speakingStatus === "failed" ? <Notice icon="alert" neutral>Penilaian speaking gagal: {a.speakingError || "tidak ada pesan."} Perbaiki kuota atau kunci Speechace, lalu tekan Nilai ulang yang gagal.</Notice> : null}
       {speaking ? <div className="writing-total"><span>Band Speaking</span><strong>{speaking.band}</strong></div> : null}
       {speaking ? <dl className="writing-criteria speaking-criteria">
