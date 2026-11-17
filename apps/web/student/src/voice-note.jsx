@@ -52,6 +52,7 @@ export function VoiceNote({ label, current, duration, paused, finished = false, 
         aria-label="Posisi audio"
         aria-valuetext={`${clock(current)} dari ${clock(duration || 0)}`}
         disabled={!seekable}
+        style={{ "--at": `${duration ? (current / duration) * 100 : 0}%` }}
       />
       <span className="voice-note__time" id="audio-time">{clock(paused && !current ? duration || 0 : current)}</span>
     </div>

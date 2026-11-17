@@ -1007,7 +1007,13 @@ progress::-moz-progress-bar { background: var(--navy-900); border-radius: var(--
   height: 6px;
   appearance: none;
   border-radius: var(--radius-pill);
-  background: var(--gray-200);
+  background: linear-gradient(
+    to right,
+    var(--navy-900) 0%,
+    var(--navy-900) var(--at, 0%),
+    var(--gray-200) var(--at, 0%),
+    var(--gray-200) 100%
+  );
   cursor: pointer;
 }
 
