@@ -296,7 +296,7 @@ The details screen must not reveal the score or level. Its job is to collect the
 
 ## 15. Email template
 
-The result email is a 600px single column with inline styles only, because email clients drop external CSS. The header is navy with the brand eyebrow in yellow, the body is white with a 16px radius, the level sits in a pale surface block with a red score pill, the recommendation uses a yellow left edge, and the CTA is a navy pill to WhatsApp. The footer carries the campus address and the domain.
+The result email is a 600px single column with inline styles only, because email clients drop external CSS. The header is navy with the brand eyebrow in yellow, the body is white with a 16px radius, the level sits in a pale surface block with a red score pill, the recommendation sits in an even pale yellow block with a uniform border, and the CTA is a navy pill to WhatsApp. The footer carries the campus address and the domain.
 
 The email uses the same hex values as this file. It cannot use CSS variables, so the values are repeated in `src/email.js`. That is the only allowed duplication.
 

@@ -8,6 +8,7 @@ const NAVY = "#0A1B38";
 const NAVY_700 = "#16325C";
 const RED = "#E3201F";
 const YELLOW = "#F7B500";
+const YELLOW_LIGHT = "#FFF6DC";
 const GRAY = "#5C6B7F";
 const BORDER = "#E6E2D9";
 const SURFACE = "#F7F8FA";
@@ -145,7 +146,7 @@ export function buildResultEmail({ name, email, score, total, level, speaking = 
       ${resultLinkHtml(resultUrl)}
       <p style="margin:0 0 20px;font-size:16px;line-height:1.65;">${escapeHtml(level.description)}</p>
 
-      <div style="border-left:4px solid ${YELLOW};padding:4px 0 4px 16px;margin:0 0 28px;">
+      <div style="background:${YELLOW_LIGHT};border:1px solid ${BORDER};border-radius:12px;padding:16px 20px;margin:0 0 28px;">
         <div style="font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:${GRAY};font-weight:700;">Rekomendasi</div>
         <div style="font-size:18px;font-weight:700;color:${NAVY};margin-top:4px;">${escapeHtml(level.program)}</div>
       </div>
