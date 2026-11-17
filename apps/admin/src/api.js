@@ -15,7 +15,7 @@ import {
 } from "@tnec/core/pendaftaran";
 import { sendWhatsApp, whatsappConfigured } from "@tnec/core/whatsapp";
 import { buildResultEmail, buildInviteEmail } from "@tnec/core/email";
-import { parseRosterCsv, inviteWindow, formatWib, EMAIL_DAILY_LIMIT } from "@tnec/core/mockup-bulk";
+import { parseRosterCsv, inviteWindow, formatWib, EMAIL_DAILY_LIMIT, mockupCode } from "@tnec/core/mockup-bulk";
 import { staticResponse, textResponse } from "@tnec/core/node-server";
 import { deliverInBackground, runInBackground } from "@tnec/core/delivery";
 import { drainInviteQueue, emailsSentRecently } from "./invite-queue.js";
@@ -871,14 +871,7 @@ async function sendStudentWhatsApp(request, env, user, url, id) {
   return json({ ok: true, messageId: result.messageId });
 }
 
-/* The IELTS mockup invite carries a 6 character code that the student types in; the other tests
-   keep plain links. Unambiguous letters only, so reading it over WhatsApp is easy. */
-const CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
-function randomCode() {
-  let code = "";
-  for (let i = 0; i < 6; i += 1) code += CODE_ALPHABET[Math.floor(Math.random() * CODE_ALPHABET.length)];
-  return code;
-}
+/* The IELTS mockup invite code comes from the shared pure module, so the smoke test covers it. */
 
 async function createInvite(request, env, user, url, id) {
   const s = await getStudentRow(env, id);
@@ -894,7 +887,7 @@ async function createInvite(request, env, user, url, id) {
   let packageTotal = null;
   if (test === "ielts-mockup") {
     for (let i = 0; i < 5 && !code; i += 1) {
-      const candidate = randomCode();
+      const candidate = mockupCode();
       const taken = await env.DB.prepare("SELECT 1 FROM invites WHERE code = ?").bind(candidate).first();
       if (!taken) code = candidate;
     }
@@ -1098,7 +1091,7 @@ async function confirmSessionImport(request, env, user, url, id) {
     }
     let code = null;
     for (let i = 0; i < 20 && !code; i += 1) {
-      const candidate = randomCode();
+      const candidate = mockupCode();
       if (usedCodes.has(candidate)) continue;
       if (await env.DB.prepare("SELECT 1 FROM invites WHERE code = ?").bind(candidate).first()) continue;
       usedCodes.add(candidate);
@@ -1189,7 +1182,7 @@ async function moveInviteToSession(request, env, user, url, inviteId) {
   if (window.error) throw new HttpError(400, window.error);
   let code = null;
   for (let i = 0; i < 20 && !code; i += 1) {
-    const candidate = randomCode();
+    const candidate = mockupCode();
     if (await env.DB.prepare("SELECT 1 FROM invites WHERE code = ?").bind(candidate).first()) continue;
     code = candidate;
   }

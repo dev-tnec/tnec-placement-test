@@ -141,15 +141,17 @@ Tombol undangan per siswa di halaman profil tetap ada untuk kasus satu orang, da
 
 | Method | Path | Isi |
 |---|---|---|
-| GET | `/api/admin/mockup/sessions` | Daftar sesi dan ringkasan roster |
+| GET | `/api/admin/bootstrap` | Daftar sesi beserta ringkasan roster dan pemakaian email 24 jam terakhir |
 | POST | `/api/admin/mockup/sessions` | Membuat sesi |
 | PUT | `/api/admin/mockup/sessions/:id` | Mengubah sesi |
-| POST | `/api/admin/mockup/sessions/:id/import` | Membaca berkas dan mengembalikan pratinjau, tanpa menulis |
+| POST | `/api/admin/mockup/sessions/:id/import` | Membaca berkas dan mengembalikan pratinjau, tanpa menulis. Batas isi 4 MB karena JSON memperbesar CSV sekitar dua kalinya |
 | POST | `/api/admin/mockup/sessions/:id/import/confirm` | Menulis siswa, pendaftaran, undangan, dan antrean |
 | POST | `/api/admin/mockup/sessions/:id/send` | Tim menekan "Kirim semua", antrean kedua kanal mulai |
-| POST | `/api/admin/mockup/sessions/:id/pause` | Menjeda antrean |
-| POST | `/api/admin/mockup/invites/:id/retry` | Mengulang satu kanal untuk satu siswa |
+| POST | `/api/admin/mockup/sessions/:id/pause` | Menjeda atau melanjutkan antrean |
+| POST | `/api/admin/mockup/sessions/:id/test-send` | Satu pesan uji ke nomor atau email tim |
 | GET | `/api/admin/mockup/sessions/:id/roster` | Roster lengkap dengan status kedua kanal |
+| POST | `/api/admin/mockup/invites/:id/retry` | Mengulang satu kanal untuk satu siswa |
+| POST | `/api/admin/mockup/invites/:id/move` | Memindahkan undangan ke sesi lain, undangan lama yang belum dipakai dihapus |
 
 Semua route butuh sesi admin dan menolak tulisan dari origin lain, seperti route admin yang sudah ada. Impor massal mencatat aktivitas admin, jumlah baris, dan nama sesi.
 
@@ -159,8 +161,8 @@ Migrasi baru `db/migrations/0015_mockup_sessions.sql`.
 
 | Tabel | Perubahan |
 |---|---|
-| `mockup_sessions` | Tabel baru: `id`, `name`, `window_mode`, `range_start`, `range_end`, `entry_grace_seconds`, `program_id`, `period_id`, `duration_id`, `package_id`, `quota`, `status`, `created_by`, `created_at`, `updated_at` |
-| `invites` | Tambah `session_id` yang menunjuk ke `mockup_sessions`, nullable untuk pre-test dan post-test |
+| `mockup_sessions` | Tabel baru: `id`, `name`, `window_mode`, `range_start`, `range_end`, `entry_grace_seconds`, `program_id`, `period_id`, `duration_id`, `package_id`, `quota`, `queue_paused`, `status`, `created_by`, `created_at`, `updated_at` |
+| `invites` | Tambah `session_id` yang menunjuk ke `mockup_sessions`, nullable untuk pre-test dan post-test. Kode undangan dibuat oleh modul murni `mockupCode()` di `mockup-bulk.js`, yang sama untuk undangan tunggal dan impor massal, dan `tests/smoke.mjs` memeriksanya |
 | `mockup_invite_queue` | Tabel baru: `id`, `invite_id`, `email_status`, `email_attempts`, `email_error`, `email_sent_at`, `wa_status`, `wa_attempts`, `wa_error`, `wa_sent_at`, `plain_token`, `created_at` |
 | `programs`, `program_durations` | Seed program "IELTS Mockup" mode Online dan durasi "1 hari" tanpa harga |
 | `students` | Tidak berubah. Sumber "IELTS Mockup" ditambahkan ke daftar sumber |

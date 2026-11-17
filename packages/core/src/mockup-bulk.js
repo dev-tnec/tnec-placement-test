@@ -11,6 +11,14 @@ export const EMAIL_DAILY_LIMIT = 200;
 /** Same alphabet as the single invite dialog: no ambiguous letters, easy to read on a phone. */
 export const MOCKUP_CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
 
+/** One random 6 character invite code. Uniqueness is the caller's job: the DB check plus a
+ *  per-import Set, because both need the database or the batch context this pure module lacks. */
+export function mockupCode() {
+  let code = "";
+  for (let i = 0; i < 6; i += 1) code += MOCKUP_CODE_ALPHABET[Math.floor(Math.random() * MOCKUP_CODE_ALPHABET.length)];
+  return code;
+}
+
 export const MAX_IMPORT_ROWS = 500;
 
 const DAYS = ["Minggu", "Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu"];

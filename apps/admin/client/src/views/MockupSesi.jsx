@@ -3,10 +3,11 @@
 // student with an invite, and the roster shows the email and WhatsApp status of every invite.
 
 import { useEffect, useState } from "react";
-import { api, db, mutate, useVersion } from "../store.js";
-import { fmtDate, fmtDateTime, fmtWa, programById, periodById } from "../lib.js";
-import { Empty, Icon, PageHead, Status, rowRun } from "../ui.jsx";
+import { api, db, mutate, useVersion, NOW } from "../store.js";
+import { fmtDate, fmtDateTime, fmtWa, programById, periodById, downloadCsv, toDateInput } from "../lib.js";
+import { Empty, Icon, PageHead, PendaftaranStatus, Status, rowRun } from "../ui.jsx";
 import { openSessionEditor, openSessionImport, openMoveInvite, openTestSend } from "../dialogs.jsx";
+import { toast } from "../dom.js";
 
 const KIND = { draft: ["Draf", "ring"], open: ["Terbuka", "navy"], closed: ["Selesai", "ring"], cancelled: ["Dibatalkan", "ring"] };
 
@@ -28,6 +29,27 @@ function windowText(s) {
     return `${fmtDate(s.rangeStart)} sampai ${fmtDate(s.rangeEnd)}`;
   }
   return `Terjadwal, tenggang ${Math.round(s.entryGraceSeconds / 60)} menit`;
+}
+
+/* The roster follows the same CSV export as the other lists: what the table shows is what
+   downloads, including both channel statuses. */
+function exportRoster(session, rows) {
+  downloadCsv(`sesi-mockup-${session.name.replace(/[^\w-]+/g, "-").toLowerCase()}-${toDateInput(NOW)}.csv`, [
+    ["Nama", "WhatsApp", "Email", "Kode tes", "Jendela mulai", "Jendela akhir", "Status email", "Status WhatsApp", "Status tes", "Status pendaftaran"],
+    ...rows.map((r) => {
+      const reg = db.pendaftaran.find((p) => p.studentId === r.studentId
+        && p.programId === session.programId && p.periodId === session.periodId && p.status !== "batal");
+      return [
+        r.name, fmtWa(r.wa), r.email, r.code,
+        session.windowMode === "fleksibel" ? fmtDate(r.opensAt) : fmtDateTime(r.opensAt),
+        session.windowMode === "fleksibel" ? fmtDate(r.expiresAt) : fmtDateTime(r.expiresAt),
+        QUEUE_LABEL[r.emailStatus] || r.emailStatus, QUEUE_LABEL[r.waStatus] || r.waStatus,
+        r.submittedAt ? "Sudah mengerjakan" : r.attemptStatus ? "Sedang mengerjakan" : "Belum mulai",
+        reg ? (reg.status === "aktif" ? "Aktif" : reg.status === "selesai" ? "Selesai" : "Batal") : "Tidak ada",
+      ];
+    }),
+  ]);
+  toast(`${rows.length} baris peserta diekspor ke CSV.`);
 }
 
 /* ===================== Sesi list ===================== */
@@ -109,6 +131,7 @@ export function SessionDetail({ id }) {
         {windowText(session)} &middot; {db.tests["ielts-mockup"].packages.find((p) => p.id === session.packageId)?.name || "-"} &middot; {programById(session.programId)?.name || "-"}
       </p>}
       actions={<>
+        <button className="btn btn--quiet" type="button" disabled={!rows.length} onClick={() => exportRoster(session, rows)}><Icon name="download" />Ekspor CSV</button>
         <button className="btn btn--quiet" type="button" onClick={() => openSessionEditor(session.id)}><Icon name="pencil" />Ubah sesi</button>
         <button className="btn btn--quiet" type="button" onClick={() => openTestSend(session.id)}><Icon name="send" />Pesan uji</button>
         <button className="btn btn--secondary" type="button" disabled={busy || session.status === "cancelled"} onClick={() => act(`sessions/${session.id}/send`, {}, "Antrean pengiriman dimulai.")}><Icon name="send" />Kirim semua</button>
@@ -131,10 +154,14 @@ export function SessionDetail({ id }) {
         <thead><tr>
           <th scope="col">Siswa</th><th scope="col">Kode</th><th scope="col">Jendela tes</th>
           <th scope="col">Email</th><th scope="col">WhatsApp</th>
+          <th scope="col" className="hide-lg">Pendaftaran</th>
           <th scope="col" className="hide-md">Tes</th>
           <th scope="col" className="is-action"><span className="sr-only">Aksi</span></th>
         </tr></thead>
-        <tbody>{rows.map((r) => (
+        <tbody>{rows.map((r) => {
+          const reg = db.pendaftaran.find((p) => p.studentId === r.studentId
+            && p.programId === session.programId && p.periodId === session.periodId && p.status !== "batal");
+          return (
           <tr key={r.inviteId}>
             <td><a className="q-prompt" href={`#/siswa/${r.studentId}`}>{r.name}</a>
               <span className="cell-sub">{fmtWa(r.wa)}{r.email ? `, ${r.email}` : ""}</span></td>
@@ -144,6 +171,9 @@ export function SessionDetail({ id }) {
               : `${fmtDateTime(r.opensAt)} sampai ${fmtDateTime(r.expiresAt)}`}</td>
             <td><QueueChip status={r.emailStatus} error={r.emailError} /></td>
             <td><QueueChip status={r.waStatus} error={r.waError} /></td>
+            <td className="hide-lg">{reg
+              ? <PendaftaranStatus p={reg} />
+              : <span className="muted">Tidak ada</span>}</td>
             <td className="hide-md">{r.attemptStatus
               ? <Status label={r.submittedAt ? "Sudah mengerjakan" : "Sedang mengerjakan"} kind="navy" />
               : <span className="muted">Belum mulai</span>}</td>
@@ -155,7 +185,8 @@ export function SessionDetail({ id }) {
               {!r.attemptStatus ? <button className="btn btn--quiet btn--sm" type="button" onClick={() => openMoveInvite(r.inviteId, r.name, session.id)}>Pindah sesi</button> : null}
             </span></td>
           </tr>
-        ))}</tbody>
+          );
+        })}</tbody>
       </table></div>
         : <Empty title="Belum ada peserta." desc="Impor CSV peserta untuk mengisi sesi ini." />}
     </section>

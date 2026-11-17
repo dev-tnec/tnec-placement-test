@@ -28,6 +28,7 @@ import { createMailer, parseAddress } from "@tnec/core/mailer";
 import { buildInviteEmail } from "@tnec/core/email";
 import {
   parseRosterCsv, inviteWindow, formatWib, buildInviteWhatsApp, EMAIL_DAILY_LIMIT, MAX_IMPORT_ROWS,
+  MOCKUP_CODE_ALPHABET, mockupCode,
 } from "@tnec/core/mockup-bulk";
 import { buildEnv } from "@tnec/core/env";
 import { announceSetup, createAdminHandler } from "../apps/admin/server.js";
@@ -639,6 +640,16 @@ assert.ok(parseRosterCsv("nama,email\nBudi,x@y.z", { scheduled: true, now: NOW }
 assert.ok(parseRosterCsv("nama,whatsapp,tanggal_tes\nBudi,081234567890,2026-11-20", { scheduled: false, now: NOW }).fatal, "a fleksibel import with date columns is fatal");
 assert.equal(MAX_IMPORT_ROWS, 500);
 assert.equal(EMAIL_DAILY_LIMIT, 200);
+
+// The invite code: 6 characters from the unambiguous alphabet, and not the same every time.
+const codes = new Set();
+for (let i = 0; i < 50; i += 1) {
+  const code = mockupCode();
+  assert.equal(code.length, 6);
+  assert.ok([...code].every((c) => MOCKUP_CODE_ALPHABET.includes(c)), `code ${code} uses the shared alphabet`);
+  codes.add(code);
+}
+assert.ok(codes.size > 45, "50 generated codes are near-unique");
 
 const session = { windowMode: "terjadwal", entryGraceSeconds: 7200 };
 const scheduledWindow = inviteWindow(session, 1_800_028_800);

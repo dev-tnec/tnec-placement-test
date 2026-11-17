@@ -15,6 +15,7 @@ import {
 } from "./lib.js";
 import { certFormatProblem, certPeriodLabel, formatCertNumber } from "./cert-number.js";
 import { Icon, OptList } from "./ui.jsx";
+import { buildInviteWhatsApp, formatWib } from "@tnec/core/mockup-bulk";
 
 /* ===================== Dialog store ===================== */
 let dlg = null;
@@ -1872,7 +1873,13 @@ function SessionImportDialog({ sessionId }) {
                 <td className="nowrap tnum">{fmtWa(r.wa) || r.waRaw}</td>
                 <td>{r.studentId ? <span>lama: {r.studentName}</span> : r.errors.length ? <span className="muted">-</span> : <span>baru</span>}</td>
                 <td className="nowrap">{scheduled && r.scheduledAt ? `${r.date} ${r.time}` : scheduled ? <span className="muted">-</span> : "rentang sesi"}</td>
-                <td>{r.errors.length ? r.errors.join(" ") : r.windowError ? r.windowError : r.inviteExisting ? "Sudah punya undangan di sesi ini, dilewati." : <span className="muted">Siap diimpor</span>}</td>
+                <td>{r.errors.length
+                  ? r.errors.join(" ")
+                  : r.windowError
+                    ? r.windowError
+                    : r.inviteExisting
+                      ? "Sudah punya undangan di sesi ini, dilewati."
+                      : `${r.registrationExisting ? "Pendaftaran mockup sudah ada, dipakai ulang." : "Pendaftaran mockup baru dibuat."} Kode tes dibuat otomatis saat konfirmasi.`}</td>
               </tr>
             ))}</tbody>
           </table></div> : null}
@@ -1962,6 +1969,21 @@ export function openTestSend(sessionId) { openDialog({ kind: "test-send", sessio
 
 function TestSendDialog({ sessionId }) {
   const s = db.sessions.find((x) => x.id === sessionId);
+  // The preview uses the same builder as the real queue, with sample data, so what the team
+  // reads here is what the student receives.
+  const sampleNow = Math.floor(Date.now() / 1000);
+  const sampleSchedule = s?.windowMode === "fleksibel"
+    ? `${formatWib((s.rangeStart ?? sampleNow * 1000) / 1000)} sampai ${formatWib((s.rangeEnd ?? (sampleNow + 86400) * 1000) / 1000)}`
+    : `${formatWib(sampleNow + 7200)} (contoh jadwal)`;
+  const sampleDeadline = `paling telat ${formatWib(sampleNow + 7200 + (s?.entryGraceSeconds ?? 7200))}`;
+  const sampleText = buildInviteWhatsApp({
+    firstName: "Peserta",
+    sessionName: s?.name || "Sesi",
+    schedule: sampleSchedule,
+    link: `${db.publicUrl}/?undangan=contoh-tautan`,
+    code: "ABC234",
+    deadline: sampleDeadline,
+  });
 
   async function send(e) {
     e.preventDefault();
@@ -1994,6 +2016,11 @@ function TestSendDialog({ sessionId }) {
             <div className="field">
               <label className="label" htmlFor="ts-email">Email uji (opsional)</label>
               <input className="input" id="ts-email" type="email" placeholder="nama@contoh.com" />
+            </div>
+            <div className="field span-all">
+              <span className="label">Pratinjau isi pesan</span>
+              <pre className="ts-preview">{sampleText}</pre>
+              <p className="hint">Email memakai isi yang sama dengan tautan dan kode yang bisa diklik.</p>
             </div>
             <p className="error span-all" id="ts-err" hidden></p>
           </div>

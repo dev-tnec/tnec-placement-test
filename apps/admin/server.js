@@ -12,7 +12,9 @@ import { startSpeakingWorker, stopSpeakingWorker } from "@tnec/core/speaking";
 import { handleAdmin, serveAdminPage, adminCount, setSetupCode } from "./src/api.js";
 import { startInviteQueueWorker, stopInviteQueueWorker } from "./src/invite-queue.js";
 
-/** The mockup roster import sends a whole CSV in one JSON body, bigger than the admin default. */
+/** The mockup roster import sends a whole CSV in one JSON body. JSON escaping can nearly double
+ *  the size (quotes and newlines expand to two characters each), so the transport cap is twice
+ *  the 2 MB file cap from the PRD. */
 const IMPORT_ROUTES = /\/api\/admin\/mockup\/sessions\/[\w-]+\/import/;
 
 export function createAdminHandler() {
@@ -21,7 +23,7 @@ export function createAdminHandler() {
     if (url.pathname.startsWith("/api/admin/")) return handleAdmin(request, env, url, ctx);
     return serveAdminPage(request, env, url);
   };
-  handler.bodyLimit = (method, pathname) => (method === "POST" && IMPORT_ROUTES.test(pathname) ? 2 * 1024 * 1024 : null);
+  handler.bodyLimit = (method, pathname) => (method === "POST" && IMPORT_ROUTES.test(pathname) ? 4 * 1024 * 1024 : null);
   return handler;
 }
 
