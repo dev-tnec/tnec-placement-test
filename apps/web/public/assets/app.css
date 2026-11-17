@@ -1548,6 +1548,10 @@ kbd {
 
 /* ---------- Speaking ---------- */
 
+/* The speaking screen starts with a bare card, so it needs more air at the top than the test
+   screen, and it scales down on short viewports. */
+.speak-wrap { padding-block: clamp(var(--space-12), 9vh, 96px) var(--space-12); }
+
 .speaking-grid {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
@@ -1607,7 +1611,7 @@ kbd {
   display: flex;
   align-items: center;
   gap: var(--space-3);
-  margin-top: var(--space-5);
+  margin-top: var(--space-8);
   margin-bottom: var(--space-4);
 }
 
