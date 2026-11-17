@@ -74,7 +74,7 @@ Isinya diambil dari tabel konversi paket Desember yang sudah ada di bahan (`full
 
 1. Skor mentah per skill dihitung dari `answers` yang sudah menyimpan benar atau salah per soal, dikelompokkan lewat kolom `skill` soal.
 2. Attempt menyimpan `bands`, JSON berisi band per skill dan band keseluruhan, dihitung server saat submit dan disimpan supaya hasil tidak berubah kalau tabel konversi diedit belakangan.
-3. Layar hasil untuk undangan saat ini menampilkan nilai 0 sampai 100. Untuk `ielts-mockup` layarnya berganti: skor mentah dan band per skill, band keseluruhan, dan kalimat "Hasil ini adalah perkiraan dan bukan skor resmi IELTS. Skor resmi hanya diterbitkan oleh British Council atau IDP."
+3. Laporan hasil adalah satu halaman React di `/hasil` untuk keempat tes. Undangan membuka `/hasil?attempt=<id>`, dan tes penempatan membuka `/hasil?token=<token>`. Untuk `ielts-mockup` laporan menampilkan skor mentah dan band per skill, band keseluruhan, evaluasi Writing dan Speaking, dan kalimat "Hasil ini adalah perkiraan dan bukan skor resmi IELTS. Skor resmi hanya diterbitkan oleh British Council atau IDP."
 4. Email dan WhatsApp hasil menyusul setelah rilis pertama jalan; layar hasil dan dasbor dulu.
 
 ## 9. Akses: undangan ditambah kode

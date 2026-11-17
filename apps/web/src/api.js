@@ -57,8 +57,8 @@ async function handleApi(request, env, url) {
 
   if (path === "/api/attempts" && request.method === "POST") return createAttempt(request, env);
 
-  const mockupResult = path.match(/^\/api\/attempts\/([0-9a-f-]{36})\/result$/);
-  if (mockupResult && request.method === "GET") return getMockupResult(env, mockupResult[1]);
+  const attemptResult = path.match(/^\/api\/attempts\/([0-9a-f-]{36})\/result$/);
+  if (attemptResult && request.method === "GET") return getAttemptResult(env, attemptResult[1]);
 
   const match = path.match(/^\/api\/attempts\/([0-9a-f-]{36})\/(violation|submit|contact|speaking|speaking-skip|audio-played|speaking-answer)$/);
   if (match && request.method === "POST") {
@@ -272,11 +272,36 @@ async function logViolation(request, env, attemptId) {
   return json({ ok: true, counted: Boolean(row) });
 }
 
-function inviteResult(attempt, score, total, passed, bands, writing = null, speaking = null) {
+/** A stable public reference for the report header, for example TN-IELTS-MOCKUP-2026-1A2B. */
+function resultCode(attempt) {
+  const year = new Date(((attempt.submitted_at || attempt.started_at) || nowSeconds()) * 1000).getUTCFullYear();
+  const short = String(attempt.id || "").replace(/-/g, "").slice(0, 4).toUpperCase() || "0000";
+  return `TN-${String(attempt.test_key || "placement").toUpperCase()}-${year}-${short}`;
+}
+
+/** The name and package behind an invite attempt, for the report header. */
+async function inviteMeta(env, attempt) {
+  const invite = attempt.invite_id
+    ? await env.DB.prepare("SELECT s.name FROM invites i JOIN students s ON s.id = i.student_id WHERE i.id = ?").bind(attempt.invite_id).first()
+    : null;
+  const pkg = attempt.package_id
+    ? await env.DB.prepare("SELECT name FROM question_packages WHERE id = ?").bind(attempt.package_id).first()
+    : null;
+  return { firstName: String(invite?.name || "").split(/\s+/)[0], packageName: pkg?.name || null };
+}
+
+function inviteResult(attempt, score, total, passed, bands, writing = null, speaking = null, meta = {}) {
+  const base = {
+    test: attempt.test_key,
+    testName: TEST_NAMES[attempt.test_key],
+    date: attempt.submitted_at || attempt.started_at || null,
+    code: resultCode(attempt),
+    whatsapp: WHATSAPP,
+    ...meta,
+  };
   if (bands) {
     return {
-      test: attempt.test_key,
-      testName: TEST_NAMES[attempt.test_key],
+      ...base,
       overall: bands.overall,
       skills: bands.skills,
       ...(writing ? { writingStatus: writing.status || null, writingError: writing.error || "" } : {}),
@@ -286,8 +311,7 @@ function inviteResult(attempt, score, total, passed, bands, writing = null, spea
   }
   const nilai = total ? Math.round((score / total) * 100) : 0;
   return {
-    test: attempt.test_key,
-    testName: TEST_NAMES[attempt.test_key],
+    ...base,
     score,
     total,
     nilai,
@@ -302,7 +326,7 @@ function inviteResult(attempt, score, total, passed, bands, writing = null, spea
 /* The mockup bands: raw per skill, band per skill from band_scales, and the overall band as the
    mean rounded to the nearest half. Stored on the attempt so editing a scale never changes a
    finished result. */
-async function computeBands(env, correctBySkill) {
+async function computeBands(env, correctBySkill, skillTotals = new Map()) {
   const skills = [];
   for (const [skill, correct] of correctBySkill) {
     const { results } = await env.DB.prepare(
@@ -310,7 +334,7 @@ async function computeBands(env, correctBySkill) {
     ).bind(skill).all();
     const raw = correct;
     const band = results.length ? bandForRaw(results.map((r) => ({ raw: r.raw, band: Number(r.band) })), raw) : 0;
-    skills.push({ skill, raw, band });
+    skills.push({ skill, raw, total: skillTotals.get(skill) || 0, band });
   }
   return { skills, overall: overallBand(skills.map((s) => s.band)) };
 }
@@ -360,6 +384,7 @@ async function submitAttempt(request, env, attemptId) {
 
   let score = 0;
   const correctBySkill = new Map();
+  const skillTotals = new Map();
   const statements = [];
   for (const question of list) {
     const raw = rawAnswers[question.id];
@@ -375,6 +400,7 @@ async function submitAttempt(request, env, attemptId) {
     const isCorrect = graded.correct ? 1 : 0;
     score += isCorrect;
     correctBySkill.set(question.skill, (correctBySkill.get(question.skill) || 0) + isCorrect);
+    skillTotals.set(question.skill, (skillTotals.get(question.skill) || 0) + 1);
     const stored = question.type === "text" ? String(raw ?? "").slice(0, 300) : normalizeChoice(raw);
     statements.push(env.DB.prepare(
       `INSERT INTO answers (attempt_id, question_id, choice, is_correct, answer_key) VALUES (?, ?, ?, ?, ?)
@@ -394,7 +420,7 @@ async function submitAttempt(request, env, attemptId) {
   } else if (testKey === "post") {
     passed = (total ? Math.round((score / total) * 100) : 0) >= (attempt.pass_score ?? 70) ? 1 : 0;
   } else if (testKey === "ielts-mockup") {
-    bands = await computeBands(env, correctBySkill);
+    bands = await computeBands(env, correctBySkill, skillTotals);
     const essays = list.filter((q) => q.type === "longtext");
     if (essays.length) {
       try {
@@ -640,20 +666,26 @@ async function uploadMockupSpeaking(request, env, attemptId, url) {
   return json({ ok: true });
 }
 
-/* The result after the submit, while Speechace finishes the speaking answers. The attempt id is a
-   random UUID and only the mockup answers here, so no contact details leave the server. */
-async function getMockupResult(env, attemptId) {
+/* The result after the submit for an invited test. The attempt id is a random UUID and only this
+   attempt's result comes back, so the report can load without a session. While Speechace finishes
+   the mockup speaking answers it answers not ready, so the report keeps checking. */
+async function getAttemptResult(env, attemptId) {
   const attempt = await getAttempt(env, attemptId);
-  if ((attempt.test_key || "placement") !== "ielts-mockup") throw new HttpError(404, "Hasil tidak ditemukan.");
-  if (attempt.status !== "submitted") return json({ ready: false, speaking: { status: "pending" } });
-  const { results } = await env.DB.prepare("SELECT status FROM speaking_answers WHERE attempt_id = ?").bind(attemptId).all();
-  if (results.some((r) => r.status === "pending" || r.status === "grading")) {
-    return json({ ready: false, speaking: { status: "pending", answered: results.length, total: MOCKUP_SPEAKING_TOTAL } });
+  const testKey = attempt.test_key || "placement";
+  if (!attempt.invite_id || !["pre", "post", "ielts-mockup"].includes(testKey)) throw new HttpError(404, "Hasil tidak ditemukan.");
+  if (attempt.status !== "submitted") return json({ ready: false });
+  const meta = await inviteMeta(env, attempt);
+
+  if (testKey === "ielts-mockup") {
+    const { results } = await env.DB.prepare("SELECT status FROM speaking_answers WHERE attempt_id = ?").bind(attemptId).all();
+    if (results.some((r) => r.status === "pending" || r.status === "grading")) {
+      return json({ ready: false, speaking: { status: "pending", answered: results.length, total: MOCKUP_SPEAKING_TOTAL } });
+    }
   }
   const stored = attempt.bands ? JSON.parse(attempt.bands) : null;
-  const writing = { status: attempt.writing_status || null, error: attempt.writing_error || "" };
-  const speaking = { status: attempt.speaking_status || null, error: attempt.speaking_error || "" };
-  return json({ ready: true, result: inviteResult(attempt, attempt.score, attempt.total, attempt.passed, stored, writing, speaking) });
+  const writing = testKey === "ielts-mockup" ? { status: attempt.writing_status || null, error: attempt.writing_error || "" } : null;
+  const speaking = testKey === "ielts-mockup" ? { status: attempt.speaking_status || null, error: attempt.speaking_error || "" } : null;
+  return json({ ready: true, result: inviteResult(attempt, attempt.score, attempt.total, attempt.passed, stored, writing, speaking, meta) });
 }
 
 async function skipSpeaking(request, env, attemptId) {
@@ -686,7 +718,7 @@ async function skipSpeaking(request, env, attemptId) {
  */
 async function getResultLink(env, token) {
   const attempt = await env.DB.prepare(
-    "SELECT id, test_key, status, name, score, total, level_key, timed_out, violations FROM attempts WHERE result_token = ?",
+    "SELECT id, test_key, status, name, score, total, level_key, timed_out, violations, started_at, submitted_at FROM attempts WHERE result_token = ?",
   ).bind(token).first();
   if (!attempt) throw new HttpError(404, "Tautan hasil ini tidak ditemukan. Periksa kembali tautan yang kami kirim ke email dan WhatsApp kamu.");
   if ((attempt.test_key || "placement") !== "placement" || attempt.status !== "submitted") {
@@ -698,6 +730,7 @@ async function getResultLink(env, token) {
   ).bind(attempt.id).first();
   const levels = await loadLevels(env);
   const level = levels.find((l) => l.key === attempt.level_key) || levelFor(levels, attempt.score ?? 0);
+  const next = levels[levels.indexOf(level) + 1] || null;
 
   if (speaking && !isFinalStatus(speaking.status)) {
     return json({ ready: false, name: attempt.name || "" });
@@ -712,6 +745,11 @@ async function getResultLink(env, token) {
       timedOut: Boolean(attempt.timed_out),
       violations: attempt.violations,
       speaking: speakingFacts(speaking),
+      date: attempt.submitted_at || attempt.started_at,
+      code: resultCode(attempt),
+      whatsapp: WHATSAPP,
+      levels: levels.map((l) => ({ key: l.key, label: l.label, min: l.min, max: l.max })),
+      next: next ? { key: next.key, label: next.label, min: next.min } : null,
     },
     programs: programCards(levels, level.key),
   });

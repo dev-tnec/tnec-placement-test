@@ -27,7 +27,7 @@ All values come from `../design.md`.
 | `--navy-700` | `#16325C` | Preview card back sheet, icons on pale surfaces |
 | `--red-500` | `#E3201F` | Current level dot, timer under one minute, level pill in the result email |
 | `--red-600` | `#C41615` | Field error text and invalid input border |
-| `--red-50` | `#FDECEC` | Violation icon background only |
+| `--red-50` | `#FDECEC` | Violation icon background, and the priority skill icon on the result report |
 | `--yellow-400` | `#F7B500` | One hero word, flagged marker, done step bar, reached level dot, score number |
 | `--yellow-50` | `#FFF6DC` | Flagged button, benefit icon background |
 | `--white` | `#FFFFFF` | Cards, text on navy |
@@ -48,6 +48,7 @@ Rules:
 3. Navy on white or white on navy carries all body copy. Never red or yellow body text.
 4. Pale tints (`--yellow-50`, `--surface-50`, `--red-50`) are for notes, passages, and icon backgrounds. Never use them as a card fill.
 5. Navy tints are expressed as `rgba(10, 27, 56, .02)` to `.08`. They are the same token with alpha, not a new color.
+6. Buttons are navy. The one exception is the call to action inside the navy profile box of the result report, which is yellow so it stays visible on navy.
 
 ## 4. Typography
 
@@ -115,7 +116,8 @@ No other shadow. Never use black for a card shadow.
 | Page gutter | `clamp(20px, 3vw, 48px)` |
 | Wide wrap | 1180px |
 | Narrow wrap (intro) | 900px |
-| Details and result wrap | 1000px |
+| Details wrap | 1000px |
+| Result report wrap | 1180px |
 | Hero grid | `minmax(0, 1.08fr) minmax(320px, .92fr)`, 56px gap |
 | Test grid | `minmax(0, 1fr) 340px`, 24px gap |
 | Details grid | `minmax(0, .88fr) minmax(0, 1.12fr)`, 56px gap |
@@ -171,11 +173,19 @@ The details screen never shows the score. The score is withheld until the contac
 
 ### Result
 
-A 1000px column with the stepper at the top, step 3 active. Below it a two-column layout: a navy result card and a white recommendation panel.
+The result is a React report at `/hasil`, one page for all four tests: the placement test, pre-test, post-test, and IELTS mockup. The placement test opens it with `?token=`, the invited tests with `?attempt=`. It is a 1180px wrap.
 
-The result card carries the result eyebrow, a large ghost level index in the top right, the level name, one sentence summary, the score in yellow, and a six row level ladder. The ladder shows every level with a dot, a label, and a "Kamu di sini" pill on the current level. Done levels use a yellow dot, the current level uses a red dot with a soft ring, and upcoming levels use a muted dot.
+A white sticky header carries the TN mark, the brand, and two actions: Rekomendasi Belajar and Unduh PDF / Cetak. The print action calls `window.print()`.
 
-The recommendation panel carries the program name, the level description, the WhatsApp CTA, the retry button, the delivery note for the email and the WhatsApp message, and the indikatif disclaimer. The result opens before the email and WhatsApp go out, so the delivery note says where the copy is going ("Salinan hasil ini sedang kami kirim ke ... dan ke WhatsApp kamu") and never claims it has arrived.
+The navy hero carries the test eyebrow, the public code, the student name, one lead sentence, and four meta boxes (package or program, date, status, profile). Its right side is the score card: a gold arc dial, the score, the band or level label, the scale, and the one-line caption. For the IELTS mockup the dial is the overall band out of 9.0; for the placement test it is the multiple choice score; for the pre-test and post-test it is the score out of 100.
+
+Below the hero, the skill cards use one grid. The IELTS mockup has four cards (Listening, Reading, Writing, Speaking), the placement test has two (Pilihan Ganda and Speaking), and the pre-test and post-test have two (Nilai and Soal Benar). A card carries an icon, a status badge, the value, the raw count, one diagnosis line, and a progress bar. The tones are navy for Kompeten, yellow for Sedang, red for Prioritas, and gray for a part that was skipped or not taken. There is no green: navy is the positive tone in this system.
+
+The gap analysis compares each score with its target: Band 6.5 per skill for the mockup, the next level threshold for the placement test, and the pass score for the post-test. The target is a 3px line inside the track, outlined in white so it stays visible on a navy fill. The profile box next to it is navy, with the level or band profile, three stat rows, and the WhatsApp call to action. When a test has no gap row, the profile box spans the full width and the call to action sits on the right.
+
+The detail panel lists the Writing tasks and the Speaking interview with their four criteria and the AI comments. The placement test uses the same panel for the five speaking aspects. The action plan follows with two numbered steps and the yellow note that carries the disclaimer. The placement test adds the program cards below the plan.
+
+Every section avoids a page break when printed, the header actions are hidden, and `print-color-adjust: exact` keeps the navy and gold on paper. The print layout returns the hero to two columns and puts the skill cards and criteria in two columns.
 
 ## 9. Components
 
@@ -302,7 +312,7 @@ The email uses the same hex values as this file. It cannot use CSS variables, so
 
 ## 16. Implementation
 
-The test site is plain HTML, one CSS file, one ES module, and one vendored component module, served by a small Node.js server. There is no framework and no build step. Tailwind is not used, even though the reference mock uses it, because the production page needs a strict content security policy and a small payload.
+The test site is plain HTML, one CSS file, one ES module, and one vendored component module, served by a small Node.js server. The test runner has no framework and no build step. The result report at `/hasil` is the exception: it is React, built by Vite from `apps/web/result` into `apps/web/public/hasil`, and its build output is committed like the dashboard's. Tailwind is not used in either React app, even though the reference mock uses it, because the production page needs a strict content security policy and a small payload. The report has its own `hasil.css` with the same tokens, not a utility framework.
 
 Open-source components are vendored under `apps/web/public/assets` and imported as ES modules, because the CSP blocks third-party scripts. `live-waveform.js` is the ElevenLabs UI LiveWaveform port with its MIT notice and source link at the top; keep both when touching it.
 
@@ -318,7 +328,7 @@ Counts, durations, and the violation limit in the copy are not hardcoded. Elemen
 
 ## 17. Pre-test and post-test screens
 
-A pre-test or post-test opens from a personal link, `/?undangan=<token>`, that the team sends from the dashboard. The intro keeps the same layout, greets the student by first name, hides the contact step and the six level fact, and rewrites the data rules for an enrolled student. There is no details screen. After submit, the score screen reuses the result card and panel: the card shows "Nilai kamu" with the number out of 100 and the correct answers, and the panel says what happens next. A used, expired, or closed link shows a yellow notice in the hero, with a 1px border and no colored edge, and the start button stays disabled.
+A pre-test or post-test opens from a personal link, `/?undangan=<token>`, that the team sends from the dashboard. The intro keeps the same layout, greets the student by first name, hides the contact step and the six level fact, and rewrites the data rules for an enrolled student. There is no details screen. After submit the browser opens the result report at `/hasil?attempt=<id>`, where the score card shows the value out of 100 and the gap row compares it with the pass score on the post-test. A used, expired, or closed link shows a yellow notice in the hero, with a 1px border and no colored edge, and the start button stays disabled.
 
 ## 18. Dashboard
 

@@ -78,17 +78,6 @@ const els = {
   errName: $("#err-name"),
   errEmail: $("#err-email"),
   errWa: $("#err-wa"),
-  resultLevel: $("#result-level"),
-  resultSummary: $("#result-summary"),
-  resultScore: $("#result-score"),
-  resultTotal: $("#result-total"),
-  resultIndex: $("#result-index"),
-  levelLadder: $("#level-ladder"),
-  resultProgram: $("#result-program"),
-  resultDescription: $("#result-description"),
-  waBtn: $("#wa-btn"),
-  retryBtn: $("#retry-btn"),
-  emailNote: $("#result-email-note"),
   violationDialog: $("#violation-dialog"),
   violationCount: $("#violation-count"),
   violationClose: $("#violation-close"),
@@ -122,15 +111,6 @@ const els = {
   speakAudio: $("#speak-audio"),
   speakRetake: $("#speak-retake"),
   speakSend: $("#speak-send"),
-  pendingWa: $("#pending-wa"),
-  pendingEmailNote: $("#pending-email-note"),
-  resultSpeaking: $("#result-speaking"),
-  resultSpeakingCefr: $("#speaking-result-cefr"),
-  resultSpeakingIelts: $("#speaking-result-ielts"),
-  resultSpeakingSource: $("#speaking-result-source"),
-  resultSpeakingAspects: $("#speaking-result-aspects"),
-  resultSpeakingNote: $("#speaking-result-note"),
-  programGrid: $("#program-grid"),
   detailsLead: $("#details-lead"),
   detailsBenefit: $("#details-benefit-score"),
   timeupDialog: $("#timeup-dialog"),
@@ -143,12 +123,6 @@ const els = {
   audioPlay: $("#audio-play"),
   audioNote: $("#audio-note"),
   listeningAudio: $("#listening-audio"),
-  scorePlain: $("#score-plain"),
-  scoreBand: $("#score-band"),
-  bandOverall: $("#band-overall"),
-  bandList: $("#band-list"),
-  scoreNote: $("#score-note"),
-  writingResult: $("#writing-result"),
   toast: $("#toast"),
   live: $("#live"),
 };
@@ -179,8 +153,6 @@ const state = {
   submitted: false,
   ending: false,
   lastViolationAt: 0,
-  contact: null,
-  delivery: null,
   restarting: false,
   toastTimer: null,
   speaking: null,
@@ -209,7 +181,8 @@ async function init() {
   if (token) state.invite = token.trim();
   const resultLink = params.get("hasil");
   if (resultLink) {
-    openResultLink(resultLink.trim());
+    // Old emailed links open the React report now.
+    window.location.replace(`/hasil?token=${encodeURIComponent(resultLink.trim())}`);
     return;
   }
 
@@ -273,7 +246,6 @@ async function init() {
   els.endBack.addEventListener("click", backToStart);
   els.timeupRetry.addEventListener("click", retry);
   els.timeupBack.addEventListener("click", backToStart);
-  els.retryBtn.addEventListener("click", retry);
   els.legalAction.addEventListener("click", confirmLegal);
   els.legalDialog.addEventListener("close", () => {
     pendingConsent = null;
@@ -580,8 +552,6 @@ function beginAttempt(data) {
   state.submitted = false;
   state.ending = false;
   state.lastViolationAt = 0;
-  state.contact = null;
-  state.delivery = null;
 
   els.contactForm.reset();
   clearErrors();
@@ -605,7 +575,7 @@ function beginAttempt(data) {
 }
 
 function showScreen(name, { focus = true } = {}) {
-  for (const key of ["intro", "test", "speaking", "details", "result", "pending", "score", "mockup-pending"]) {
+  for (const key of ["intro", "test", "speaking", "details"]) {
     $(`#screen-${key}`).hidden = key !== name;
   }
   document.body.dataset.screen = name;
@@ -617,10 +587,6 @@ function showScreen(name, { focus = true } = {}) {
     intro: "#intro-title",
     speaking: "#speaking-title",
     details: "#details-title",
-    result: "#result-level",
-    pending: "#pending-title",
-    score: "#score-title",
-    "mockup-pending": "#mockup-pending-title",
   }[name];
   if (target) $(target).focus({ preventScroll: true });
 }
@@ -983,16 +949,13 @@ async function submitAnswers() {
       body: { answers: state.answers },
     });
     state.submitted = true;
-    if (!data.result && state.mockupSpeaking && data.speaking) {
+    // Every result is the React report now, including the wait while the mockup speaking is scored.
+    if (state.inviteInfo) {
       await exitFullscreen();
-      showMockupPending(data.speaking);
+      window.location.assign(`/hasil?attempt=${encodeURIComponent(state.attempt.id)}`);
       return;
     }
-    if (data.result) {
-      renderScore(data.result);
-      showScreen("score");
-      await exitFullscreen();
-    } else if (state.speaking) {
+    if (state.speaking) {
       await exitFullscreen();
       enterSpeaking();
     } else {
@@ -1057,16 +1020,12 @@ async function saveContact(event) {
       method: "POST",
       body: { name, email, whatsapp },
     });
-    state.contact = { name, email };
-    state.delivery = data.delivery || null;
-    if (data.result) {
-      renderResult(data.result, { programs: data.programs });
-      showScreen("result");
-    } else {
-      renderPending();
-      showScreen("pending");
-      if (data.resultToken) pollResult(data.resultToken);
+    // The report opens right away and shows the wait itself while a recording is scored.
+    if (data.resultToken) {
+      window.location.assign(`/hasil?token=${encodeURIComponent(data.resultToken)}`);
+      return;
     }
+    toast("Data sudah tersimpan, tetapi tautan hasil belum siap. Muat ulang halaman ini sebentar lagi.");
   } catch (error) {
     toast(error.message || "Data gagal disimpan. Silakan coba lagi.");
   } finally {
@@ -1537,398 +1496,9 @@ function advanceMockupSpeaking() {
   openSubmit();
 }
 
-function showMockupPending(speaking) {
-  $("#mockup-pending-status").textContent = speaking?.answered
-    ? `${speaking.answered} dari ${speaking.total} jawaban sudah masuk. Menunggu penilaian...`
-    : "Menunggu penilaian...";
-  showScreen("mockup-pending");
-  pollMockupResult();
-}
-
-async function pollMockupResult() {
-  stopResultPoll();
-  const check = async () => {
-    if (document.hidden) return;
-    let data;
-    try {
-      data = await api(`/api/attempts/${state.attempt.id}/result`);
-    } catch {
-      return;
-    }
-    if (!data.ready) {
-      if (data.speaking?.answered) $("#mockup-pending-status").textContent = `${data.speaking.answered} dari ${data.speaking.total} jawaban sudah masuk. Menunggu penilaian...`;
-      return;
-    }
-    stopResultPoll();
-    renderScore(data.result);
-    showScreen("score");
-  };
-  await check();
-  if (state.pollId === null && document.body.dataset.screen !== "score") {
-    state.pollId = setInterval(check, RESULT_POLL_MS);
-  }
-}
-
 /* The sound wave is the ElevenLabs UI LiveWaveform component, ported to a small vanilla module
    because this app has no React. It draws a live mirrored spectrum of the microphone. */
 const recWave = createLiveWaveform(els.recWave, { height: 24 });
-
-/* ---------- Waiting for the score, and the result behind a private link ---------- */
-
-// The waiting screen checks the result every few seconds, so a student who stays on the page sees
-// the full result without waiting for the email. The link from the email uses the same endpoint.
-const RESULT_POLL_MS = 6000;
-
-function stopResultPoll() {
-  clearInterval(state.pollId);
-  state.pollId = null;
-}
-
-async function pollResult(token, { publicView = false } = {}) {
-  stopResultPoll();
-  state.resultToken = token;
-  const check = async () => {
-    if (document.hidden) return;
-    let data;
-    try {
-      data = await api(`/api/results/${encodeURIComponent(token)}`);
-    } catch {
-      return; // a network blip should not end the wait; the next tick tries again
-    }
-    if (!data.ready) return;
-    stopResultPoll();
-    renderResult(data.result, { programs: data.programs, publicView });
-    showScreen("result");
-  };
-  await check();
-  if (state.pollId === null && document.body.dataset.screen !== "result") {
-    state.pollId = setInterval(check, RESULT_POLL_MS);
-  }
-}
-
-/* The waiting screen, shown when the recording is still being scored. */
-function renderPending() {
-  const name = state.contact?.name || "";
-  const waText = `Halo Admin Titik Nol, saya ${name}. Saya baru selesai mengerjakan tes penempatan dan ingin menanyakan hasil saya.`;
-  els.pendingWa.href = `https://wa.me/${state.config.whatsapp}?text=${encodeURIComponent(waText)}`;
-
-  const to = state.contact?.email || "email kamu";
-  const viaEmail = state.delivery?.email === "sending" || state.delivery?.email === "sent";
-  const viaWa = state.delivery?.whatsapp === "sending" || state.delivery?.whatsapp === "sent";
-  let note;
-  if (viaEmail && viaWa) note = `Setelah penilaian selesai, hasilnya kami kirim ke ${to} dan ke WhatsApp kamu.`;
-  else if (viaEmail) note = `Setelah penilaian selesai, hasilnya kami kirim ke ${to}.`;
-  else if (viaWa) note = "Setelah penilaian selesai, hasilnya kami kirim ke WhatsApp kamu.";
-  else note = "Hasil belum bisa kami kirim ke email maupun WhatsApp, jadi hubungi admin lewat tombol di bawah.";
-  els.pendingEmailNote.textContent = note;
-}
-
-/** The link from the email and WhatsApp, opened on its own. */
-async function openResultLink(token) {
-  document.title = "Hasil Tes Penempatan, Titik Nol English Course";
-  state.contact = { name: "" };
-  try {
-    const data = await api(`/api/results/${encodeURIComponent(token)}`);
-    if (data.ready) {
-      renderResult(data.result, { programs: data.programs, publicView: true });
-      showScreen("result");
-      return;
-    }
-  } catch (error) {
-    showIntroNotice(error.message);
-    els.startBtn.disabled = true;
-    return;
-  }
-  showScreen("pending");
-  els.pendingWa.href = `https://wa.me/${state.config?.whatsapp || "6282333143544"}?text=${encodeURIComponent("Halo Admin Titik Nol, saya ingin menanyakan hasil tes penempatan saya.")}`;
-  els.pendingEmailNote.textContent = "Penilaian speaking kamu masih berjalan. Halaman ini menyegarkan sendiri, jadi tunggu sebentar saja.";
-  await pollResult(token, { publicView: true });
-}
-
-function renderResult(result, { programs = [], publicView = false } = {}) {
-  const level = result.level;
-  const levelIndex = Math.max(0, LEVEL_ORDER.indexOf(level.key));
-
-  els.resultLevel.textContent = level.label;
-  els.resultSummary.textContent = level.summary;
-  els.resultScore.textContent = String(result.score);
-  els.resultTotal.textContent = `/ ${result.total}`;
-  els.resultIndex.textContent = String(levelIndex + 1).padStart(2, "0");
-  els.resultProgram.textContent = level.program;
-  els.resultDescription.textContent = level.description;
-
-  renderSpeakingResult(result.speaking);
-  renderProgramGrid(programs);
-
-  els.levelLadder.replaceChildren();
-  LEVEL_ORDER.forEach((key, index) => {
-    const item = document.createElement("li");
-    item.className = "ladder__item";
-    if (index < levelIndex) item.classList.add("is-done");
-    if (index === levelIndex) item.classList.add("is-current");
-
-    const dot = document.createElement("span");
-    dot.className = "ladder__dot";
-    dot.setAttribute("aria-hidden", "true");
-
-    const label = document.createElement("span");
-    label.className = "ladder__label";
-    label.textContent = LEVEL_LABELS[key];
-
-    item.append(dot, label);
-
-    if (index === levelIndex) {
-      const you = document.createElement("span");
-      you.className = "ladder__you";
-      you.textContent = "Level kamu";
-      item.append(you);
-    }
-    els.levelLadder.append(item);
-  });
-
-  // A visitor from the emailed link has no attempt to repeat, and no channels to report on.
-  els.retryBtn.hidden = publicView;
-  const contactName = state.contact?.name || "";
-  const waText = `Halo Admin Titik Nol, saya ${contactName}. Saya baru selesai mengerjakan tes penempatan dengan hasil ${level.label} (${result.score} dari ${result.total}) dan ingin berkonsultasi tentang program yang sesuai.`;
-  els.waBtn.href = `https://wa.me/${state.config?.whatsapp || "6282333143544"}?text=${encodeURIComponent(waText)}`;
-  els.emailNote.textContent = publicView
-    ? "Ini halaman hasil lengkap kamu. Simpan tautannya agar kamu bisa membukanya kembali kapan saja."
-    : deliveryNote(state.delivery, state.contact?.email);
-}
-
-/* The speaking block of the result, with the five aspects and the note from the grader. */
-function renderSpeakingResult(sp) {
-  if (!sp) {
-    els.resultSpeaking.hidden = true;
-    return;
-  }
-  els.resultSpeaking.hidden = false;
-  els.resultSpeakingCefr.textContent = sp.cefr;
-  els.resultSpeakingIelts.textContent = sp.ielts === null || sp.ielts === undefined ? "-" : Number(sp.ielts).toFixed(1);
-  els.resultSpeakingSource.textContent = sp.source === "manual" ? "dinilai oleh tim Titik Nol" : "dinilai otomatis";
-
-  els.resultSpeakingAspects.replaceChildren();
-  for (const aspect of sp.aspects) {
-    const li = document.createElement("li");
-    const name = document.createElement("span");
-    name.className = "aspect-name";
-    name.textContent = aspect.label;
-    const cefr = document.createElement("span");
-    cefr.className = "aspect-cefr";
-    cefr.textContent = aspect.cefr || "-";
-    li.append(name, cefr);
-    if (aspect.score !== null && aspect.score !== undefined) {
-      const score = document.createElement("span");
-      score.className = "aspect-score";
-      score.textContent = `${Math.round(aspect.score)} / 100`;
-      li.append(score);
-    }
-    els.resultSpeakingAspects.append(li);
-  }
-
-  const notes = [];
-  if (sp.tooShort) notes.push("Jawaban kamu kurang dari 20 kata, jadi nilai keseluruhannya belum stabil.");
-  if (sp.offTopic) notes.push("Jawaban kamu belum sesuai dengan pertanyaannya.");
-  if (sp.transcript) notes.push(`Transkrip jawaban kamu: "${sp.transcript}"`);
-  notes.push(...(sp.notes || []).slice(0, 2));
-  els.resultSpeakingNote.textContent = notes.join(" ");
-  els.resultSpeakingNote.hidden = notes.length === 0;
-}
-
-/* The program cards, each linking to its product page on titiknolenglish.com. */
-function renderProgramGrid(cards) {
-  els.programGrid.replaceChildren();
-  if (!cards.length) {
-    els.programGrid.hidden = true;
-    return;
-  }
-  els.programGrid.hidden = false;
-  for (const card of cards) {
-    const link = document.createElement("a");
-    link.className = "program-card";
-    link.href = card.url;
-    link.target = "_blank";
-    link.rel = "noopener";
-
-    if (card.image) {
-      const img = document.createElement("img");
-      img.className = "program-card__img";
-      img.src = card.image;
-      img.alt = card.name;
-      img.loading = "lazy";
-      link.append(img);
-    }
-
-    const body = document.createElement("div");
-    body.className = "program-card__body";
-    if (card.recommended) {
-      const tag = document.createElement("p");
-      tag.className = "program-card__tag";
-      tag.textContent = "Rekomendasi kami";
-      body.append(tag);
-    }
-    const name = document.createElement("p");
-    name.className = "program-card__name";
-    name.textContent = card.name;
-    body.append(name);
-    if (card.recommended && card.levelLabel) {
-      const meta = document.createElement("p");
-      meta.className = "program-card__meta";
-      meta.textContent = `Sesuai level ${card.levelLabel} kamu`;
-      body.append(meta);
-    } else if (card.levels?.length) {
-      const meta = document.createElement("p");
-      meta.className = "program-card__meta";
-      meta.textContent = `Untuk level ${card.levels.join(", ")}`;
-      body.append(meta);
-    }
-    link.append(body);
-    els.programGrid.append(link);
-  }
-}
-
-// The email and WhatsApp go out in the background after the result appears, so the note says
-// where the copy is going rather than whether it has arrived.
-function deliveryNote(delivery, email) {
-  const to = email || "email kamu";
-  const used = (channel) => channel === "sending" || channel === "sent";
-  const viaEmail = used(delivery?.email);
-  const viaWa = used(delivery?.whatsapp);
-  const done = (!viaEmail || delivery.email === "sent") && (!viaWa || delivery.whatsapp === "sent");
-  const verb = done ? "sudah kami kirim" : "sedang kami kirim";
-  if (viaEmail && viaWa) return `Salinan hasil ini ${verb} ke ${to} dan ke WhatsApp kamu. Kalau emailnya belum masuk dalam beberapa menit, periksa juga folder spam.`;
-  if (viaEmail) return `Salinan hasil ini ${verb} ke ${to}. Kalau belum masuk dalam beberapa menit, periksa juga folder spam.`;
-  if (viaWa) return `Salinan hasil ini ${verb} ke WhatsApp kamu.`;
-  return "Salinan hasil belum bisa kami kirim ke email maupun WhatsApp kamu, jadi simpan halaman ini atau hubungi admin melalui WhatsApp.";
-}
-
-// Results for invited tests. Pre-test and post-test show a score out of 100; the IELTS mockup
-// shows the band estimate instead, with the official-score disclaimer.
-function renderScore(result) {
-  const first = state.inviteInfo?.firstName || "";
-  els.scorePlain.hidden = Boolean(result.skills);
-  els.scoreBand.hidden = !result.skills;
-  els.bandList.hidden = !result.skills;
-  els.scoreNote.textContent = result.skills
-    ? "Hasil ini sudah tercatat di data kamu sebagai siswa Titik Nol English Course, jadi halaman ini boleh ditutup."
-    : "Nilai ini sudah tercatat di data kamu sebagai siswa Titik Nol English Course, jadi halaman ini boleh ditutup.";
-
-  if (result.skills) {
-    $("#score-eyebrow").textContent = `Hasil ${result.testName}`;
-    $("#score-title").textContent = "Perkiraan band kamu";
-    els.bandOverall.textContent = String(result.overall ?? 0);
-    els.bandList.replaceChildren();
-    for (const skill of result.skills) {
-      const li = document.createElement("li");
-      li.className = "band-list__row";
-      const name = document.createElement("span");
-      name.textContent = skill.skill;
-      const band = document.createElement("strong");
-      band.textContent = String(skill.band);
-      const raw = document.createElement("span");
-      raw.className = "band-list__raw";
-      raw.textContent = skill.skill === "Writing" ? "dinilai AI" : skill.skill === "Speaking" ? "dinilai otomatis" : `${skill.raw} dari 40 benar`;
-      li.append(name, band, raw);
-      els.bandList.append(li);
-    }
-    // The writing tasks and their four criteria, when the AI scored them.
-    const writing = result.skills.find((s) => s.skill === "Writing");
-    els.writingResult.replaceChildren();
-    els.writingResult.hidden = !writing && result.writingStatus !== "failed";
-    if (writing) {
-      for (const task of writing.tasks || []) {
-        const block = document.createElement("div");
-        block.className = "writing-result__task";
-        const head = document.createElement("p");
-        head.className = "writing-result__head";
-        head.textContent = `Writing Task ${task.taskNumber}: band ${task.band}`;
-        block.append(head);
-        for (const [key, label] of [["task_response", "Task Response"], ["coherence_cohesion", "Coherence & Cohesion"], ["lexical_resource", "Lexical Resource"], ["grammatical_range_accuracy", "Grammatical Range & Accuracy"]]) {
-          const criterion = task.criteria?.[key];
-          if (!criterion) continue;
-          const row = document.createElement("p");
-          row.className = "writing-result__criterion";
-          const strong = document.createElement("strong");
-          strong.textContent = `${label} ${criterion.band}`;
-          const comment = document.createElement("span");
-          comment.textContent = criterion.comment;
-          row.append(strong, comment);
-          block.append(row);
-        }
-        els.writingResult.append(block);
-      }
-    } else if (result.writingStatus === "failed") {
-      const note = document.createElement("p");
-      note.className = "writing-result__criterion";
-      note.textContent = "Penilaian Writing belum berhasil. Tim Titik Nol akan menghubungi kamu dengan hasilnya.";
-      els.writingResult.append(note);
-    }
-    // The speaking band and its four criteria, when Speechace scored the answers.
-    const speaking = result.skills.find((s) => s.skill === "Speaking");
-    const speakingBox = $("#speaking-result");
-    speakingBox.replaceChildren();
-    speakingBox.hidden = !speaking && result.speakingStatus !== "failed" && result.speakingStatus !== "skipped";
-    if (speaking) {
-      const block = document.createElement("div");
-      block.className = "writing-result__task";
-      const head = document.createElement("p");
-      head.className = "writing-result__head";
-      head.textContent = `Speaking: band ${speaking.band}`;
-      block.append(head);
-      for (const [key, label] of [["pronunciation", "Pronunciation"], ["fluency_coherence", "Fluency & Coherence"], ["lexical_resource", "Lexical Resource"], ["grammatical_range_accuracy", "Grammatical Range & Accuracy"]]) {
-        const value = speaking.criteria?.[key];
-        if (value === null || value === undefined) continue;
-        const row = document.createElement("p");
-        row.className = "writing-result__criterion";
-        const strong = document.createElement("strong");
-        strong.textContent = `${label} ${value}`;
-        row.append(strong);
-        block.append(row);
-      }
-      const note = document.createElement("p");
-      note.className = "writing-result__criterion";
-      note.textContent = "Rekaman dinilai otomatis dengan empat kriteria IELTS Speaking.";
-      block.append(note);
-      speakingBox.append(block);
-    } else if (result.speakingStatus === "failed" || result.speakingStatus === "skipped") {
-      const note = document.createElement("p");
-      note.className = "writing-result__criterion";
-      note.textContent = result.speakingStatus === "skipped"
-        ? "Kamu melewati bagian speaking, jadi band Speaking tidak ada di hasil ini."
-        : "Penilaian Speaking belum berhasil. Tim Titik Nol akan menghubungi kamu dengan hasilnya.";
-      speakingBox.append(note);
-    }
-    $("#score-summary").textContent = `Terima kasih sudah mengerjakan mock IELTS${first ? `, ${first}` : ""}.`;
-    $("#score-headline").textContent = "Band keseluruhan kamu";
-    $("#score-description").textContent = `${result.disclaimer} Band ini dihitung dari Listening, Reading, Writing${speaking ? ", dan Speaking" : ""}.${speaking ? "" : " Speaking belum termasuk, jadi band resmi tetap butuh empat skill."}`;
-    return;
-  }
-
-  $("#score-eyebrow").textContent = `Hasil ${result.testName}`;
-  $("#score-title").textContent = `Nilai kamu ${result.nilai}`;
-  $("#score-value").textContent = String(result.score);
-  $("#score-total").textContent = `/ ${result.total}`;
-
-  let summary;
-  let headline;
-  let description;
-  if (result.test !== "post") {
-    summary = `Terima kasih sudah mengerjakan pre-test${first ? `, ${first}` : ""}.`;
-    headline = "Nilai awal kamu sudah tercatat";
-    description = "Nilai ini menjadi titik awal untuk melihat perkembangan kamu selama program. Di akhir program, kamu akan mengerjakan post-test supaya kemajuan kamu bisa dibandingkan dengan nilai ini.";
-  } else if (result.passed) {
-    summary = `Selamat${first ? `, ${first}` : ""}. Nilai kamu sudah mencapai batas kelulusan ${result.passScore}.`;
-    headline = "Kamu siap lanjut ke level berikutnya";
-    description = "Tim pendidikan Titik Nol akan menghubungi kamu untuk membahas pilihan kelas di level berikutnya.";
-  } else {
-    summary = `${first ? `${first}, n` : "N"}ilai kamu belum mencapai batas kelulusan ${result.passScore}.`;
-    headline = "Level ini perlu diperkuat dulu";
-    description = "Tutor kamu akan membahas bagian yang masih perlu dilatih, lalu tim pendidikan membantu menentukan kelas berikutnya untuk kamu.";
-  }
-  $("#score-summary").textContent = summary;
-  $("#score-headline").textContent = headline;
-  $("#score-description").textContent = description;
-}
 
 async function retry() {
   if (state.restarting || !state.config) return;

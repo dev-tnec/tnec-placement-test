@@ -327,16 +327,16 @@ assert.equal(emailSpeaking.html.includes("<b>Bali</b>"), false, "the transcript 
 const emailManual = buildResultEmail({ name: "Rani", email: "rani@example.com", score: 13, total: 25, level: levelForScore(13), speaking: manualFacts });
 assert.ok(emailManual.text.includes("dinilai oleh tim Titik Nol"));
 
-const waSpeaking = buildResultWhatsApp({ name: "Rani Putri Lestari", score: 13, total: 25, level: levelForScore(13), speaking: facts, resultUrl: "https://tes.example.test/?hasil=token123" });
+const waSpeaking = buildResultWhatsApp({ name: "Rani Putri Lestari", score: 13, total: 25, level: levelForScore(13), speaking: facts, resultUrl: "https://tes.example.test/hasil?token=token123" });
 assert.ok(waSpeaking.includes("\nSpeaking:\n"), "the WhatsApp header carries no vendor name");
 assert.ok(waSpeaking.includes("CEFR B2, IELTS 6.0"));
 assert.ok(waSpeaking.includes("Pronunciation 78 (B2)"));
-assert.ok(waSpeaking.includes("Hasil lengkap: https://tes.example.test/?hasil=token123"));
+assert.ok(waSpeaking.includes("Hasil lengkap: https://tes.example.test/hasil?token=token123"));
 assert.ok(waSpeaking.includes("bukan sertifikat resmi"));
 assert.ok(waSpeaking.length <= 1000, "the WhatsApp result stays under 1,000 characters");
 assert.equal(/[\u2013\u2014]/.test(waSpeaking), false, "no en or em dash");
-const waPlainLink = buildResultWhatsApp({ name: "Rani", score: 13, total: 25, level: levelForScore(13), resultUrl: "https://tes.example.test/?hasil=token123" });
-assert.ok(waPlainLink.includes("Hasil lengkap: https://tes.example.test/?hasil=token123"), "the result link reaches a student without speaking too");
+const waPlainLink = buildResultWhatsApp({ name: "Rani", score: 13, total: 25, level: levelForScore(13), resultUrl: "https://tes.example.test/hasil?token=token123" });
+assert.ok(waPlainLink.includes("Hasil lengkap: https://tes.example.test/hasil?token=token123"), "the result link reaches a student without speaking too");
 
 /* ---------- The program cards and the result link ---------- */
 import { programCards, publicLevel } from "@tnec/core/store";
@@ -355,9 +355,9 @@ assert.equal(cards[1].recommended, undefined);
 assert.equal(programCards([{ key: "x", label: "X", program: "P", programUrl: "", programImage: "" }], "x").length, 0, "levels without a url render no cards");
 const publicIntermediate = publicLevel({ key: "intermediate", label: "Intermediate", program: "Program Intermediate", programUrl: "https://titiknolenglish.com/product/general-english-offline/", programImage: "general.webp" });
 assert.equal(publicIntermediate.programUrl, "https://titiknolenglish.com/product/general-english-offline/");
-const emailWithLink = buildResultEmail({ name: "Rani", email: "rani@example.com", score: 13, total: 25, level: levelForScore(13), speaking: facts, resultUrl: "https://tes.example.test/?hasil=token123" });
-assert.ok(emailWithLink.html.includes("https://tes.example.test/?hasil=token123"), "the email links to the result page");
-assert.ok(emailWithLink.text.includes("Hasil lengkap kamu: https://tes.example.test/?hasil=token123"));
+const emailWithLink = buildResultEmail({ name: "Rani", email: "rani@example.com", score: 13, total: 25, level: levelForScore(13), speaking: facts, resultUrl: "https://tes.example.test/hasil?token=token123" });
+assert.ok(emailWithLink.html.includes("https://tes.example.test/hasil?token=token123"), "the email links to the result page");
+assert.ok(emailWithLink.text.includes("Hasil lengkap kamu: https://tes.example.test/hasil?token=token123"));
 assert.ok(emailWithLink.html.includes("Buka hasil lengkap di web"));
 const emailNoLink = buildResultEmail({ name: "Rani", email: "rani@example.com", score: 13, total: 25, level: levelForScore(13) });
 assert.equal(emailNoLink.html.includes("Halaman hasil lengkap"), false, "without a token the panel stays away");
@@ -525,5 +525,63 @@ assert.ok(certHtml.includes("<title>Rani $&amp;</title>"));
 assert.ok(certHtml.includes('class="cert-void"'), "a cancelled certificate carries the DIBATALKAN mark");
 assert.ok(certHtml.includes('href="logo.css"'), "the template keeps its relative stylesheet links");
 assert.equal(/\{\{\w+\}\}/.test(certHtml), false, "no placeholder is left on the page");
+
+// The React result report build output is committed too, so Render needs no build command.
+const reportIndex = readFileSync(new URL("../apps/web/public/hasil/index.html", import.meta.url), "utf8");
+const reportEntry = reportIndex.match(/src="(\/hasil\/assets\/[^"]+\.js)"/);
+assert.ok(reportEntry, "the result report build output exists");
+assert.ok(existsSync(new URL(`../apps/web/public${reportEntry[1]}`, import.meta.url)), "the result report entry bundle exists on disk");
+assert.equal(/<script(?![^>]*\bsrc=)/i.test(reportIndex), false, "the built report uses no inline script");
+
+// One report view model for the four tests: placement, pre-test, post-test, and IELTS mockup.
+const { buildReport } = await import("../apps/web/result/src/report.js");
+const bandResult = {
+  test: "ielts-mockup", testName: "IELTS Mockup", firstName: "Rani", code: "TN-IELTS-MOCKUP-2026-1A2B", date: 1_800_000_000,
+  overall: 4, disclaimer: "Hasil ini adalah perkiraan dan bukan skor resmi IELTS.",
+  writingStatus: "graded", speakingStatus: "graded",
+  skills: [
+    { skill: "Listening", raw: 4, band: 2.5 },
+    { skill: "Reading", raw: 10, band: 4 },
+    { skill: "Writing", band: 6, tasks: [
+      { taskNumber: 1, band: 6, criteria: { task_response: { band: 6, comment: "Overview memadai." }, coherence_cohesion: { band: 6, comment: "Rapi." }, lexical_resource: { band: 6, comment: "Cukup." }, grammatical_range_accuracy: { band: 6, comment: "Bervariasi." } } },
+      { taskNumber: 2, band: 6, criteria: { task_response: { band: 6, comment: "Relevan." }, coherence_cohesion: { band: 6, comment: "Jelas." }, lexical_resource: { band: 6, comment: "Akademik." }, grammatical_range_accuracy: { band: 6, comment: "Minor." } } },
+    ] },
+    { skill: "Speaking", band: 6, answers: 18, criteria: { pronunciation: 6, fluency_coherence: 6, lexical_resource: 6, grammatical_range_accuracy: 6 } },
+  ],
+};
+const bandReport = buildReport(bandResult);
+assert.equal(bandReport.kind, "band");
+assert.equal(bandReport.skills.length, 4, "the four skill cards");
+assert.equal(bandReport.score.label, "Limited User", "band 4 reads as Limited User");
+assert.equal(bandReport.gap.rows.length, 4, "every scored skill gets a gap row");
+assert.equal(bandReport.details.groups.length, 3, "two writing tasks plus the speaking interview");
+assert.equal(bandReport.details.groups[0].criteria[0].label, "Task Achievement", "Task 1 uses Task Achievement");
+assert.equal(bandReport.details.groups[1].criteria[0].label, "Task Response", "Task 2 uses Task Response");
+assert.ok(bandReport.plan.length >= 1, "the weakest skills drive the study plan");
+assert.equal(buildReport({ ...bandResult, skills: bandResult.skills.slice(0, 3), speakingStatus: "skipped" }).skills.at(-1).badge, "Dilewati", "a skipped speaking keeps a visible fourth card");
+
+const scoreReport = buildReport({ test: "post", testName: "Post-test", firstName: "Rani", score: 18, total: 25, nilai: 72, passed: false, passScore: 70, date: 1_800_000_000, code: "TN-POST-2026-1A2B" });
+assert.equal(scoreReport.kind, "score");
+assert.equal(scoreReport.score.value, "72");
+assert.equal(scoreReport.score.label, "Belum lulus");
+assert.equal(scoreReport.gap.rows[0].delta, "+2 poin", "the pass line gap is signed");
+assert.equal(buildReport({ test: "pre", testName: "Pre-test", score: 10, total: 25, nilai: 40, passed: null }).gap, null, "a pre-test has no pass line");
+
+const placementReport = buildReport({
+  score: 18, total: 25, date: 1_800_000_000, code: "TN-PLACEMENT-2026-1A2B", name: "Rani Putri",
+  level: { key: "advanced", label: "Advanced", program: "Program Advanced", programUrl: "https://titiknolenglish.com/product/x/", summary: "Ringkasan.", description: "Deskripsi." },
+  next: { key: "toefl-prep", label: "TOEFL/IELTS Preparation", min: 20 },
+  levels: [], speaking: { source: "auto", cefr: "B2", ielts: 6, aspects: [{ key: "pronunciation", label: "Pronunciation", cefr: "B2", ielts: 6, score: 78 }], notes: [] },
+}, [{ name: "Program Advanced", url: "https://titiknolenglish.com/product/x/", levels: ["Advanced"], recommended: true, levelLabel: "Advanced" }]);
+assert.equal(placementReport.kind, "placement");
+assert.equal(placementReport.skills.length, 2, "the score card and the speaking card");
+assert.equal(placementReport.gap.rows[0].target, "20", "the next level threshold is the gap target");
+assert.equal(placementReport.programs.length, 1, "the program cards reach the report");
+assert.equal(placementReport.details.groups[0].criteria.length, 1, "the speaking aspects reach the detail panel");
+
+for (const report of [bandReport, scoreReport, placementReport]) {
+  const copy = JSON.stringify(report);
+  assert.equal(/[\u2013\u2014]/.test(copy), false, "the report copy has no en or em dash");
+}
 
 console.log("smoke ok");

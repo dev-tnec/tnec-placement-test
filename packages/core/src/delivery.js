@@ -77,7 +77,7 @@ export async function deliverResult(env, attemptId) {
   const levels = await loadLevels(env);
   const level = publicLevel(levels.find((l) => l.key === attempt.level_key) || levelFor(levels, attempt.score ?? 0));
   // The private link to the full result page, sent inside both channels.
-  const resultUrl = attempt.result_token ? `${env.PUBLIC_WEB_URL}/?hasil=${attempt.result_token}` : null;
+  const resultUrl = attempt.result_token ? `${env.PUBLIC_WEB_URL}/hasil?token=${attempt.result_token}` : null;
   const facts = { name: attempt.name, email: attempt.email, score: attempt.score ?? 0, total: attempt.total, level, speaking: speakingFacts(speaking), resultUrl };
   const waText = buildResultWhatsApp(facts);
   const [mail, wa] = await Promise.all([

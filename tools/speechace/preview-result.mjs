@@ -50,11 +50,11 @@ const manualFacts = speakingFacts({
 
 const base = { name: "Rani Puspita Lestari", email: "rani.puspita@example.com", score: 13, total: 25, level };
 
-const waAuto = buildResultWhatsApp({ ...base, speaking: facts, resultUrl: "https://tes.example.test/?hasil=abc123" });
-const waManual = buildResultWhatsApp({ ...base, speaking: manualFacts, resultUrl: "https://tes.example.test/?hasil=abc123" });
-const waPlain = buildResultWhatsApp({ ...base, resultUrl: "https://tes.example.test/?hasil=abc123" });
-const emailAuto = buildResultEmail({ ...base, speaking: facts, resultUrl: "https://tes.example.test/?hasil=abc123" });
-const emailManual = buildResultEmail({ ...base, speaking: manualFacts, resultUrl: "https://tes.example.test/?hasil=abc123" });
+const waAuto = buildResultWhatsApp({ ...base, speaking: facts, resultUrl: "https://tes.example.test/hasil?token=abc123" });
+const waManual = buildResultWhatsApp({ ...base, speaking: manualFacts, resultUrl: "https://tes.example.test/hasil?token=abc123" });
+const waPlain = buildResultWhatsApp({ ...base, resultUrl: "https://tes.example.test/hasil?token=abc123" });
+const emailAuto = buildResultEmail({ ...base, speaking: facts, resultUrl: "https://tes.example.test/hasil?token=abc123" });
+const emailManual = buildResultEmail({ ...base, speaking: manualFacts, resultUrl: "https://tes.example.test/hasil?token=abc123" });
 
 console.log("===== WHATSAPP, dinilai Speechace =====\n");
 console.log(waAuto);

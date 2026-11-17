@@ -5,6 +5,7 @@ Online placement test, pre-test, and post-test for Titik Nol English Course, plu
 | Part | Folder | Default address |
 |---|---|---|
 | Test site for students | `apps/web` | `http://localhost:4000` |
+| Student result report (React) | `apps/web/result`, built into `apps/web/public/hasil` | `http://localhost:4000/hasil` |
 | Dashboard for the team | `apps/admin` | `http://localhost:4001/admin` |
 | Shared server code | `packages/core` | |
 | Database schema and seeds | `db/migrations` | |
@@ -17,7 +18,7 @@ On Windows, double-click `start.cmd`. It installs what it needs the first time, 
 
 From a terminal, the same thing is `npm install` once, then `npm start`. If PowerShell refuses `npm` because scripts are disabled, use `node scripts/start.mjs` instead. The settings live in `.env` at the repository root, and `.env.example` lists every key.
 
-Starting updates the database schema when needed, builds the React dashboard client from `apps/admin/client`, then runs both apps. The first time the dashboard opens with an empty database, the login page offers to create the first admin account. From the same computer no code is needed; from another computer, enter the setup code that `npm start` prints.
+Starting updates the database schema when needed, builds the React dashboard client from `apps/admin/client` and the React result report from `apps/web/result`, then runs both apps. The first time the dashboard opens with an empty database, the login page offers to create the first admin account. From the same computer no code is needed; from another computer, enter the setup code that `npm start` prints.
 
 ## Configuration
 
@@ -41,6 +42,8 @@ Bump `CONSENT_VERSION` whenever the terms or privacy text changes, so each store
 |---|---|
 | `npm run start:web` | Runs only the test site |
 | `npm run start:admin` | Runs only the dashboard |
+| `npm run build:web` | Rebuilds the React result report into `apps/web/public/hasil` |
+| `npm run build:admin` | Rebuilds the React dashboard into `apps/admin/public/admin` |
 | `npm run db:migrate` | Applies pending files in `db/migrations` without starting the apps |
 | `npm run admin:create -- --email someone@example.com --name Name` | Adds a dashboard account or resets its password; it asks for the password |
 | `npm test` | Smoke checks, no database needed |
@@ -56,7 +59,7 @@ Render pulls the code from the public repository URL, and Render only deploys on
 | `tnec-placement-test` | https://tnec-placement-test.onrender.com | `npm run start:web` |
 | `tnec-placement-admin` | https://tnec-placement-admin.onrender.com/admin | `npm run start:admin` |
 
-Both build with `npm ci --no-audit --no-fund` from `dev-tnec/tnec-placement-test`. Each app listens on the `PORT` that Render sets and applies pending migrations when it starts. The test app also sends any result email or WhatsApp still waiting when it starts, and on SIGTERM it lets running sends finish before it exits.
+Both build with `npm ci --no-audit --no-fund` from `dev-tnec/tnec-placement-test`. The dashboard build output and the result report build output are committed, so neither service runs a build command. Each app listens on the `PORT` that Render sets and applies pending migrations when it starts. The test app also sends any result email or WhatsApp still waiting when it starts, and on SIGTERM it lets running sends finish before it exits.
 
 | Setting | Test service | Dashboard service |
 |---|---|---|
