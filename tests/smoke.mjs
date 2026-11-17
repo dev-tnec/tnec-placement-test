@@ -413,6 +413,24 @@ assert.equal(overallBand([6.5, 5.5, 6, 7]), 6.5);
 assert.equal(overallBand([6.25, 5.75]), 6);
 assert.equal(overallBand([]), 0);
 
+/* The dashboard bootstrap cache: round trip, TTL, and clear. */
+const cacheStore = new Map();
+globalThis.sessionStorage = {
+  getItem: (k) => (cacheStore.has(k) ? cacheStore.get(k) : null),
+  setItem: (k, v) => cacheStore.set(k, String(v)),
+  removeItem: (k) => cacheStore.delete(k),
+};
+const bootstrapCache = await import("../apps/admin/client/src/bootstrap-cache.js");
+const cachedPayload = { me: { name: "Test" }, now: 1 };
+bootstrapCache.writeBootstrapCache(cachedPayload);
+assert.deepEqual(bootstrapCache.readBootstrapCache(), cachedPayload, "the bootstrap cache round trips");
+assert.ok(cacheStore.get(bootstrapCache.BOOTSTRAP_CACHE).includes('"at"'));
+bootstrapCache.clearBootstrapCache();
+assert.equal(bootstrapCache.readBootstrapCache(), null, "the cache clears on logout or a 401");
+cacheStore.set(bootstrapCache.BOOTSTRAP_CACHE, JSON.stringify({ at: Date.now() - 13 * 60 * 60 * 1000, data: cachedPayload }));
+assert.equal(bootstrapCache.readBootstrapCache(), null, "a payload older than the 12 hour session is ignored");
+delete globalThis.sessionStorage;
+
 let finished = false;
 runInBackground(() => new Promise((resolve) => setTimeout(() => { finished = true; resolve(); }, 150)));
 const loud = console.error;

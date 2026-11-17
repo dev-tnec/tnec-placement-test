@@ -4,6 +4,7 @@
 import { useEffect, useState } from "react";
 import "./admin.css";
 import { createRoot } from "react-dom/client";
+import { clearBootstrapCache } from "./bootstrap-cache.js";
 
 const HOME = "/admin/";
 
@@ -56,6 +57,7 @@ function Login() {
         if (!email || !password) { setError("Isi email dan kata sandi."); (email ? form.password : form.email).focus(); return; }
         await post("/api/admin/login", { email, password });
       }
+      clearBootstrapCache();
       window.location.assign(HOME);
     } catch (err) {
       setError(err instanceof TypeError ? "Server tidak bisa dihubungi. Periksa koneksi internet, lalu coba lagi." : err.message);

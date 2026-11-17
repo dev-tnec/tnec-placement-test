@@ -4,6 +4,7 @@
 
 import { useSyncExternalStore } from "react";
 import { toast } from "./dom.js";
+import { readBootstrapCache, writeBootstrapCache, clearBootstrapCache } from "./bootstrap-cache.js";
 
 export const HOME = "/admin/";
 export const LOGIN = "/admin/login";
@@ -43,7 +44,7 @@ export async function api(path, { method = "GET", body } = {}) {
   });
   let data = null;
   try { data = await response.json(); } catch { data = null; }
-  if (response.status === 401) { window.location.assign(LOGIN); throw new Error("Sesi berakhir."); }
+  if (response.status === 401) { clearBootstrapCache(); window.location.assign(LOGIN); throw new Error("Sesi berakhir."); }
   if (!response.ok) { const err = new Error(data?.error || "Permintaan gagal diproses. Coba lagi."); err.field = data?.field; err.status = response.status; throw err; }
   return data;
 }
@@ -65,7 +66,15 @@ export async function mutate(work, success) {
 
 export async function reload() {
   const data = await api("/api/admin/bootstrap");
-  NOW = data.now || Date.now();
+  applyBootstrap(data);
+  writeBootstrapCache(data);
+  notify();
+}
+
+/* Applies one bootstrap payload to the store. A cached payload uses the current clock, so the
+   date filters stay right even when the payload was fetched a few minutes earlier. */
+function applyBootstrap(data, cached = false) {
+  NOW = cached ? Date.now() : (data.now || Date.now());
   ME = data.me.name;
   db.me = data.me;
   db.publicUrl = data.publicUrl;
@@ -89,7 +98,6 @@ export async function reload() {
   for (const entry of studentDetails.values()) entry.stale = true;
   for (const entry of attemptDetails.values()) entry.stale = true;
   dataReady = true;
-  notify();
 }
 
 /* ===================== Hash router ===================== */
@@ -158,4 +166,10 @@ export function withDetail(a) {
     (raw) => ({ answers: raw.answers, log: raw.log, device: raw.device, country: raw.country, consent: raw.consent, speaking: raw.speaking || null }),
     () => route().parts[3] === a.id);
   return d ? { ...a, ...d, loading: false } : { ...a, answers: null, log: null, consent: "", loading: true, speaking: a.speaking || null };
+}
+/* Paint the last payload right away on a reload; the App still fetches a fresh copy in the
+   background. A payload with an unexpected shape is dropped rather than breaking the shell. */
+const cachedBootstrap = readBootstrapCache();
+if (cachedBootstrap) {
+  try { applyBootstrap(cachedBootstrap, true); } catch { clearBootstrapCache(); }
 }

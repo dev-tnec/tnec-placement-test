@@ -3,10 +3,12 @@
 
 import { useEffect, useState } from "react";
 import { dataReady, db, notify, reload, route, ui, useRoute, useVersion, TEST_KEYS, LOGIN } from "./store.js";
+import { clearBootstrapCache } from "./bootstrap-cache.js";
 import { isColdLead, leads, exportStudents, exportAttempts, TEST_META } from "./lib.js";
 import { Icon, PageHead, Empty } from "./ui.jsx";
 import { closeMenu } from "./menus.jsx"; // also registers the menu listeners
 import { deleteStudents, deleteAttempts } from "./actions.js";
+import { toast } from "./dom.js";
 import { Ringkasan } from "./views/Ringkasan.jsx";
 import { SiswaList, SiswaDetail } from "./views/Siswa.jsx";
 import { Sertifikat } from "./views/Sertifikat.jsx";
@@ -71,6 +73,7 @@ function Sidebar({ nav }) {
             onClick={async (e) => {
               const b = e.currentTarget; b.disabled = true;
               try { await fetch("/api/admin/logout", { method: "POST", credentials: "same-origin" }); } catch { /* the login page still opens */ }
+              clearBootstrapCache();
               window.location.assign(LOGIN);
             }}><Icon name="logout" /></button>
         </div>
@@ -149,7 +152,10 @@ export default function App() {
 
   useEffect(() => {
     window.addEventListener("hashchange", notify);
-    if (!dataReady) reload().catch((e) => setError(e.message || "Server tidak merespons."));
+    reload().catch((e) => {
+      if (dataReady) toast("Data terbaru belum bisa dimuat. Dasbor memakai data terakhir.");
+      else setError(e.message || "Server tidak merespons.");
+    });
     return () => window.removeEventListener("hashchange", notify);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
