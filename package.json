@@ -19,6 +19,7 @@
     "admin:create": "node scripts/create-admin.mjs",
     "build:admin": "npm run build -w @tnec/admin",
     "build:web": "npm run build -w @tnec/web",
+    "render": "node scripts/render.mjs",
     "test": "node tests/smoke.mjs"
   },
   "allowScripts": {

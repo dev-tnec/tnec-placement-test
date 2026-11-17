@@ -304,7 +304,38 @@ Read `DESIGN.md` before touching CSS. Navy structure, navy buttons, white readin
 3. Commits are authored as Aldo `<354270602+dev-tnec@users.noreply.github.com>` only. No AI attribution, no Co-Authored-By trailers.
 4. Use conventional subjects (`feat:`, `fix:`, `docs:`, `chore:`), imperative and one line. Review `git status` and `git diff --staged` before every push.
 5. Never commit `.env`, `node_modules/`, the session export `tikno-english-placement-test-setup.json`, or any secret. Pushing from this machine works with the GitHub CLI login: `git -c credential.helper= -c "credential.helper=!gh auth git-credential" push origin main`.
-6. After a push, deploy the Render services the change touches, with the Render MCP `trigger_deploy` tool or Manual Deploy in the dashboard: `srv-dbt6h3tg1s2s738toue0` for `apps/web`, `srv-dbt6h3tg1s2s738touf0` for `apps/admin`, and both for `packages`, `db`, or the root package files. Then check that each one reaches `live`.
+6. After a push, deploy the Render services the change touches with `npm run render -- deploy both` (or `web` or `admin`). The helper uses the Render API key from the OpenCode config. Then run `npm run render -- status both` and check that each one reaches `live`. Deploy both for `packages`, `db`, or the root package files.
+
+## Render access
+
+The Render MCP is configured in the OpenCode config at `C:\Users\Sales\.config\opencode\opencode.json` under `mcp.servers.render`, with a Render API key in `mcp.servers.render.headers.Authorization`. The MCP tools may not appear in a session's tool search. That does not mean the account is unavailable. Use `scripts/render.mjs` or the Render REST API with that key. Never commit the key or paste it into a repository file.
+
+The project uses two web services in the IndexNow workspace, Singapore, Starter plan, branch `main`. The `tnec-ielts-mockup` service is in the same workspace but is not part of this repository; do not deploy or change it.
+
+| Service | ID | Address | Start command |
+|---|---|---|---|
+| `tnec-placement-test` | `srv-dbt6h3tg1s2s738toue0` | https://tnec-placement-test.onrender.com | `npm run start:web` |
+| `tnec-placement-admin` | `srv-dbt6h3tg1s2s738touf0` | https://tnec-placement-admin.onrender.com/admin | `npm run start:admin` |
+
+The helper reads the key from the OpenCode config, or from `RENDER_API_KEY` when that is set, and never prints it.
+
+1. `npm run render -- status both` lists the latest deploys.
+2. `npm run render -- deploy both` triggers both and waits until `live` or a failure. Use `web` or `admin` for one service.
+3. `npm run render -- env list web` lists the variable names with masked values. Add `--show-values` only when you are alone on the screen.
+4. `npm run render -- env set both GEMINI_API_KEY=...` adds or updates one variable. `npm run render -- env delete web KEY` removes one. Run `deploy both` after an environment change.
+
+The REST calls behind the helper use `Authorization: Bearer <key>` against `https://api.render.com/v1`.
+
+| Method | Path | Use |
+|---|---|---|
+| GET | `/services` | List services |
+| POST | `/services/{id}/deploys` | Trigger a deploy, body `{"clearCache":"do_not_clear"}` |
+| GET | `/services/{id}/deploys?limit=5` | Latest deploys and their status |
+| GET | `/services/{id}/env-vars` | List environment variables |
+| PUT | `/services/{id}/env-vars/{key}` | Add or update one, body `{"value":"..."}` |
+| DELETE | `/services/{id}/env-vars/{key}` | Delete one |
+
+On 17 November 2026 both placement services have `SPEECHACE_KEY`, `DATABASE_URL`, the Cloudflare email keys, and the AttCos keys. Neither has `GEMINI_API_KEY` or `GEMINI_MODEL`, so Writing scoring fails in production until the owner provides the key. The local `.env` does not have it either.
 
 ## Known limits and next steps
 
