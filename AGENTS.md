@@ -82,7 +82,7 @@ To run against the `dev` branch, point `ENV_FILE` at a second env file with the 
 5. Submitting sends only the answers. The server grades them against the questions stored on the attempt and stores the key used with each answer. For the placement test the response never includes the score.
 6. Placement only: the details screen collects name, email, and WhatsApp. `POST /api/attempts/:id/contact` links or creates the student, logs the activity, marks the result email and the result WhatsApp as pending, and returns the result right away. The server sends both in the background (see Result delivery), so the result page never waits for Cloudflare or AttCos. Nobody presses anything for either one. A repeated contact step does not send a channel again once it has delivered for that attempt.
 7. Pre-test and post-test: the student opens `/?undangan=<token>` from a dashboard message. There is no contact step, and the score out of 100 shows right away, with pass or not for the post-test. A link works until it is used for a submission or expires after 14 days.
-8. A failed attempt is never submitted. When the total timer reaches zero, or when the violation limit is reached, the test stops and a dialog offers a retry or a return to the start.
+8. A failed attempt is never submitted. When the total timer reaches zero, or when the violation limit is reached, the test stops and a dialog offers a retry or a return to the start. An attempt that hits the violation limit is deleted at that moment, answers and recording included, so it never appears in the dashboard. An attempt that runs out of time stays as Waktu habis.
 
 ## Public API (web app)
 
@@ -177,7 +177,7 @@ What the app does:
 
 1. Requests fullscreen when the test starts, with the navigation bar hidden where the browser allows it. If the browser refuses, the test continues with a warning banner.
 2. Locks the Esc key during the test in Chrome, Edge, and Opera (Keyboard Lock API), asked for right before fullscreen and released when fullscreen ends. A quick press does nothing; leaving fullscreen takes holding Esc for 2 seconds, which the browser always allows and which still counts as a strike. Firefox and Safari have no Keyboard Lock, so Esc leaves fullscreen at once there.
-3. Counts leaving fullscreen, hiding the tab, and blurring the window as focus violations. At the limit, 3 by default and set per test, the test stops without submitting.
+3. Counts leaving fullscreen, hiding the tab, and blurring the window as focus violations. At the limit, 3 by default and set per test, the test stops without submitting, and the attempt row is deleted right away so no Pelanggaran submission is stored.
 4. Logs blocked copy, cut, paste, context menu, drag, F12, and developer shortcuts without counting them as strikes.
 5. Keeps the timer running while the violation modal is open, and grades on the server.
 

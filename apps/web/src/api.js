@@ -183,11 +183,17 @@ async function logViolation(request, env, attemptId) {
   const type = String(body?.type || "");
   if (!VIOLATION_TYPES.has(type)) throw new HttpError(400, "Jenis pelanggaran tidak dikenal.");
   const entry = `${nowSeconds()}:${type};`.slice(0, 200);
-  const result = await env.DB.prepare(
+  const row = await env.DB.prepare(
     `UPDATE attempts SET violations = violations + 1, violation_log = COALESCE(violation_log, '') || ?
-      WHERE id = ? AND status = 'in_progress'`,
-  ).bind(entry, attemptId).run();
-  return json({ ok: true, counted: Boolean(result.meta?.changes) });
+      WHERE id = ? AND status = 'in_progress' RETURNING violation_log, max_violations`,
+  ).bind(entry, attemptId).first();
+  // The last strike ends the attempt without submitting, and such attempts must not sit in the
+  // database as "Tanpa nama, Pelanggaran". Deleting the row removes its answers and recording too.
+  if (row && focusStrikes(row.violation_log) >= (row.max_violations || 3)) {
+    await env.DB.prepare("DELETE FROM attempts WHERE id = ? AND status = 'in_progress'").bind(attemptId).run();
+    return json({ ok: true, counted: true, ended: true });
+  }
+  return json({ ok: true, counted: Boolean(row) });
 }
 
 function inviteResult(attempt, score, total, passed) {
