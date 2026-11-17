@@ -255,6 +255,7 @@ input[type="checkbox"] { width: 16px; height: 16px; margin: 0; accent-color: var
 
 /* Tables */
 .table-wrap { position: relative; overflow-x: auto; }
+.si-preview { max-height: 320px; overflow-y: auto; }
 .table { width: 100%; border-collapse: collapse; font-size: 14px; }
 .table th {
   padding: 10px 16px; text-align: left; white-space: nowrap;

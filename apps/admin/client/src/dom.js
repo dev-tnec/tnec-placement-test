@@ -26,6 +26,22 @@ export function busy(button, label) {
   return () => { button.disabled = false; button.textContent = old; };
 }
 
+/**
+ * One shared "mark this field invalid and remember the first one" helper for every dialog
+ * submit handler. Each dialog used to define its own copy of this closure. `fail.first()`
+ * returns the first invalid element, or null when every field passed.
+ */
+export function makeFieldFail() {
+  let first = null;
+  const fail = (input, errId, message) => {
+    fieldError(input, errId, message);
+    if (!first) first = input;
+    return input;
+  };
+  fail.first = () => first;
+  return fail;
+}
+
 /* ===================== Toasts ===================== */
 export function toast(message, action) {
   const region = $("#toasts");

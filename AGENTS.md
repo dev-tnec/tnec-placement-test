@@ -328,6 +328,22 @@ Read `DESIGN.md` before touching CSS. Navy structure, navy buttons, white readin
 
 The runner stylesheet is `apps/web/student/src/app.css`, imported by `src/main.jsx`. esbuild bundles and hashes it, and the Node server writes the link into the generated document shell, so no stylesheet link is ever added to an HTML file by hand.
 
+## React standard
+
+The three React apps (the student runner, the result report, the dashboard) follow one standard, checked against the Vercel React best practices skill. New React work must keep it.
+
+1. Function components only, on React 19 with the automatic JSX runtime. No class components, no `React.createRef`, no string refs, no default exports of non-component modules where a named export is the pattern.
+2. Shared components live in one place per app and are searched before a new one is written. The dashboard keeps every atom in `src/ui.jsx` (Icon, Status, Chip, Empty, PageHead, Pager, Notice, the cell components) and every dialog in `src/dialogs.jsx`; the student runner keeps the screens in `src/screens.jsx` with icons hoisted to module level; the result report is one page in `src/App.jsx`. Before writing a new component, grep the existing atoms and the 21st MCP for an established one; only build new when nothing fits.
+3. Shared logic used by two or more apps goes in `packages/core/src` as a pure module with no Node builtins, so both the server and the browser bundles can import it (`mockup-bulk.js` is the pattern), and `tests/smoke.mjs` covers it. Logic used by one app stays in that app.
+4. Never define a component inside a component. Components, icon SVGs, and message builders are hoisted to module level; inline arrow functions inside JSX are for event handlers only.
+5. State: the dashboard is one external store subscribed through `useSyncExternalStore` (`useVersion`), every write goes through the API and then `reload()`, and no view keeps a private copy of bootstrap data. The runner uses local state; refs mirror state for the timer and event callbacks, and the mirror assignment happens in `useEffect`, never during render, because writing refs during render tears under concurrent rendering.
+6. Every effect that starts something returns a cleanup: intervals, timeouts, listeners, media tracks, object URLs, and the LiveWaveform destroy. The result report's polling effect is the reference (`stopped` flag plus `clearTimeout`).
+7. Derive state during render (`useMemo` or a plain expression), not by copying state into other state inside an effect. Effects are for subscribing to the outside world, not for re-rendering.
+8. Every `.map` render carries a stable `key`. Conditional rendering uses a ternary or an explicit boolean; never `number && jsx`, which renders the number.
+9. Imports are direct from the file, never through a barrel file, so esbuild tree-shakes and the committed bundle stays small. No runtime CSS-in-JS; styles are the committed `.css` files per app, because both CSPs block inline styles.
+10. Forms in the dashboard are uncontrolled by design: values are read from the DOM at submit, validated with `makeFieldFail()` from `src/dom.js` (one shared helper, not a per-dialog copy) and `busy()` for the submit button. The student test inputs are controlled.
+11. The Vercel React best practices skill (`react-best-practices`) and the 21st component MCP are installed; consult them before new React work, the same way DESIGN.md governs CSS.
+
 ## Git and push rules
 
 1. This folder is its own repository. Never commit the parent `tnec` folder, `credentials/`, `cpanel-titiknolenglishcom/`, or `tnec-cpanel/`.

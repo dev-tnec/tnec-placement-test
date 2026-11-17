@@ -5,7 +5,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { api, db, ui, T, notify, reload, mutate, sessionEnded, useVersion, NOW, KEYS } from "./store.js";
-import { $, $$, busy, clearErrors, fieldError, toast } from "./dom.js";
+import { $, $$, busy, clearErrors, fieldError, makeFieldFail, toast } from "./dom.js";
 import {
   TEST_META, certPrefill, certCounter, certTypeName, certTemplateOf, certTypeById, certById,
   classesFor, classLabel, currentPeriod, fmtDate, fmtDateLong, fmtNum, fmtRp, fmtSpan, fmtWa,
@@ -111,8 +111,7 @@ function QuestionDialog({ id }) {
     clearErrors(form);
     const prompt = $("#qe-prompt").value.trim();
     const passage = hasPassage ? $("#qe-passage").value.trim() : "";
-    let first = null;
-    const fail = (input, errId, msg) => { fieldError(input, errId, msg); if (!first) first = input; };
+    const fail = makeFieldFail();
     if (!prompt) fail($("#qe-prompt"), "qe-prompt-err", "Teks soal wajib diisi.");
     if (hasPassage && !passage) fail($("#qe-passage"), "qe-passage-err", "Bacaan wajib diisi kalau opsi bacaan dicentang.");
 
@@ -152,6 +151,7 @@ function QuestionDialog({ id }) {
 
     const seconds = Number($("#qe-seconds")?.value);
     if (per && (!Number.isInteger(seconds) || seconds < 5 || seconds > 180)) fail($("#qe-seconds"), "qe-seconds-err", "Waktu soal harus antara 5 dan 180 detik.");
+    const first = fail.first();
     if (first) { first.focus(); return; }
 
     const done = busy(form.querySelector('[type="submit"]'), "Menyimpan...");
@@ -288,8 +288,7 @@ function SectionDialog({ id }) {
     e.preventDefault();
     const form = e.currentTarget;
     clearErrors(form);
-    let first = null;
-    const fail = (input, errId, msg) => { fieldError(input, errId, msg); if (!first) first = input; };
+    const fail = makeFieldFail();
     const title = $("#se-title").value.trim();
     const start = Number($("#se-from").value);
     const end = Number($("#se-to").value);
@@ -301,6 +300,7 @@ function SectionDialog({ id }) {
     }
     if (audioUrl && !audioUrl.startsWith("/")) fail($("#se-audio"), "se-audio-err", "Alamat audio harus dimulai dengan / dan dihosting di situs tes ini.");
     if (imageUrl && !imageUrl.startsWith("/")) fail($("#se-image"), "se-image-err", "Alamat gambar harus dimulai dengan / dan dihosting di situs tes ini.");
+    const first = fail.first();
     if (first) { first.focus(); return; }
 
     const body = {
@@ -404,10 +404,10 @@ function PackageDialog({ id }) {
     e.preventDefault();
     const form = e.currentTarget;
     clearErrors(form);
-    let first = null;
-    const fail = (input, errId, msg) => { fieldError(input, errId, msg); if (!first) first = input; };
+    const fail = makeFieldFail();
     const value = $("#pk-name").value.trim();
     if (!value) fail($("#pk-name"), "pk-name-err", "Nama paket wajib diisi.");
+    const first = fail.first();
     if (first) { first.focus(); return; }
     const body = { name: value, active: $("#pk-active").checked };
     const done = busy(form.querySelector('[type="submit"]'), "Menyimpan...");
@@ -459,14 +459,14 @@ function StudentDialog({ id }) {
     const wa = normalizeWa(waRaw);
     const email = $("#sf-email").value.trim().toLowerCase();
     const stage = $("#sf-stage").value;
-    let first = null;
-    const fail = (input, errId, msg) => { fieldError(input, errId, msg); if (!first) first = input; };
+    const fail = makeFieldFail();
     if (name.length < 2) fail($("#sf-name"), "sf-name-err", "Nama minimal 2 karakter.");
     if (!waRaw) fail($("#sf-wa"), "sf-wa-err", "Nomor WhatsApp wajib diisi.");
     else if (!/^62\d{8,13}$/.test(wa)) fail($("#sf-wa"), "sf-wa-err", "Nomor WhatsApp terlihat belum lengkap. Periksa lagi jumlah digitnya.");
     if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email)) fail($("#sf-email"), "sf-email-err", "Format email belum benar.");
     const birthdate = $("#sf-birthdate").value;
     if (birthdate && !/^\d{4}-\d{2}-\d{2}$/.test(birthdate)) fail($("#sf-birthdate"), "sf-birthdate-err", "Tanggal lahir belum benar.");
+    const first = fail.first();
     if (first) { first.focus(); return; }
     const body = {
       name, wa, email, city: $("#sf-city").value.trim(), source: $("#sf-source").value, stage,
@@ -624,8 +624,7 @@ function DaftarDialog({ studentId }) {
     clearErrors(form);
     const programId2 = $("#df-program").value || null;
     const periodId2 = $("#df-period").value || null;
-    let first = null;
-    const fail = (el, errId, msg) => { fieldError(el, errId, msg); if (!first) first = el; };
+    const fail = makeFieldFail();
     if (!programId2) fail($("#df-program"), "df-program-err", "Program wajib dipilih.");
     if (!periodId2) fail($("#df-period"), "df-period-err", "Periode wajib dipilih.");
     const birthdate = $("#df-birthdate").value;
@@ -655,6 +654,7 @@ function DaftarDialog({ studentId }) {
       body.email = $("#df-email").value.trim().toLowerCase();
       body.city = $("#df-city").value.trim();
     }
+    const first = fail.first();
     if (first) { first.focus(); return; }
     const done = busy($("#df-save"), "Menyimpan...");
     try {
@@ -911,22 +911,23 @@ function ProgramDialog({ id }) {
     const form = e.currentTarget;
     clearErrors(form);
     const name = $("#pg-name").value.trim().replace(/\s+/g, " ");
-    let first = null;
-    const fail = (input, errId, msg) => { fieldError(input, errId, msg); if (!first) first = input || $("#pg-name"); };
-    if (!name) fail($("#pg-name"), "pg-name-err", "Nama program wajib diisi.");
-    else if (db.programs.some((x) => x.name.toLowerCase() === name.toLowerCase() && x.id !== id)) fail($("#pg-name"), "pg-name-err", "Nama program ini sudah ada.");
-    if (!rows.length) fail(null, "pg-dur-err", "Tambahkan minimal satu durasi.");
+    const fail = makeFieldFail();
+    const nameField = () => $("#pg-name");
+    if (!name) fail(nameField(), "pg-name-err", "Nama program wajib diisi.");
+    else if (db.programs.some((x) => x.name.toLowerCase() === name.toLowerCase() && x.id !== id)) fail(nameField(), "pg-name-err", "Nama program ini sudah ada.");
+    if (!rows.length) fail(nameField(), "pg-dur-err", "Tambahkan minimal satu durasi.");
     for (const r of rows) {
       if (!r.label) { fail($(`[aria-label="Nama durasi"][value=""]`), "pg-dur-err", "Setiap durasi perlu nama, misalnya 2 minggu atau 1 bulan."); break; }
-      if (!Number.isInteger(r.days) || r.days < 1 || r.days > 365) { fail(null, "pg-dur-err", `Jumlah hari untuk ${r.label || "durasi ini"} harus antara 1 dan 365.`); break; }
-      if (r.price !== null && r.price !== "" && r.price !== undefined && (!Number.isInteger(Number(r.price)) || Number(r.price) < 0)) { fail(null, "pg-dur-err", `Harga ${r.label} harus angka bulat dan tidak boleh negatif.`); break; }
+      if (!Number.isInteger(r.days) || r.days < 1 || r.days > 365) { fail(nameField(), "pg-dur-err", `Jumlah hari untuk ${r.label || "durasi ini"} harus antara 1 dan 365.`); break; }
+      if (r.price !== null && r.price !== "" && r.price !== undefined && (!Number.isInteger(Number(r.price)) || Number(r.price) < 0)) { fail(nameField(), "pg-dur-err", `Harga ${r.label} harus angka bulat dan tidak boleh negatif.`); break; }
     }
-    if (!first && rows.length && new Set(rows.map((r) => String(r.label || "").toLowerCase())).size < rows.length) fail(null, "pg-dur-err", "Ada nama durasi yang sama. Setiap durasi harus berbeda.");
-    if (!first && p) {
+    if (!fail.first() && rows.length && new Set(rows.map((r) => String(r.label || "").toLowerCase())).size < rows.length) fail(nameField(), "pg-dur-err", "Ada nama durasi yang sama. Setiap durasi harus berbeda.");
+    if (!fail.first() && p) {
       const kept = new Set(rows.map((r) => r.id).filter(Boolean));
       const inUse = p.durations.filter((d) => !kept.has(d.id)).find((d) => db.students.some((s) => s.durationId === d.id));
-      if (inUse) fail(null, "pg-dur-err", `Durasi ${inUse.label} masih dipakai ${db.students.filter((s) => s.durationId === inUse.id).length} siswa, jadi belum bisa dihapus.`);
+      if (inUse) fail(nameField(), "pg-dur-err", `Durasi ${inUse.label} masih dipakai ${db.students.filter((s) => s.durationId === inUse.id).length} siswa, jadi belum bisa dihapus.`);
     }
+    const first = fail.first();
     if (first) { first.focus(); return; }
     const body = {
       name, mode: $("#pg-mode").value, status: $("#pg-status").value,
@@ -1059,8 +1060,7 @@ function CertTypeDialog({ id }) {
     clearErrors(e.currentTarget);
     const signerName = signer.trim().replace(/\s+/g, " ");
     const signerRole = role.trim().replace(/\s+/g, " ");
-    let first = null;
-    const fail = (input, errId, msg) => { fieldError(input, errId, msg); if (!first) first = input; };
+    const fail = makeFieldFail();
     if (name.trim().length < 2) fail($("#ct-name"), "ct-name-err", "Nama sertifikat minimal 2 karakter.");
     else if (db.certs.types.some((x) => x.id !== id && x.name.toLowerCase() === name.trim().toLowerCase())) fail($("#ct-name"), "ct-name-err", "Jenis sertifikat dengan nama ini sudah ada.");
     if (!code.trim() || /\s/.test(code)) fail($("#ct-code"), "ct-code-err", "Kode wajib diisi tanpa spasi, misalnya COMP.");
@@ -1070,6 +1070,7 @@ function CertTypeDialog({ id }) {
     else if (lastNum < top) fail($("#ct-last"), "ct-last-err", `Nomor terakhir tidak bisa di bawah ${top}, karena nomor itu sudah terbit di ${certPeriodLabel(reset, today)}.`);
     if (!signerName) fail($("#ct-signer"), "ct-signer-err", "Nama penanda tangan wajib diisi.");
     if (!signerRole) fail($("#ct-role"), "ct-role-err", "Jabatan penanda tangan wajib diisi.");
+    const first = fail.first();
     if (first) { first.focus(); return; }
     const body = { name: name.trim().replace(/\s+/g, " "), code: code.trim(), template, format: format.trim(), reset, signerName, signerRole, status: $("#ct-status").value };
     // The counter is only sent when someone typed a new last number, so saving a signer change never
@@ -1247,8 +1248,7 @@ function CertDialog({ studentId, certId }) {
     clearErrors(e.currentTarget);
     const details = {};
     for (const f of tpl ? tpl.fields : []) details[f.key] = String(values[f.key] ?? "").trim();
-    let first = null;
-    const fail = (input, errId, msg) => { fieldError(input, errId, msg); if (!first) first = input; };
+    const fail = makeFieldFail();
     if (!c && !studentById(studentId2)) fail($("#cr-student").closest("[hidden]") ? null : $("#cr-student"), "cr-student-err", "Pilih siswa penerima sertifikat.");
     if (!c && !type) fail($("#cr-type"), "cr-type-err", "Pilih jenis sertifikat.");
     if (!c && !dateIso) fail($("#cr-date"), "cr-date-err", "Pilih tanggal terbit.");
@@ -1256,6 +1256,7 @@ function CertDialog({ studentId, certId }) {
     if (nameOnCert.length < 2) fail($("#cr-name"), "cr-name-err", "Nama di sertifikat minimal 2 karakter.");
     for (const f of tpl ? tpl.fields : []) if (!details[f.key]) fail($(`#cr-f-${f.key}`), `cr-f-${f.key}-err`, `${f.label} wajib diisi.`);
     if (details.mulai && details.selesai && details.selesai < details.mulai) fail($("#cr-f-selesai"), "cr-f-selesai-err", "Selesai belajar tidak boleh lebih awal dari mulai belajar.");
+    const first = fail.first();
     if (first) { first.focus(); return; }
     if (!c && !studentById(studentId2)) { toast("Data siswa ini sudah tidak ada. Tutup dialog lalu pilih siswa lain."); return; }
     const done = busy($("#cr-save"), c ? "Menyimpan..." : "Menerbitkan...");
@@ -1651,8 +1652,7 @@ function SessionDialog({ id }) {
     e.preventDefault();
     const form = e.currentTarget;
     clearErrors(form);
-    let first = null;
-    const fail = (el, errId, msg) => { fieldError(el, errId, msg); if (!first) first = el; };
+    const fail = makeFieldFail();
     const name = $("#ss-name").value.trim();
     if (name.length < 2) fail($("#ss-name"), "ss-name-err", "Nama sesi minimal 2 karakter.");
     const body = {
@@ -1678,6 +1678,7 @@ function SessionDialog({ id }) {
       else body.entryGraceSeconds = minutes * 60;
     }
     if (s) body.status = $("#ss-status").value;
+    const first = fail.first();
     if (first) { first.focus(); return; }
     const done = busy($("#ss-save"), "Menyimpan...");
     try {
@@ -1899,14 +1900,14 @@ function MoveInviteDialog({ inviteId, name, fromSessionId }) {
   async function save(e) {
     e.preventDefault();
     clearErrors(e.currentTarget);
-    let first = null;
-    const fail = (el, errId, msg) => { fieldError(el, errId, msg); if (!first) first = el; };
+    const fail = makeFieldFail();
     const body = { sessionId: targetId };
     if (target?.windowMode === "terjadwal") {
       body.date = $("#mv-date").value;
       body.time = $("#mv-time").value;
       if (!body.date || !body.time) fail($("#mv-date"), "mv-err", "Tanggal dan jam baru wajib diisi untuk sesi terjadwal.");
     }
+    const first = fail.first();
     if (first) { first.focus(); return; }
     const done = busy(e.currentTarget.querySelector("#mv-save"), "Memindah...");
     try {

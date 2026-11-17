@@ -120,16 +120,20 @@ export default function App() {
   const speakingCountRef = useRef(0);
   const finishSpeakingByTimeRef = useRef(null);
 
-  screenRef.current = screen;
-  attemptRef.current = attempt;
-  indexRef.current = index;
-  answersRef.current = answers;
-  perModeRef.current = perMode;
-  endingRef.current = ending;
-  submittedRef.current = submitted;
-  maxStrikesRef.current = maxStrikes;
-  mockupRef.current = mockup;
-  autoSubmitRef.current = autoSubmit;
+  // Keep the latest state in refs for the timer and event callbacks, but only after the commit:
+  // writing refs during render is impure and can tear under concurrent rendering.
+  useEffect(() => {
+    screenRef.current = screen;
+    attemptRef.current = attempt;
+    indexRef.current = index;
+    answersRef.current = answers;
+    perModeRef.current = perMode;
+    endingRef.current = ending;
+    submittedRef.current = submitted;
+    maxStrikesRef.current = maxStrikes;
+    mockupRef.current = mockup;
+    autoSubmitRef.current = autoSubmit;
+  });
 
   const showToast = useCallback((message, duration = 5000) => {
     setToast(message);
