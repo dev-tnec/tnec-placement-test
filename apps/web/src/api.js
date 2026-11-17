@@ -8,9 +8,9 @@ import {
 } from "@tnec/core/store";
 import { CONSENT_VERSION, PRIVACY, TERMS, WHATSAPP, fillLegal } from "@tnec/core/legal";
 import { whatsappConfigured } from "@tnec/core/whatsapp";
-import { deliverInBackground, EMAIL_SKIPPED } from "@tnec/core/delivery";
+import { deliverInBackground, runInBackground, EMAIL_SKIPPED } from "@tnec/core/delivery";
 import { sha256Hex } from "@tnec/core/crypto";
-import { SPEAKING_MAX_BYTES, speakingType, speechaceConfigured, gradeInBackground } from "@tnec/core/speaking";
+import { SPEAKING_MAX_BYTES, speakingType, speechaceConfigured, gradeInBackground, purgeExpiredAttempts } from "@tnec/core/speaking";
 import { isFinalStatus } from "@tnec/core/speaking-result";
 
 const PUBLIC_BODY_LIMIT = 16 * 1024;
@@ -154,6 +154,9 @@ async function createAttempt(request, env) {
     testKey, invite ? invite.student_id : null, JSON.stringify(questions.map((q) => q.id)), test.timeMode,
     durationSeconds, test.maxViolations, testKey === "post" ? test.passScore ?? 70 : null, invite ? invite.id : null,
   ).run();
+
+  // Somebody is testing again, so attempts whose time ran out long ago are cleaned up now.
+  runInBackground(() => purgeExpiredAttempts(env));
 
   return json({
     attemptId: id,

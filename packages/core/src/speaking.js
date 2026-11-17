@@ -226,6 +226,23 @@ export async function purgeOldAudio(env, now = nowSeconds()) {
   return count;
 }
 
+// The client may still submit up to 15 seconds after the deadline, so wait past that.
+const EXPIRED_GRACE_SECONDS = 60;
+
+/**
+ * Deletes attempts whose time ran out long ago, answers and recordings included. The owner asked
+ * for failed attempts not to sit in the database as "Tanpa nama". This runs when a new test starts
+ * and in the six-hourly safety scan, not on a timer, so the Neon compute can still suspend.
+ */
+export async function purgeExpiredAttempts(env, now = nowSeconds()) {
+  const purged = await env.DB.prepare(
+    `DELETE FROM attempts WHERE status = 'in_progress' AND expires_at + ${EXPIRED_GRACE_SECONDS} < ?`,
+  ).bind(now).run();
+  const count = purged.meta?.changes || 0;
+  if (count) console.log(`attempts purged count=${count} reason=expired`);
+  return count;
+}
+
 /** Starts the scan at start-up, the retries, the 6-hourly safety scan, and the daily audio purge. */
 export function startSpeakingWorker(env) {
   if (ticker) return;
@@ -241,6 +258,7 @@ export function startSpeakingWorker(env) {
     if (nowMs - lastScan >= SCAN_EVERY_MS) {
       lastScan = nowMs;
       runInBackground(() => gradePending(env));
+      runInBackground(() => purgeExpiredAttempts(env));
       // The apps send waiting results at start-up themselves. The later scans also catch a result
       // whose recording was graded right before its server stopped.
       if (!first) runInBackground(() => deliverPending(env));
