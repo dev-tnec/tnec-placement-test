@@ -16,6 +16,7 @@ import { SPEAKING_MAX_BYTES, speakingType, speechaceConfigured, gradeInBackgroun
 import { isFinalStatus, speakingFacts } from "@tnec/core/speaking-result";
 import { mockupSpeakingPlan, mockupSpeakingQuestion, MOCKUP_SPEAKING_TOTAL } from "@tnec/core/speaking-mockup";
 import { gradeAnswer as gradeMockupAnswer } from "@tnec/core/speaking-mockup-worker";
+import { formatWib } from "@tnec/core/mockup-bulk";
 
 const PUBLIC_BODY_LIMIT = 16 * 1024;
 // Two writing essays need more room than the other JSON bodies.
@@ -151,6 +152,9 @@ async function findInvite(env, token) {
   if (row.used_at) throw new HttpError(410, "Tautan ini sudah dipakai untuk mengirim jawaban. Hubungi admin Titik Nol kalau kamu perlu mengulang.");
   if (row.code_tries >= 3) throw new HttpError(423, "Kode sudah salah tiga kali, jadi undangan ini terkunci. Minta admin membuatkan undangan baru.");
   if (row.expires_at < nowSeconds()) throw new HttpError(410, "Tautan ini sudah kedaluwarsa. Minta tautan baru ke admin Titik Nol.");
+  if (row.opens_at && row.opens_at > nowSeconds()) {
+    throw new HttpError(423, `Tes ini baru bisa dibuka pada ${formatWib(row.opens_at)}. Buka kembali tautan ini lagi nanti.`);
+  }
   return row;
 }
 

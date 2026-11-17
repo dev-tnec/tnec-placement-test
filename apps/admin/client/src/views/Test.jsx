@@ -19,7 +19,8 @@ import {
 } from "../ui.jsx";
 import { MenuBtn } from "../menus.jsx";
 import { resendEmail, speakingRetry, speakingReviewed, speakingSkip } from "../actions.js";
-import { openQuestionEditor, openDaftar, openSectionEditor, openPackageEditor } from "../dialogs.jsx";
+import { openQuestionEditor, openDaftar, openSectionEditor, openPackageEditor, openSessionEditor } from "../dialogs.jsx";
+import { SessionsTab } from "./MockupSesi.jsx";
 import { $, busy, clearErrors, fieldError, toast } from "../dom.js";
 
 /* Jumlah soal aktif versus the top level threshold. */
@@ -48,6 +49,7 @@ export function TestPage({ testKey, tab }) {
   if (testKey === "ielts-mockup") {
     tabs.push(["bagian", "Bagian", packageSections(t).length]);
     tabs.push(["paket", "Paket", t.packages.length]);
+    tabs.push(["sesi", "Sesi", db.sessions.length]);
   }
   tabs.push(["pengaturan", "Pengaturan", null]);
   if (!tabs.some((x) => x[0] === tab)) tab = "soal";
@@ -57,6 +59,7 @@ export function TestPage({ testKey, tab }) {
     : tab === "submission" ? <button className="btn btn--quiet" type="button" onClick={() => exportAttempts(db.attempts.filter((a) => attemptMatches(a, ui.attempts[testKey], false)))}><Icon name="download" />Ekspor CSV</button>
       : tab === "bagian" ? <button className="btn btn--primary" type="button" onClick={() => openSectionEditor(null)}><Icon name="plus" />Tambah bagian</button>
         : tab === "paket" ? <button className="btn btn--primary" type="button" onClick={() => openPackageEditor(null)}><Icon name="plus" />Tambah paket</button>
+  : tab === "sesi" ? <button className="btn btn--primary" type="button" onClick={() => openSessionEditor(null)}><Icon name="plus" />Tambah sesi</button>
           : tab === "lead" ? <button className="btn btn--quiet" type="button" onClick={() => exportLeads()}><Icon name="download" />Ekspor CSV</button> : null;
   return <>
     <PageHead title={meta.name}
@@ -67,7 +70,7 @@ export function TestPage({ testKey, tab }) {
         <a key={k} className="seg__item" href={`#/tes/${testKey}/${k}`} {...(k === tab ? { "aria-current": "page" } : {})}>{label}{n === null ? null : <> <span className="seg__n">{n}</span></>}</a>
       ))}
     </nav>
-    {tab === "soal" ? <QuestionsTab /> : tab === "submission" ? <SubmissionsTab /> : tab === "bagian" ? <SectionsTab /> : tab === "paket" ? <PackagesTab /> : tab === "lead" ? <LeadTab /> : <SettingsTab testKey={testKey} />}
+    {tab === "soal" ? <QuestionsTab /> : tab === "submission" ? <SubmissionsTab /> : tab === "bagian" ? <SectionsTab /> : tab === "paket" ? <PackagesTab /> : tab === "sesi" ? <SessionsTab /> : tab === "lead" ? <LeadTab /> : <SettingsTab testKey={testKey} />}
   </>;
 }
 

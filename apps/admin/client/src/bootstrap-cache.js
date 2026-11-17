@@ -3,7 +3,7 @@
 // The cache lives in sessionStorage, so it belongs to one tab and disappears when the tab closes.
 // Clear it on login, logout, and a 401. Bump the key when the bootstrap shape changes.
 
-export const BOOTSTRAP_CACHE = "tnec-bootstrap-v2";
+export const BOOTSTRAP_CACHE = "tnec-bootstrap-v3";
 const TTL = 12 * 60 * 60 * 1000;
 
 export function readBootstrapCache() {

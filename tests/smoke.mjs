@@ -25,6 +25,10 @@ import {
 import { speakingType, retryDelays, SPEAKING_MAX_BYTES } from "@tnec/core/speaking";
 import { numberPlaceholders } from "@tnec/core/db";
 import { createMailer, parseAddress } from "@tnec/core/mailer";
+import { buildInviteEmail } from "@tnec/core/email";
+import {
+  parseRosterCsv, inviteWindow, formatWib, buildInviteWhatsApp, EMAIL_DAILY_LIMIT, MAX_IMPORT_ROWS,
+} from "@tnec/core/mockup-bulk";
 import { buildEnv } from "@tnec/core/env";
 import { announceSetup, createAdminHandler } from "../apps/admin/server.js";
 import {
@@ -606,5 +610,60 @@ for (const report of [bandReport, scoreReport, placementReport]) {
 assert.ok(existsSync(new URL("../apps/web/public/favicon.png", import.meta.url)), "the web favicon exists");
 assert.ok(existsSync(new URL("../apps/admin/public/favicon.png", import.meta.url)), "the admin favicon exists");
 assert.equal(existsSync(new URL("../apps/web/public/favicon.svg", import.meta.url)), false, "the old text favicon is gone");
+
+/* ---------- Bulk mockup import ---------- */
+const NOW = 1_800_000_000;
+const scheduledCsv = [
+  "nama,whatsapp,email,tanggal_tes,jam_tes",
+  "Budi Santoso,0812 3456 7890,budi@contoh.com,2026-11-20,09:00",
+  '"Sari, Maria",+62 813 111 2223,,2026-11-21,13:30',
+  "Rani",  // row missing whatsapp: caught by the row error
+].join("\n");
+const scheduled = parseRosterCsv(scheduledCsv, { scheduled: true, now: NOW });
+assert.equal(scheduled.fatal, null);
+assert.equal(scheduled.rows.length, 3);
+assert.equal(scheduled.rows[0].name, "Budi Santoso");
+assert.equal(scheduled.rows[0].wa, "6281234567890");
+assert.equal(scheduled.rows[1].name, "Sari, Maria", "a quoted comma inside a name survives the CSV split");
+assert.equal(scheduled.rows[1].wa, "628131112223");
+assert.equal(scheduled.rows[1].email, "");
+assert.ok(scheduled.rows[2].errors.some((e) => e.includes("WhatsApp")), "a row without a WhatsApp number is flagged");
+assert.ok(scheduled.rows.every((r) => !r.errors.length || r.errors.length > 0));
+const pastSchedule = parseRosterCsv("nama,whatsapp,tanggal_tes,jam_tes\nBudi,081234567890,2020-01-01,09:00", { scheduled: true, now: NOW });
+assert.ok(pastSchedule.rows[0].errors.some((e) => e.includes("masa lalu") || e.includes("lewat")), "a past schedule is rejected");
+const dupWa = parseRosterCsv("nama,whatsapp\nBudi,08123456789\nSari,628123456789", { scheduled: false, now: NOW });
+assert.ok(dupWa.rows[1].errors.some((e) => e.includes("baris 2")), "a duplicate WhatsApp in one file is flagged");
+assert.equal(parseRosterCsv("nama,whatsapp\n", { scheduled: false, now: NOW }).fatal, null);
+assert.ok(parseRosterCsv("", { scheduled: false }).fatal, "an empty file is fatal");
+assert.ok(parseRosterCsv("nama,email\nBudi,x@y.z", { scheduled: true, now: NOW }).fatal, "a terjadwal import without date columns is fatal");
+assert.ok(parseRosterCsv("nama,whatsapp,tanggal_tes\nBudi,081234567890,2026-11-20", { scheduled: false, now: NOW }).fatal, "a fleksibel import with date columns is fatal");
+assert.equal(MAX_IMPORT_ROWS, 500);
+assert.equal(EMAIL_DAILY_LIMIT, 200);
+
+const session = { windowMode: "terjadwal", entryGraceSeconds: 7200 };
+const scheduledWindow = inviteWindow(session, 1_800_028_800);
+assert.equal(scheduledWindow.opensAt, 1_800_028_800);
+assert.equal(scheduledWindow.expiresAt, 1_800_028_800 + 7200, "a scheduled student gets the 2 hour entry grace");
+assert.ok(inviteWindow({ windowMode: "fleksibel", rangeStart: 10, rangeEnd: 9 }, null).error, "an inverted flexible range is an error");
+assert.deepEqual(inviteWindow({ windowMode: "fleksibel", rangeStart: 100, rangeEnd: 500 }, null), { opensAt: 100, expiresAt: 500 });
+assert.ok(inviteWindow(session, null).error, "a scheduled window without a slot is an error");
+assert.equal(formatWib(1_800_028_800), "Jumat, 15 Januari 2027, 23.00 WIB");
+
+const waInvite = buildInviteWhatsApp({
+  firstName: "Budi", sessionName: "Gelombang 1", schedule: formatWib(1_800_028_800),
+  link: "https://tnec.example/?undangan=abc", code: "ABC234", deadline: `paling telat ${formatWib(1_800_035_900)}`,
+});
+assert.ok(waInvite.includes("Budi") && waInvite.includes("ABC234") && waInvite.includes("paling telat"));
+assert.ok(waInvite.length <= 1000, "the WhatsApp invite stays under 1,000 characters");
+assert.equal(/[\u2013\u2014]/.test(waInvite), false, "the invite copy has no en or em dash");
+
+const mailInvite = buildInviteEmail({
+  name: "Budi <script>", sessionName: "Gelombang 1", schedule: formatWib(1_800_028_800),
+  link: "https://tnec.example/?undangan=abc", code: "ABC234", deadline: `paling telat ${formatWib(1_800_035_900)}`,
+});
+assert.ok(mailInvite.subject.includes("Gelombang 1"));
+assert.ok(mailInvite.html.includes("Budi &lt;script&gt;"), "the email escapes the name");
+assert.ok(mailInvite.text.includes("ABC234") && mailInvite.text.includes("paling telat"));
+assert.equal(/[\u2013\u2014]/.test(JSON.stringify(mailInvite)), false, "the invite email copy has no en or em dash");
 
 console.log("smoke ok");

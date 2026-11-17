@@ -14,9 +14,11 @@ import {
   JENJANG_PENDIDIKAN, TAHU_DARI, PENDAFTARAN_STATUS,
 } from "@tnec/core/pendaftaran";
 import { sendWhatsApp, whatsappConfigured } from "@tnec/core/whatsapp";
-import { buildResultEmail } from "@tnec/core/email";
+import { buildResultEmail, buildInviteEmail } from "@tnec/core/email";
+import { parseRosterCsv, inviteWindow, formatWib, EMAIL_DAILY_LIMIT } from "@tnec/core/mockup-bulk";
 import { staticResponse, textResponse } from "@tnec/core/node-server";
-import { deliverInBackground } from "@tnec/core/delivery";
+import { deliverInBackground, runInBackground } from "@tnec/core/delivery";
+import { drainInviteQueue, emailsSentRecently } from "./invite-queue.js";
 import { gradeInBackground, speechaceConfigured } from "@tnec/core/speaking";
 import { ASPECTS, MANUAL_CEFR, isFinalStatus, speakingFacts } from "@tnec/core/speaking-result";
 import { mockupSpeakingPlan } from "@tnec/core/speaking-mockup";
@@ -58,7 +60,7 @@ const LOCK_AFTER = 5;
 const LOCK_SECONDS = 15 * 60;
 const INVITE_TTL = 14 * 24 * 60 * 60;
 const STAGES = { baru: "Baru", dihubungi: "Dihubungi", konsultasi: "Konsultasi", terdaftar: "Terdaftar", lepas: "Tidak lanjut" };
-const SOURCES = ["Placement test", "WhatsApp", "Instagram", "Datang langsung", "Rekomendasi alumni"];
+const SOURCES = ["Placement test", "WhatsApp", "Instagram", "Datang langsung", "Rekomendasi alumni", "IELTS Mockup"];
 const MODES = ["Offline di Pare", "Online", "Online dan offline"];
 const SKILLS = ["Grammar", "Vocabulary", "Reading", "Listening", "Writing"];
 const CHOICES = ["A", "B", "C", "D", "E", "F"];
@@ -258,6 +260,16 @@ const ROUTES = [
   ["POST", /^\/api\/admin\/students\/([\w-]+)\/notes$/, addNote],
   ["POST", /^\/api\/admin\/students\/([\w-]+)\/whatsapp$/, sendStudentWhatsApp],
   ["POST", /^\/api\/admin\/students\/([\w-]+)\/invite$/, createInvite],
+  ["POST", /^\/api\/admin\/mockup\/sessions$/, saveMockupSession],
+  ["PUT", /^\/api\/admin\/mockup\/sessions\/([\w-]+)$/, saveMockupSession],
+  ["POST", /^\/api\/admin\/mockup\/sessions\/([\w-]+)\/import$/, previewSessionImport],
+  ["POST", /^\/api\/admin\/mockup\/sessions\/([\w-]+)\/import\/confirm$/, confirmSessionImport],
+  ["POST", /^\/api\/admin\/mockup\/sessions\/([\w-]+)\/send$/, sendSessionQueue],
+  ["POST", /^\/api\/admin\/mockup\/sessions\/([\w-]+)\/pause$/, pauseSessionQueue],
+  ["POST", /^\/api\/admin\/mockup\/sessions\/([\w-]+)\/test-send$/, testSendSessionMessage],
+  ["GET", /^\/api\/admin\/mockup\/sessions\/([\w-]+)\/roster$/, getSessionRoster],
+  ["POST", /^\/api\/admin\/mockup\/invites\/([\w-]+)\/retry$/, retryInviteChannel],
+  ["POST", /^\/api\/admin\/mockup\/invites\/([\w-]+)\/move$/, moveInviteToSession],
   ["POST", /^\/api\/admin\/pendaftaran$/, createPendaftaran],
   ["PUT", /^\/api\/admin\/pendaftaran\/([\w-]+)$/, updatePendaftaran],
   ["PUT", /^\/api\/admin\/tests\/(placement|pre|post|ielts-mockup)$/, updateTestSettings],
@@ -344,6 +356,14 @@ async function bootstrap(request, env, user, url) {
     stmt(`SELECT id, test_key, student_id, started_at, expires_at, submitted_at, status, score, total, level_key, name,
                  violation_log, duration_seconds, limit_seconds, max_violations, email_status, pass_score, passed,
                  voided_at, voided_by, void_reason, user_agent, country, bands, audio_played_at, package_id, writing_status, writing_error, speaking_status, speaking_error FROM attempts ORDER BY started_at DESC LIMIT 5000`),
+    stmt(`SELECT s.*,
+                 (SELECT COUNT(*) FROM invites i WHERE i.session_id = s.id) AS roster,
+                 (SELECT COUNT(*) FROM mockup_invite_queue q JOIN invites i ON i.id = q.invite_id WHERE i.session_id = s.id AND q.wa_status = 'sent') AS wa_sent,
+                 (SELECT COUNT(*) FROM mockup_invite_queue q JOIN invites i ON i.id = q.invite_id WHERE i.session_id = s.id AND q.email_status = 'sent') AS email_sent,
+                 (SELECT COUNT(*) FROM invites i JOIN attempts a ON a.invite_id = i.id WHERE i.session_id = s.id AND a.submitted_at IS NOT NULL) AS done
+                 FROM mockup_sessions s ORDER BY s.created_at DESC, s.id`),
+    stmt(`SELECT (SELECT COUNT(*) FROM attempts WHERE email_sent_at > ?) + (SELECT COUNT(*) FROM mockup_invite_queue WHERE email_sent_at > ?) AS sent`,
+      now - 24 * 3600, now - 24 * 3600),
     stmt("SELECT student_id, MAX(at) AS last_at FROM activities GROUP BY student_id"),
     stmt("SELECT MIN(registered_at) AS at FROM pendaftaran WHERE status != 'batal' GROUP BY student_id"),
     stmt("SELECT * FROM programs ORDER BY name"),
@@ -358,7 +378,7 @@ async function bootstrap(request, env, user, url) {
             FROM speaking_submissions ORDER BY created_at DESC LIMIT 5000`),
     stmt("SELECT * FROM pendaftaran ORDER BY registered_at, id"),
   ]), certificateData(env)]);
-  const [tests, questions, sections, packages, levels, students, attempts, lastActs, enrolled, programs, durations, programTutors, tutors, periods, classes, s7, s30, speaking, pendaftaran] = res.map((r) => r.results);
+  const [tests, questions, sections, packages, levels, students, attempts, sessions, emailUse, lastActs, enrolled, programs, durations, programTutors, tutors, periods, classes, s7, s30, speaking, pendaftaran] = res.map((r) => r.results);
   const speakingByAttempt = new Map(speaking.map((s) => [s.attempt_id, s]));
   const last = new Map(lastActs.map((r) => [r.student_id, r.last_at]));
   // Registrations per student, oldest to newest: they drive the registered filter and the count.
@@ -409,6 +429,15 @@ async function bootstrap(request, env, user, url) {
       createdAt: ms(s.created_at), lastActivityAt: ms(Math.max(s.updated_at || 0, last.get(s.id) || 0, s.created_at)),
     })),
     pendaftaran: pendaftaranRows,
+    sessions: sessions.map((s) => ({
+      id: s.id, name: s.name, windowMode: s.window_mode,
+      rangeStart: ms(s.range_start), rangeEnd: ms(s.range_end), entryGraceSeconds: s.entry_grace_seconds,
+      programId: s.program_id, periodId: s.period_id, durationId: s.duration_id, packageId: s.package_id,
+      quota: s.quota, queuePaused: Boolean(s.queue_paused), status: s.status,
+      createdBy: s.created_by || "", createdAt: ms(s.created_at),
+      counts: { roster: s.roster, waSent: s.wa_sent, emailSent: s.email_sent, done: s.done },
+    })),
+    emailUsage: { sent: emailUse[0]?.sent ?? 0, limit: EMAIL_DAILY_LIMIT },
     attempts: attempts.map((a) => mapAttempt(a, now, speakingByAttempt.get(a.id))),
     speaking: speakingSummary(env, speaking, now),
     enrolledAt: enrolled.map((r) => ms(r.at)),
@@ -890,6 +919,361 @@ async function createInvite(request, env, user, url, id) {
   await env.DB.prepare("INSERT INTO invites (id, token_hash, student_id, test_key, code, package_id, created_at, expires_at, created_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)")
     .bind(newId("inv"), await sha256Hex(token), s.id, test, code, packageId, now, now + INVITE_TTL, user.name).run();
   return json({ ok: true, link: `${env.PUBLIC_WEB_URL}/?undangan=${token}`, code, packageName, packageTotal, expiresAt: ms(now + INVITE_TTL) });
+}
+
+/* ===================== Mockup sessions and the bulk import ===================== */
+
+/** The roster CSV arrives as JSON, so the import routes need a bigger body than the admin default. */
+const IMPORT_CSV_LIMIT = 2 * 1024 * 1024;
+
+const rangeDaySeconds = (value) => {
+  if (value === undefined || value === null || value === "") return null;
+  if (typeof value === "number") return Math.floor(value);
+  const at = Date.parse(`${String(value)}T00:00:00+07:00`);
+  return Number.isNaN(at) ? null : Math.floor(at / 1000);
+};
+
+function mapSessionRow(s) {
+  return {
+    id: s.id, name: s.name, windowMode: s.window_mode,
+    rangeStart: ms(s.range_start), rangeEnd: ms(s.range_end), entryGraceSeconds: s.entry_grace_seconds,
+    programId: s.program_id, periodId: s.period_id, durationId: s.duration_id, packageId: s.package_id,
+    quota: s.quota, queuePaused: Boolean(s.queue_paused), status: s.status,
+    createdBy: s.created_by || "", createdAt: ms(s.created_at),
+    counts: { roster: s.roster ?? 0, waSent: s.wa_sent ?? 0, emailSent: s.email_sent ?? 0, done: s.done ?? 0 },
+  };
+}
+
+function sessionRow(env, id) {
+  return env.DB.prepare("SELECT * FROM mockup_sessions WHERE id = ?").bind(id).first();
+}
+
+async function saveMockupSession(request, env, user, url, id) {
+  const body = await readJson(request);
+  const name = text(body.name, 120);
+  if (name.length < 2) throw new HttpError(400, "Nama sesi minimal 2 karakter.", { field: "name" });
+  const windowMode = body.windowMode === "fleksibel" ? "fleksibel" : "terjadwal";
+  let rangeStart = null;
+  let rangeEnd = null;
+  let entryGrace = 7200;
+  if (windowMode === "fleksibel") {
+    rangeStart = rangeDaySeconds(body.rangeStart);
+    rangeEnd = rangeDaySeconds(body.rangeEnd);
+    if (!rangeStart || !rangeEnd) throw new HttpError(400, "Rentang tanggal sesi wajib diisi.", { field: "rangeStart" });
+    if (rangeEnd <= rangeStart) throw new HttpError(400, "Akhir rentang harus setelah awalnya.", { field: "rangeEnd" });
+  } else {
+    const v = int(body.entryGraceSeconds ?? 7200, { min: 300, max: 24 * 3600 });
+    if (v === null) throw new HttpError(400, "Masa tenggang harus antara 5 menit dan 24 jam.", { field: "entryGraceSeconds" });
+    entryGrace = v;
+  }
+  const programId = String(body.programId || "");
+  const periodId = String(body.periodId || "");
+  const durationId = body.durationId ? String(body.durationId) : null;
+  const packageId = String(body.packageId || "");
+  await checkEnrollment(env, { programId, durationId, periodId, classId: null });
+  const pkg = await env.DB.prepare("SELECT id FROM question_packages WHERE id = ? AND test_key = 'ielts-mockup' AND is_active = 1").bind(packageId).first();
+  if (!pkg) throw new HttpError(400, "Paket soal tidak ditemukan atau tidak aktif.", { field: "packageId" });
+  const count = await env.DB.prepare("SELECT COUNT(*) AS n FROM questions WHERE package_id = ? AND status = 'aktif'").bind(packageId).first();
+  if (!count?.n) throw new HttpError(503, "Paket soal ini belum punya soal aktif.");
+  let quota = null;
+  if (body.quota !== undefined && body.quota !== null && body.quota !== "") {
+    quota = int(body.quota, { min: 1, max: 5000 });
+    if (quota === null) throw new HttpError(400, "Kuota harus angka bulat dari 1 sampai 5000.", { field: "quota" });
+  }
+  const now = nowSeconds();
+  if (id) {
+    const row = await sessionRow(env, id);
+    if (!row) throw new HttpError(404, "Sesi tidak ditemukan.");
+    const roster = await env.DB.prepare("SELECT COUNT(*) AS n FROM invites WHERE session_id = ?").bind(id).first();
+    if (roster?.n && (row.program_id !== programId || row.period_id !== periodId || row.package_id !== packageId)) {
+      throw new HttpError(400, "Sesi ini sudah punya peserta, jadi program, periode, dan paketnya tidak bisa diubah.");
+    }
+    const status = ["draft", "open", "closed", "cancelled"].includes(body.status) ? body.status : row.status;
+    await env.DB.prepare(`UPDATE mockup_sessions SET name = ?, window_mode = ?, range_start = ?, range_end = ?, entry_grace_seconds = ?,
+        program_id = ?, period_id = ?, duration_id = ?, package_id = ?, quota = ?, status = ?, updated_at = ? WHERE id = ?`)
+      .bind(name, windowMode, rangeStart, rangeEnd, windowMode === "fleksibel" ? row.entry_grace_seconds : entryGrace,
+        programId, periodId, durationId, packageId, quota, status, now, id).run();
+    return json({ ok: true, id });
+  }
+  const sessionId = newId("msn");
+  await env.DB.prepare(`INSERT INTO mockup_sessions (id, name, window_mode, range_start, range_end, entry_grace_seconds,
+      program_id, period_id, duration_id, package_id, quota, status, created_by, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'draft', ?, ?, ?)`)
+    .bind(sessionId, name, windowMode, rangeStart, rangeEnd, entryGrace, programId, periodId, durationId, packageId, quota, user.name, now, now).run();
+  return json({ ok: true, id: sessionId });
+}
+
+/** Parses the CSV, matches every row to a student, and computes each window. Shared by preview and confirm. */
+async function matchRosterRows(env, session, csv) {
+  const parsed = parseRosterCsv(csv, { scheduled: session.window_mode === "terjadwal" });
+  if (parsed.fatal) throw new HttpError(400, parsed.fatal);
+  const out = [];
+  for (const row of parsed.rows) {
+    const item = { ...row, studentId: null, studentName: null, inviteExisting: false, registrationExisting: false, opensAt: null, expiresAt: null, windowError: null };
+    if (!row.errors.length && row.wa) {
+      const byWa = await env.DB.prepare("SELECT id, name FROM students WHERE whatsapp = ?").bind(row.wa).first();
+      const byEmail = row.email ? await env.DB.prepare("SELECT id, name FROM students WHERE email = ? AND id != ?").bind(row.email, byWa?.id || "").first() : null;
+      if (byWa && byEmail) row.errors.push(`WhatsApp dan email menunjuk ke dua siswa berbeda: ${byWa.name} dan ${byEmail.name}.`);
+      else if (byWa || byEmail) {
+        item.studentId = (byWa || byEmail).id;
+        item.studentName = (byWa || byEmail).name;
+      }
+    }
+    if (!row.errors.length) {
+      const window = inviteWindow({
+        windowMode: session.window_mode, rangeStart: session.range_start,
+        rangeEnd: session.range_end, entryGraceSeconds: session.entry_grace_seconds,
+      }, row.scheduledAt);
+      if (window.error) item.windowError = window.error;
+      else { item.opensAt = window.opensAt; item.expiresAt = window.expiresAt; }
+    }
+    if (!row.errors.length && item.studentId) {
+      item.inviteExisting = Boolean(await env.DB.prepare("SELECT 1 FROM invites WHERE session_id = ? AND student_id = ?").bind(session.id, item.studentId).first());
+      item.registrationExisting = Boolean(await env.DB.prepare(
+        "SELECT 1 FROM pendaftaran WHERE student_id = ? AND program_id = ? AND period_id = ? AND status != 'batal'",
+      ).bind(item.studentId, session.program_id, session.period_id).first());
+    }
+    out.push(item);
+  }
+  return out;
+}
+
+async function previewSessionImport(request, env, user, url, id) {
+  const session = await sessionRow(env, id);
+  if (!session) throw new HttpError(404, "Sesi tidak ditemukan.");
+  if (session.status === "cancelled") throw new HttpError(400, "Sesi ini sudah dibatalkan.");
+  const body = await readJson(request, IMPORT_CSV_LIMIT);
+  const rows = await matchRosterRows(env, session, String(body.csv || ""));
+  const valid = rows.filter((r) => !r.errors.length && !r.windowError);
+  return json({
+    ok: true,
+    rows,
+    counts: {
+      total: rows.length,
+      invalid: rows.length - valid.length,
+      newStudents: valid.filter((r) => !r.studentId).length,
+      existingStudents: valid.filter((r) => r.studentId).length,
+      skipped: valid.filter((r) => r.inviteExisting).length,
+    },
+  });
+}
+
+async function confirmSessionImport(request, env, user, url, id) {
+  const session = await sessionRow(env, id);
+  if (!session) throw new HttpError(404, "Sesi tidak ditemukan.");
+  if (session.status === "cancelled") throw new HttpError(400, "Sesi ini sudah dibatalkan.");
+  const body = await readJson(request, IMPORT_CSV_LIMIT);
+  const rows = await matchRosterRows(env, session, String(body.csv || ""));
+  const bad = rows.filter((r) => r.errors.length || r.windowError);
+  if (bad.length) throw new HttpError(400, `${bad.length} baris bermasalah. Baris ${bad[0].line}: ${bad[0].errors[0] || bad[0].windowError}`, { rows: bad });
+  const fresh = rows.filter((r) => !r.inviteExisting);
+  const roster = await env.DB.prepare("SELECT COUNT(*) AS n FROM invites WHERE session_id = ?").bind(session.id).first();
+  if (session.quota && (roster?.n ?? 0) + fresh.length > session.quota) {
+    throw new HttpError(400, `Kuota sesi ${session.quota} peserta. Impor ini menambah ${fresh.length}, jadi melebihi kuota.`);
+  }
+  const now = nowSeconds();
+  const stmts = [];
+  const usedCodes = new Set();
+  let created = 0;
+  let studentsNew = 0;
+  let registrations = 0;
+  for (const row of fresh) {
+    let studentId = row.studentId;
+    if (!studentId) {
+      studentId = newId("stu");
+      studentsNew += 1;
+      stmts.push(env.DB.prepare(`INSERT INTO students (id, name, email, whatsapp, source, stage, created_at, updated_at)
+          VALUES (?, ?, ?, ?, 'IELTS Mockup', 'terdaftar', ?, ?)`)
+        .bind(studentId, row.name, row.email || null, row.wa, now, now));
+      stmts.push(addActivity(env, studentId, "system", `Ditambahkan lewat impor peserta mockup oleh ${user.name}.`, user.name, null, now));
+    }
+    if (!row.registrationExisting) {
+      registrations += 1;
+      const pdfId = newId("pdf");
+      stmts.push(env.DB.prepare(`INSERT INTO pendaftaran (id, student_id, program_id, duration_id, period_id, class_id, status, note, registered_at, registered_by)
+          VALUES (?, ?, ?, ?, ?, NULL, 'aktif', ?, ?, ?)`)
+        .bind(pdfId, studentId, session.program_id, session.duration_id, session.period_id, `Mockup ${session.name}`, now, user.name));
+      stmts.push(env.DB.prepare("UPDATE students SET program_id = ?, duration_id = ?, period_id = ?, stage = 'terdaftar', updated_at = ? WHERE id = ?")
+        .bind(session.program_id, session.duration_id, session.period_id, now, studentId));
+    }
+    let code = null;
+    for (let i = 0; i < 20 && !code; i += 1) {
+      const candidate = randomCode();
+      if (usedCodes.has(candidate)) continue;
+      if (await env.DB.prepare("SELECT 1 FROM invites WHERE code = ?").bind(candidate).first()) continue;
+      usedCodes.add(candidate);
+      code = candidate;
+    }
+    if (!code) throw new HttpError(500, "Kode undangan tidak bisa dibuat, coba lagi.");
+    const token = randomToken(24);
+    const inviteId = newId("inv");
+    stmts.push(env.DB.prepare(`INSERT INTO invites (id, token_hash, student_id, test_key, code, package_id, session_id, opens_at, created_at, expires_at, created_by)
+        VALUES (?, ?, ?, 'ielts-mockup', ?, ?, ?, ?, ?, ?, ?)`)
+      .bind(inviteId, await sha256Hex(token), studentId, code, session.package_id, session.id, row.opensAt, now, row.expiresAt, user.name));
+    stmts.push(env.DB.prepare(`INSERT INTO mockup_invite_queue (id, invite_id, email_status, wa_status, plain_token, created_at)
+        VALUES (?, ?, ?, 'pending', ?, ?)`)
+      .bind(newId("ivq"), inviteId, row.email ? "pending" : "dilewati", token, now));
+    stmts.push(addActivity(env, studentId, "system", `Undangan IELTS Mockup ${session.name} dibuat lewat impor massal oleh ${user.name}.`, user.name, { inviteId }, now));
+    created += 1;
+  }
+  stmts.push(env.DB.prepare("UPDATE mockup_sessions SET status = 'open', updated_at = ? WHERE id = ? AND status = 'draft'").bind(now, session.id));
+  await env.DB.batch(stmts);
+  return json({ ok: true, created, skipped: rows.length - fresh.length, studentsNew, registrations });
+}
+
+async function sendSessionQueue(request, env, user, url, id) {
+  const session = await sessionRow(env, id);
+  if (!session) throw new HttpError(404, "Sesi tidak ditemukan.");
+  if (session.status === "cancelled") throw new HttpError(400, "Sesi ini sudah dibatalkan.");
+  const now = nowSeconds();
+  await env.DB.prepare("UPDATE mockup_sessions SET queue_paused = 0, status = 'open', updated_at = ? WHERE id = ?").bind(now, id).run();
+  const pending = await env.DB.prepare(
+    `SELECT COUNT(*) AS n FROM mockup_invite_queue q JOIN invites i ON i.id = q.invite_id
+     WHERE i.session_id = ? AND (q.wa_status = 'pending' OR q.email_status IN ('pending', 'kuota'))`,
+  ).bind(id).first();
+  runInBackground(() => drainInviteQueue(env));
+  return json({ ok: true, pending: pending?.n ?? 0 });
+}
+
+async function pauseSessionQueue(request, env, user, url, id) {
+  const body = await readJson(request);
+  const paused = body.paused === false ? 0 : 1;
+  await env.DB.prepare("UPDATE mockup_sessions SET queue_paused = ?, updated_at = ? WHERE id = ?").bind(paused, nowSeconds(), id).run();
+  if (!paused) runInBackground(() => drainInviteQueue(env));
+  return json({ ok: true, paused: Boolean(paused) });
+}
+
+async function retryInviteChannel(request, env, user, url, inviteId) {
+  const row = await env.DB.prepare(
+    `SELECT q.id AS queue_id, q.plain_token, s.email FROM mockup_invite_queue q
+     JOIN invites i ON i.id = q.invite_id JOIN students s ON s.id = i.student_id WHERE i.id = ?`,
+  ).bind(inviteId).first();
+  if (!row) throw new HttpError(404, "Undangan tidak ditemukan.");
+  const body = await readJson(request);
+  const channel = body.channel === "email" ? "email" : "wa";
+  if (!row.plain_token) throw new HttpError(400, "Undangan ini sudah selesai dikirim kedua kanalnya.");
+  if (channel === "email") {
+    if (!row.email) throw new HttpError(400, "Peserta ini tidak punya email.");
+    await env.DB.prepare("UPDATE mockup_invite_queue SET email_status = 'pending', email_attempts = 0, email_error = NULL WHERE id = ?").bind(row.queue_id).run();
+  } else {
+    await env.DB.prepare("UPDATE mockup_invite_queue SET wa_status = 'pending', wa_attempts = 0, wa_error = NULL WHERE id = ?").bind(row.queue_id).run();
+  }
+  runInBackground(() => drainInviteQueue(env));
+  return json({ ok: true });
+}
+
+async function moveInviteToSession(request, env, user, url, inviteId) {
+  const invite = await env.DB.prepare(
+    "SELECT i.*, s.email, s.whatsapp, s.name AS student_name FROM invites i JOIN students s ON s.id = i.student_id WHERE i.id = ?",
+  ).bind(inviteId).first();
+  if (!invite) throw new HttpError(404, "Undangan tidak ditemukan.");
+  if (invite.used_at || invite.attempt_id) throw new HttpError(400, "Undangan ini sudah dipakai, jadi tidak bisa dipindah.");
+  const body = await readJson(request);
+  const target = await sessionRow(env, String(body.sessionId || ""));
+  if (!target) throw new HttpError(404, "Sesi tujuan tidak ditemukan.");
+  if (target.id === invite.session_id) throw new HttpError(400, "Pilih sesi lain sebagai tujuan.");
+  if (target.status === "cancelled") throw new HttpError(400, "Sesi tujuan sudah dibatalkan.");
+  const taken = await env.DB.prepare("SELECT 1 FROM invites WHERE session_id = ? AND student_id = ?").bind(target.id, invite.student_id).first();
+  if (taken) throw new HttpError(400, "Siswa ini sudah punya undangan di sesi tujuan.");
+  let scheduledAt = null;
+  if (target.window_mode === "terjadwal") {
+    const at = body.date && body.time ? Date.parse(`${body.date}T${body.time}:00+07:00`) : Number.NaN;
+    if (Number.isNaN(at)) throw new HttpError(400, "Tanggal dan jam baru wajib diisi untuk sesi terjadwal.", { field: "date" });
+    scheduledAt = Math.floor(at / 1000);
+    if (scheduledAt <= nowSeconds()) throw new HttpError(400, "Jadwal baru sudah lewat.");
+  }
+  const window = inviteWindow({
+    windowMode: target.window_mode, rangeStart: target.range_start,
+    rangeEnd: target.range_end, entryGraceSeconds: target.entry_grace_seconds,
+  }, scheduledAt);
+  if (window.error) throw new HttpError(400, window.error);
+  let code = null;
+  for (let i = 0; i < 20 && !code; i += 1) {
+    const candidate = randomCode();
+    if (await env.DB.prepare("SELECT 1 FROM invites WHERE code = ?").bind(candidate).first()) continue;
+    code = candidate;
+  }
+  if (!code) throw new HttpError(500, "Kode undangan tidak bisa dibuat, coba lagi.");
+  const token = randomToken(24);
+  const now = nowSeconds();
+  const newInviteId = newId("inv");
+  await env.DB.batch([
+    env.DB.prepare(`INSERT INTO invites (id, token_hash, student_id, test_key, code, package_id, session_id, opens_at, created_at, expires_at, created_by)
+        VALUES (?, ?, ?, 'ielts-mockup', ?, ?, ?, ?, ?, ?, ?)`)
+      .bind(newInviteId, await sha256Hex(token), invite.student_id, code, target.package_id, target.id, window.opensAt, now, window.expiresAt, user.name),
+    env.DB.prepare(`INSERT INTO mockup_invite_queue (id, invite_id, email_status, wa_status, plain_token, created_at)
+        VALUES (?, ?, ?, 'pending', ?, ?)`)
+      .bind(newId("ivq"), newInviteId, invite.email ? "pending" : "dilewati", token, now),
+    env.DB.prepare("DELETE FROM invites WHERE id = ?").bind(invite.id),
+    addActivity(env, invite.student_id, "system",
+      `Undangan IELTS Mockup dipindahkan ke sesi ${target.name} oleh ${user.name}.`, user.name, { inviteId: newInviteId }, now),
+  ]);
+  runInBackground(() => drainInviteQueue(env));
+  return json({ ok: true, id: newInviteId });
+}
+
+async function testSendSessionMessage(request, env, user, url, id) {
+  const session = await sessionRow(env, id);
+  if (!session) throw new HttpError(404, "Sesi tidak ditemukan.");
+  const body = await readJson(request);
+  const now = nowSeconds();
+  const schedule = session.window_mode === "fleksibel"
+    ? `${formatWib(session.range_start)} sampai ${formatWib(session.range_end)}`
+    : `${formatWib(now + 7200)} (contoh jadwal)`;
+  const link = `${env.PUBLIC_WEB_URL}/?undangan=contoh-tautan`;
+  const code = "ABC234";
+  const deadline = `paling telat ${formatWib(now + 7200 + session.entry_grace_seconds)}`;
+  const name = text(body.name || user.name, 80);
+  if (body.email) {
+    if (!isEmail(String(body.email))) throw new HttpError(400, "Alamat email uji belum benar.", { field: "email" });
+    const mail = buildInviteEmail({ name, sessionName: session.name, schedule, link, code, deadline });
+    try {
+      if (!env.SEND_EMAIL) throw new Error("Email belum diatur di server. Isi CLOUDFLARE_EMAIL_TOKEN di pengaturan server.");
+      await env.SEND_EMAIL.send({ from: env.RESULT_FROM_EMAIL, to: String(body.email).toLowerCase(), subject: mail.subject, html: mail.html, text: mail.text });
+    } catch (error) {
+      throw new HttpError(502, `Email uji gagal terkirim: ${String(error.message || error).slice(0, 200)}`);
+    }
+  }
+  if (body.wa) {
+    const to = normalizeWhatsapp(String(body.wa));
+    if (!to) throw new HttpError(400, "Nomor WhatsApp uji terlihat belum lengkap.", { field: "wa" });
+    const message = buildInviteWhatsApp({ firstName: String(name).split(/\s+/)[0], sessionName: session.name, schedule, link, code, deadline });
+    const result = await sendWhatsApp(env, { to, text: message });
+    await env.DB.prepare("INSERT INTO wa_messages (student_id, to_number, text, status, provider_message_id, error, created_at, created_by) VALUES (NULL, ?, ?, ?, ?, ?, ?, ?)")
+      .bind(to, message, result.status, result.messageId || null, result.error || null, now, user.name).run();
+    if (!result.ok) throw new HttpError(502, `WhatsApp uji gagal terkirim: ${result.error}`);
+  }
+  return json({ ok: true });
+}
+
+async function getSessionRoster(request, env, user, url, id) {
+  const session = await sessionRow(env, id);
+  if (!session) throw new HttpError(404, "Sesi tidak ditemukan.");
+  const rows = await env.DB.prepare(
+    `SELECT i.id AS invite_id, i.code, i.opens_at, i.expires_at, i.used_at, i.attempt_id,
+            s.id AS student_id, s.name, s.whatsapp, s.email,
+            q.email_status, q.email_attempts, q.email_error, q.email_sent_at, q.wa_status, q.wa_attempts, q.wa_error, q.wa_sent_at, q.plain_token,
+            a.status AS attempt_status, a.submitted_at
+     FROM invites i
+     JOIN students s ON s.id = i.student_id
+     LEFT JOIN mockup_invite_queue q ON q.invite_id = i.id
+     LEFT JOIN attempts a ON a.invite_id = i.id
+     WHERE i.session_id = ?
+     ORDER BY i.opens_at, s.name`,
+  ).bind(id).all();
+  const sent = await emailsSentRecently(env);
+  return json({
+    ok: true,
+    session: mapSessionRow(session),
+    emailUsage: { sent, limit: EMAIL_DAILY_LIMIT },
+    rows: rows.results.map((r) => ({
+      inviteId: r.invite_id, code: r.code, opensAt: ms(r.opens_at), expiresAt: ms(r.expires_at),
+      studentId: r.student_id, name: r.name, wa: r.whatsapp, email: r.email || "",
+      emailStatus: r.email_status, emailError: r.email_error || "", emailSentAt: ms(r.email_sent_at),
+      waStatus: r.wa_status, waError: r.wa_error || "", waSentAt: ms(r.wa_sent_at),
+      attemptStatus: r.attempt_status || null, submittedAt: ms(r.submitted_at),
+    })),
+  });
 }
 
 /* ===================== Tests and questions ===================== */

@@ -13,6 +13,7 @@ import { toast } from "./dom.js";
 import { Ringkasan } from "./views/Ringkasan.jsx";
 import { SiswaList, SiswaDetail } from "./views/Siswa.jsx";
 import { Sertifikat } from "./views/Sertifikat.jsx";
+import { SessionDetail } from "./views/MockupSesi.jsx";
 import { TestPage, AttemptDetail } from "./views/Test.jsx";
 import { ProgramKelas } from "./views/Program.jsx";
 import { DialogHost, ConfirmHost } from "./dialogs.jsx";
@@ -128,10 +129,13 @@ function currentView(parts, params) {
     const a = db.attempts.find((x) => x.id === parts[3]);
     return { view: <AttemptDetail testKey={TEST_KEYS.includes(parts[1]) ? parts[1] : "placement"} id={parts[3]} />, nav: meta.nav, title: `${meta.name} ${a ? a.short : ""}` };
   }
+  if (parts[0] === "tes" && parts[1] === "ielts-mockup" && parts[2] === "sesi" && parts[3]) {
+    return { view: <SessionDetail id={parts[3]} />, nav: TEST_META["ielts-mockup"].nav, title: "Sesi Mockup" };
+  }
   if (parts[0] === "tes") {
     const key = TEST_KEYS.includes(parts[1]) ? parts[1] : "placement";
-    const tab = ["soal", "submission", "lead", "bagian", "paket", "pengaturan"].includes(parts[2]) ? parts[2] : "soal";
-    const tabLabel = { soal: "Soal & Jawaban", submission: "Submission", lead: "Lead", bagian: "Bagian", paket: "Paket", pengaturan: "Pengaturan" }[tab];
+    const tab = ["soal", "submission", "lead", "bagian", "paket", "sesi", "pengaturan"].includes(parts[2]) ? parts[2] : "soal";
+    const tabLabel = { soal: "Soal & Jawaban", submission: "Submission", lead: "Lead", bagian: "Bagian", paket: "Paket", sesi: "Sesi", pengaturan: "Pengaturan" }[tab];
     return { view: <TestPage testKey={key} tab={tab} />, nav: TEST_META[key].nav, title: `${TEST_META[key].name}, ${tabLabel}` };
   }
   if (parts[0] === "program") {

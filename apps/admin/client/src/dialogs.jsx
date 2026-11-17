@@ -66,6 +66,10 @@ export function DialogHost() {
     case "certtype": return <CertTypeDialog key={d.seq} id={d.id} />;
     case "cert": return <CertDialog key={d.seq} studentId={d.studentId} certId={d.certId} />;
     case "wa": return <WaDialog key={d.seq} studentId={d.studentId} opts={d.opts} />;
+    case "session": return <SessionDialog key={d.seq} id={d.id} />;
+    case "session-import": return <SessionImportDialog key={d.seq} sessionId={d.sessionId} />;
+    case "move-invite": return <MoveInviteDialog key={d.seq} inviteId={d.inviteId} name={d.name} fromSessionId={d.fromSessionId} />;
+    case "test-send": return <TestSendDialog key={d.seq} sessionId={d.sessionId} />;
     case "form": return <FormDialog key={d.seq} spec={d.spec} />;
     default: return null;
   }
@@ -1630,4 +1634,376 @@ export function openTutorDialog() {
       return true;
     },
   });
+}
+
+/* ===================== Sesi mockup: editor, impor, pindah sesi, pesan uji ===================== */
+
+export function openSessionEditor(id) { openDialog({ kind: "session", id: id || null }); }
+
+function SessionDialog({ id }) {
+  const s = id ? db.sessions.find((x) => x.id === id) : null;
+  const [mode, setMode] = useState(s?.windowMode || "terjadwal");
+  const [programId, setProgramId] = useState(s?.programId || "prg_ielts_mockup");
+  const packages = db.tests["ielts-mockup"].packages;
+  const durations = db.programs.find((p) => p.id === programId)?.durations || [];
+
+  async function save(e) {
+    e.preventDefault();
+    const form = e.currentTarget;
+    clearErrors(form);
+    let first = null;
+    const fail = (el, errId, msg) => { fieldError(el, errId, msg); if (!first) first = el; };
+    const name = $("#ss-name").value.trim();
+    if (name.length < 2) fail($("#ss-name"), "ss-name-err", "Nama sesi minimal 2 karakter.");
+    const body = {
+      name,
+      windowMode: mode,
+      programId,
+      periodId: $("#ss-period").value || "",
+      durationId: $("#ss-duration").value || null,
+      packageId: $("#ss-package").value || "",
+      quota: $("#ss-quota").value.trim() === "" ? null : Number($("#ss-quota").value),
+    };
+    if (!body.periodId) fail($("#ss-period"), "ss-period-err", "Periode wajib dipilih.");
+    if (!body.packageId) fail($("#ss-package"), "ss-package-err", "Paket soal wajib dipilih.");
+    if (mode === "fleksibel") {
+      body.rangeStart = $("#ss-range-start").value;
+      body.rangeEnd = $("#ss-range-end").value;
+      if (!body.rangeStart) fail($("#ss-range-start"), "ss-range-err", "Tanggal mulai wajib diisi.");
+      if (!body.rangeEnd) fail($("#ss-range-end"), "ss-range-err", "Tanggal akhir wajib diisi.");
+      if (body.rangeStart && body.rangeEnd && body.rangeEnd <= body.rangeStart) fail($("#ss-range-end"), "ss-range-err", "Tanggal akhir harus setelah tanggal mulai.");
+    } else {
+      const minutes = Number($("#ss-grace").value);
+      if (!Number.isInteger(minutes) || minutes < 5 || minutes > 1440) fail($("#ss-grace"), "ss-grace-err", "Tenggang mulai harus antara 5 menit dan 24 jam.");
+      else body.entryGraceSeconds = minutes * 60;
+    }
+    if (s) body.status = $("#ss-status").value;
+    if (first) { first.focus(); return; }
+    const done = busy($("#ss-save"), "Menyimpan...");
+    try {
+      await mutate(() => api(s ? `/api/admin/mockup/sessions/${s.id}` : "/api/admin/mockup/sessions", { method: s ? "PUT" : "POST", body }),
+        s ? "Sesi tersimpan." : "Sesi dibuat. Lanjutkan dengan impor peserta.");
+      closeDialog("session");
+    } catch (error) {
+      if (error.field === "name") fieldError($("#ss-name"), "ss-name-err", error.message);
+      else if (error.field === "rangeStart" || error.field === "rangeEnd") fieldError($("#ss-range-end"), "ss-range-err", error.message);
+      else if (error.field === "entryGraceSeconds") fieldError($("#ss-grace"), "ss-grace-err", error.message);
+      else if (error.field === "periodId") fieldError($("#ss-period"), "ss-period-err", error.message);
+      else if (error.field === "packageId") fieldError($("#ss-package"), "ss-package-err", error.message);
+      else if (error.field === "quota") fieldError($("#ss-quota"), "ss-quota-err", error.message);
+      else fieldError(null, "ss-err", error.message);
+    } finally {
+      done();
+    }
+  }
+
+  return (
+    <Modal id="dlg-session" className="dialog dialog--session" focus="#ss-name" onClose={closeDialog}>
+      <form className="dialog__form" onSubmit={save} noValidate>
+        <Head title={s ? "Ubah sesi" : "Tambah sesi"} sub="Satu sesi adalah satu gelombang peserta berbayar IELTS Mockup." />
+        <div className="dialog__body">
+          <div className="form-grid">
+            <div className="field span-all">
+              <label className="label" htmlFor="ss-name">Nama sesi</label>
+              <input className="input" id="ss-name" type="text" defaultValue={s?.name || ""} placeholder="Contoh: Mockup November 2026 Gelombang 1" />
+              <p className="error" id="ss-name-err" hidden></p>
+            </div>
+            <div className="field">
+              <label className="label" htmlFor="ss-mode">Jendela tes</label>
+              <select className="select" id="ss-mode" value={mode} onChange={(e) => setMode(e.target.value)}>
+                <option value="terjadwal">Terjadwal, tanggal dan jam per siswa</option>
+                <option value="fleksibel">Fleksibel, rentang tanggal untuk semua</option>
+              </select>
+            </div>
+            {mode === "fleksibel" ? <>
+              <div className="field">
+                <label className="label" htmlFor="ss-range-start">Rentang mulai</label>
+                <input className="input" id="ss-range-start" type="date" defaultValue={s?.rangeStart ? new Date(s.rangeStart + 7 * 3600 * 1000).toISOString().slice(0, 10) : ""} />
+              </div>
+              <div className="field">
+                <label className="label" htmlFor="ss-range-end">Rentang akhir</label>
+                <input className="input" id="ss-range-end" type="date" defaultValue={s?.rangeEnd ? new Date(s.rangeEnd + 7 * 3600 * 1000).toISOString().slice(0, 10) : ""} />
+                <p className="hint">Siswa boleh mulai kapan saja dalam rentang ini.</p>
+                <p className="error" id="ss-range-err" hidden></p>
+              </div>
+            </> : <div className="field">
+              <label className="label" htmlFor="ss-grace">Tenggang mulai (menit)</label>
+              <input className="input tnum" id="ss-grace" type="number" min="5" max="1440" defaultValue={Math.round((s?.entryGraceSeconds ?? 7200) / 60)} />
+              <p className="hint">Tautan siswa terbuka pada jadwalnya dan menutup setelah tenggang ini.</p>
+              <p className="error" id="ss-grace-err" hidden></p>
+            </div>}
+            <div className="field">
+              <label className="label" htmlFor="ss-program">Program</label>
+              <select className="select" id="ss-program" value={programId} onChange={(e) => setProgramId(e.target.value)}>
+                <OptList list={db.programs.map((p) => [p.id, p.name])} />
+              </select>
+              <p className="hint">Pendaftaran peserta mockup memakai program ini, jadi peserta masuk Database Siswa.</p>
+            </div>
+            <div className="field">
+              <label className="label" htmlFor="ss-period">Periode</label>
+              <select className="select" id="ss-period" defaultValue={s?.periodId || ""}>
+                <OptList list={[["", "Pilih periode"], ...periodsSorted().map((p) => [p.id, fmtDate(p.start)])]} />
+              </select>
+              <p className="error" id="ss-period-err" hidden></p>
+            </div>
+            <div className="field">
+              <label className="label" htmlFor="ss-duration">Durasi program</label>
+              <select className="select" id="ss-duration" defaultValue={s?.durationId || ""}>
+                <OptList list={[["", "Tanpa durasi"], ...durations.map((d) => [d.id, d.label])]} />
+              </select>
+            </div>
+            <div className="field">
+              <label className="label" htmlFor="ss-package">Paket soal</label>
+              <select className="select" id="ss-package" defaultValue={s?.packageId || ""}>
+                <OptList list={[["", "Pilih paket"], ...packages.map((p) => [p.id, p.name])]} />
+              </select>
+              <p className="error" id="ss-package-err" hidden></p>
+            </div>
+            <div className="field">
+              <label className="label" htmlFor="ss-quota">Kuota peserta</label>
+              <input className="input tnum" id="ss-quota" type="number" min="1" defaultValue={s?.quota ?? ""} placeholder="Opsional" />
+              <p className="error" id="ss-quota-err" hidden></p>
+            </div>
+            {s ? <div className="field">
+              <label className="label" htmlFor="ss-status">Status</label>
+              <select className="select" id="ss-status" defaultValue={s.status}>
+                <option value="draft">Draf</option>
+                <option value="open">Terbuka</option>
+                <option value="closed">Selesai</option>
+                <option value="cancelled">Dibatalkan</option>
+              </select>
+            </div> : null}
+            <p className="error span-all" id="ss-err" hidden></p>
+          </div>
+        </div>
+        <div className="dialog__foot">
+          <FootEnd>
+            <button className="link-btn" type="button" onClick={closeDialog}>Batal</button>
+            <button className="btn btn--primary" type="submit" id="ss-save">{s ? "Simpan sesi" : "Buat sesi"}</button>
+          </FootEnd>
+        </div>
+      </form>
+    </Modal>
+  );
+}
+
+export function openSessionImport(sessionId) { openDialog({ kind: "session-import", sessionId }); }
+
+function SessionImportDialog({ sessionId }) {
+  const s = db.sessions.find((x) => x.id === sessionId);
+  const [preview, setPreview] = useState(null);
+  const [fileName, setFileName] = useState("");
+  const [parseError, setParseError] = useState("");
+
+  const scheduled = s?.windowMode === "terjadwal";
+  const header = scheduled ? "nama,whatsapp,email,tanggal_tes,jam_tes" : "nama,whatsapp,email";
+  const example = scheduled ? "Budi Santoso,081234567890,budi@contoh.com,2026-11-20,09:00" : "Budi Santoso,081234567890,budi@contoh.com";
+
+  function downloadTemplate() {
+    const csv = `${header}\n${example}\n`;
+    const url = URL.createObjectURL(new Blob([csv], { type: "text/csv" }));
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = scheduled ? "peserta-mockup-terjadwal.csv" : "peserta-mockup-fleksibel.csv";
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  async function readFile(e) {
+    const file = e.target.files?.[0];
+    setParseError("");
+    setPreview(null);
+    if (!file) return;
+    setFileName(file.name);
+    const csv = await file.text();
+    try {
+      const r = await api(`/api/admin/mockup/sessions/${sessionId}/import`, { method: "POST", body: { csv } });
+      if (r) setPreview(r);
+    } catch (error) {
+      setParseError(error.message);
+    }
+  }
+
+  const bad = preview ? preview.rows.filter((r) => r.errors.length || r.windowError) : [];
+  const good = preview ? preview.rows.filter((r) => !r.errors.length && !r.windowError) : [];
+
+  async function confirm() {
+    const fileInput = $("#si-file");
+    const csv = await fileInput.files?.[0]?.text();
+    const done = busy($("#si-confirm"), "Mengimpor...");
+    try {
+      const r = await api(`/api/admin/mockup/sessions/${sessionId}/import/confirm`, { method: "POST", body: { csv } });
+      closeDialog("session-import");
+      await reload();
+      toast(`Impor selesai: ${r.created} undangan dibuat, ${r.studentsNew} siswa baru, ${r.registrations} pendaftaran. Tekan "Kirim semua" untuk mengirim undangannya.`);
+    } catch (error) {
+      setParseError(error.message);
+    } finally {
+      done();
+    }
+  }
+
+  return (
+    <Modal id="dlg-import" className="dialog dialog--import" focus="#si-file" onClose={closeDialog}>
+      <Head title="Impor peserta" sub={s ? `${s.name}. ${scheduled ? "Sesi terjadwal: setiap baris membawa tanggal dan jam tesnya." : "Sesi fleksibel: semua peserta memakai rentang sesi."}` : ""} />
+      <div className="dialog__body">
+        <div className="toolbar">
+          <button className="btn btn--quiet btn--sm" type="button" onClick={downloadTemplate}><Icon name="download" />Unduh template</button>
+          <p className="toolbar__meta">CSV dengan header: {header}. Nomor WhatsApp menerima 08, 628, atau +62.</p>
+        </div>
+        <div className="field">
+          <label className="label" htmlFor="si-file">Berkas CSV</label>
+          <input className="input" id="si-file" type="file" accept=".csv,text/csv" onChange={readFile} />
+          {fileName ? <p className="hint">{fileName}</p> : null}
+        </div>
+        {parseError ? <p className="error" role="alert">{parseError}</p> : null}
+        {preview ? <>
+          <p className="hint">
+            {preview.counts.total} baris &middot; {preview.counts.newStudents} siswa baru &middot; {preview.counts.existingStudents} siswa lama &middot; {preview.counts.skipped} sudah punya undangan &middot; {preview.counts.invalid} bermasalah
+          </p>
+          {preview.rows.length ? <div className="table-wrap si-preview"><table className="table">
+            <caption className="sr-only">Pratinjau impor</caption>
+            <thead><tr><th scope="col" className="is-no">Baris</th><th scope="col">Nama</th><th scope="col">WhatsApp</th><th scope="col">Siswa</th><th scope="col">Jadwal</th><th scope="col">Catatan</th></tr></thead>
+            <tbody>{preview.rows.map((r) => (
+              <tr key={r.line} className={r.errors.length || r.windowError ? "is-draft" : ""}>
+                <td className="is-no">{r.line}</td>
+                <td>{r.name}</td>
+                <td className="nowrap tnum">{fmtWa(r.wa) || r.waRaw}</td>
+                <td>{r.studentId ? <span>lama: {r.studentName}</span> : r.errors.length ? <span className="muted">-</span> : <span>baru</span>}</td>
+                <td className="nowrap">{scheduled && r.scheduledAt ? `${r.date} ${r.time}` : scheduled ? <span className="muted">-</span> : "rentang sesi"}</td>
+                <td>{r.errors.length ? r.errors.join(" ") : r.windowError ? r.windowError : r.inviteExisting ? "Sudah punya undangan di sesi ini, dilewati." : <span className="muted">Siap diimpor</span>}</td>
+              </tr>
+            ))}</tbody>
+          </table></div> : null}
+        </> : null}
+      </div>
+      <div className="dialog__foot">
+        <FootEnd>
+          <button className="link-btn" type="button" onClick={closeDialog}>Batal</button>
+          <button className="btn btn--primary" type="button" id="si-confirm" disabled={!preview || bad.length || !good.length} onClick={confirm}>
+            Impor {good.length ? `${good.length} peserta` : ""}
+          </button>
+        </FootEnd>
+      </div>
+    </Modal>
+  );
+}
+
+export function openMoveInvite(inviteId, name, fromSessionId) { openDialog({ kind: "move-invite", inviteId, name, fromSessionId }); }
+
+function MoveInviteDialog({ inviteId, name, fromSessionId }) {
+  const others = db.sessions.filter((s) => s.id !== fromSessionId && s.status !== "cancelled");
+  const [targetId, setTargetId] = useState(others[0]?.id || "");
+  const target = others.find((s) => s.id === targetId) || null;
+
+  async function save(e) {
+    e.preventDefault();
+    clearErrors(e.currentTarget);
+    let first = null;
+    const fail = (el, errId, msg) => { fieldError(el, errId, msg); if (!first) first = el; };
+    const body = { sessionId: targetId };
+    if (target?.windowMode === "terjadwal") {
+      body.date = $("#mv-date").value;
+      body.time = $("#mv-time").value;
+      if (!body.date || !body.time) fail($("#mv-date"), "mv-err", "Tanggal dan jam baru wajib diisi untuk sesi terjadwal.");
+    }
+    if (first) { first.focus(); return; }
+    const done = busy(e.currentTarget.querySelector("#mv-save"), "Memindah...");
+    try {
+      await mutate(() => api(`/api/admin/mockup/invites/${inviteId}/move`, { method: "POST", body }),
+        `Undangan ${name} dipindahkan ke ${target?.name || "sesi baru"} dan antrean pesannya berjalan.`);
+      closeDialog("move-invite");
+    } catch (error) {
+      fieldError(null, "mv-err", error.message);
+    } finally {
+      done();
+    }
+  }
+
+  return (
+    <Modal id="dlg-move" className="dialog dialog--move" focus="#mv-session" onClose={closeDialog}>
+      <form className="dialog__form" onSubmit={save} noValidate>
+        <Head title="Pindah sesi" sub={`Undangan lama ${name} dihapus dan undangan baru dibuat di sesi tujuan, lalu pesannya masuk antrean.`} />
+        <div className="dialog__body">
+          <div className="form-grid">
+            <div className="field span-all">
+              <label className="label" htmlFor="mv-session">Sesi tujuan</label>
+              <select className="select" id="mv-session" value={targetId} onChange={(e) => setTargetId(e.target.value)}>
+                <OptList list={others.map((s) => [s.id, s.name])} />
+              </select>
+              {!others.length ? <p className="error" id="mv-err" hidden></p> : null}
+            </div>
+            {target?.windowMode === "terjadwal" ? <>
+              <div className="field">
+                <label className="label" htmlFor="mv-date">Tanggal baru</label>
+                <input className="input" id="mv-date" type="date" />
+              </div>
+              <div className="field">
+                <label className="label" htmlFor="mv-time">Jam baru</label>
+                <input className="input" id="mv-time" type="time" />
+              </div>
+            </> : null}
+            <p className="error span-all" id="mv-err" hidden></p>
+          </div>
+        </div>
+        <div className="dialog__foot">
+          <FootEnd>
+            <button className="link-btn" type="button" onClick={closeDialog}>Batal</button>
+            <button className="btn btn--primary" type="submit" id="mv-save">Pindahkan</button>
+          </FootEnd>
+        </div>
+      </form>
+    </Modal>
+  );
+}
+
+export function openTestSend(sessionId) { openDialog({ kind: "test-send", sessionId }); }
+
+function TestSendDialog({ sessionId }) {
+  const s = db.sessions.find((x) => x.id === sessionId);
+
+  async function send(e) {
+    e.preventDefault();
+    clearErrors(e.currentTarget);
+    const done = busy($("#ts-send"), "Mengirim...");
+    try {
+      await api(`/api/admin/mockup/sessions/${sessionId}/test-send`, {
+        method: "POST",
+        body: { wa: $("#ts-wa").value.trim(), email: $("#ts-email").value.trim() },
+      });
+      closeDialog("test-send");
+      toast("Pesan uji terkirim. Periksa email atau WhatsApp kamu.");
+    } catch (error) {
+      fieldError(null, "ts-err", error.message);
+    } finally {
+      done();
+    }
+  }
+
+  return (
+    <Modal id="dlg-test-send" className="dialog dialog--test-send" focus="#ts-wa" onClose={closeDialog}>
+      <form className="dialog__form" onSubmit={send} noValidate>
+        <Head title="Pesan uji" sub={s ? `Kirim satu contoh undangan ${s.name} ke nomor atau email kamu sendiri sebelum kirim semua.` : ""} />
+        <div className="dialog__body">
+          <div className="form-grid">
+            <div className="field">
+              <label className="label" htmlFor="ts-wa">WhatsApp uji (opsional)</label>
+              <input className="input" id="ts-wa" type="tel" inputMode="tel" placeholder="0812 3456 7890" />
+            </div>
+            <div className="field">
+              <label className="label" htmlFor="ts-email">Email uji (opsional)</label>
+              <input className="input" id="ts-email" type="email" placeholder="nama@contoh.com" />
+            </div>
+            <p className="error span-all" id="ts-err" hidden></p>
+          </div>
+        </div>
+        <div className="dialog__foot">
+          <FootEnd>
+            <button className="link-btn" type="button" onClick={closeDialog}>Batal</button>
+            <button className="btn btn--primary" type="submit" id="ts-send">Kirim pesan uji</button>
+          </FootEnd>
+        </div>
+      </form>
+    </Modal>
+  );
 }

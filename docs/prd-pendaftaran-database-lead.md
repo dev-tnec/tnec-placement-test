@@ -2,29 +2,32 @@
 
 Status: draf untuk direview. Tanggal: 17 November 2026.
 
+Diperbarui 17 November 2026: menu Pendaftaran terpisah dibatalkan. Pendaftaran digabung ke Database Siswa lewat tombol "Daftarkan siswa" dan panel "Pendaftaran terbaru", sesuai keputusan pemilik. Bagian 3 dan tabel antarmuka di bawah sudah disesuaikan.
+
 ## 1. Ringkasan
 
-Dua perubahan besar dan dua tambahan. Menu Pendaftaran baru membuat admin mendaftarkan seorang calon siswa ke sebuah program, dan pendaftaran itu otomatis menautkan atau membuat profil di Database Siswa. Database Siswa lalu hanya memuat siswa yang sudah terdaftar di program, sementara calon siswa dari placement test pindah ke tab Lead di bawah menu Placement Test. Data siswa bertambah tujuh kolom identitas. Tes keempat, IELTS Mockup Test, hanya terbuka lewat undangan WhatsApp dan kode unik per siswa.
+Dua perubahan besar dan dua tambahan. Pendaftaran dilakukan dari Database Siswa lewat tombol "Daftarkan siswa", bukan menu terpisah, dan pendaftaran itu otomatis menautkan atau membuat profil di Database Siswa. Database Siswa lalu hanya memuat siswa yang sudah terdaftar di program, sementara calon siswa dari placement test pindah ke tab Lead di bawah menu Placement Test. Data siswa bertambah tujuh kolom identitas. Tes keempat, IELTS Mockup Test, hanya terbuka lewat undangan WhatsApp dan kode unik per siswa.
 
 ## 2. Keputusan yang sudah diputus pemilik
 
 | Topik | Keputusan |
 |---|---|
 | Siapa yang masuk Database Siswa | Hanya siswa dengan minimal satu pendaftaran. Kontak placement test tetap sebagai Lead |
+| Lokasi Pendaftaran | Digabung ke Database Siswa lewat tombol "Daftarkan siswa", bukan menu sidebar terpisah. Keputusan 17 November 2026 |
 | Lokasi Lead | Tab baru "Lead" di menu Placement Test, di samping Submission |
 | Akses IELTS Mockup | Undangan pribadi lewat WhatsApp ditambah kode unik per siswa. Dua-duanya wajib |
 | Jadwal mockup per siswa dan unggah CSV | Fase berikutnya, tidak di rilis ini |
 
-## 3. Menu Pendaftaran
+## 3. Pendaftaran di Database Siswa
 
 ### Alur
 
-1. Admin membuka menu baru "Pendaftaran" di sidebar.
-2. Admin mencari calon siswa berdasarkan nama, email, atau nomor WhatsApp. Pencarian memakai data Lead dan siswa yang sudah ada.
+1. Admin membuka Database Siswa dan menekan tombol "Daftarkan siswa".
+2. Dialog mencari calon siswa berdasarkan nama, email, atau nomor WhatsApp. Pencarian memakai data Lead dan siswa yang sudah ada.
 3. Kalau orangnya belum ada, admin mengisi nama, WhatsApp, dan email baru. Kalau sudah ada, profilnya dipakai dan data lama tidak ditimpa.
 4. Admin memilih program, durasi, periode, dan kelas, lalu menyimpan.
 5. Simpan menulis satu baris ke tabel `pendaftaran`, menautkannya ke `student_id`, dan status siswa berubah menjadi terdaftar.
-6. Orang yang tadinya Lead sekarang muncul di Database Siswa.
+6. Orang yang tadinya Lead sekarang muncul di Database Siswa. Panel "Pendaftaran terbaru" di bawah tabel menampilkan delapan pendaftaran terakhir.
 
 ### Aturan satu siswa, banyak program
 
@@ -161,9 +164,9 @@ Semua route admin tetap butuh sesi dan menolak tulisan dari origin lain, sesuai 
 
 | Menu | Perubahan |
 |---|---|
-| Sidebar | Menu baru "Pendaftaran" setelah Ringkasan, sebelum Database Siswa |
-| Pendaftaran | Halaman baru: cari orang, form identitas, pilihan program, daftar pendaftaran terakhir di bawah |
-| Database Siswa | Hanya siswa terdaftar, kolom identitas baru di profil, bagian Perjalanan belajar, jumlah daftar |
+| Sidebar | Tidak ada menu Pendaftaran terpisah. Database Siswa menangani pendaftaran lewat tombol "Daftarkan siswa" |
+| Pendaftaran (dialog) | Dialog dari Database Siswa: cari orang, form identitas, pilihan program, durasi, periode, kelas |
+| Database Siswa | Hanya siswa terdaftar, tombol Daftarkan siswa, panel Pendaftaran terbaru di bawah tabel, kolom identitas baru di profil, bagian Perjalanan belajar, jumlah daftar |
 | Placement Test | Tab Lead baru dengan daftar Lead, tombol Daftarkan |
 | Placement Test, Pengaturan | Pengaturan IELTS Mockup terpisah seperti tes lain |
 | Menu tes | Item "IELTS Mockup" di sidebar dengan Soal & Jawaban, Submission, Pengaturan |
@@ -178,13 +181,13 @@ Data identitas baru dikumpulkan lewat admin, bukan lewat form publik. Kebijakan 
 1. Migrasi dan `packages/core`: kolom baru, tabel pendaftaran, kunci tes keempat, pemetaan data lama.
 2. API admin: pendaftaran, kolom identitas, Lead di bootstrap, undangan mockup dengan kode.
 3. API web: kode mockup di halaman undangan dan saat mulai.
-4. Antarmuka admin: menu Pendaftaran, Database Siswa baru, tab Lead, profil siswa dengan perjalanan belajar, menu IELTS Mockup.
+4. Antarmuka admin: Database Siswa baru dengan dialog Daftarkan siswa dan panel Pendaftaran terbaru, tab Lead, profil siswa dengan perjalanan belajar, menu IELTS Mockup.
 5. Tes smoke dan E2E di dev.
 6. Satu rilis, satu deploy. Bagian 4 butuh bagian 1 sampai 3 jadi dulu, dan filter Database Siswa tidak boleh menyala sebelum pemetaan data lama jalan.
 
 ## 12. Acceptance criteria
 
-1. Mendaftarkan Lead baru lewat Pendaftaran membuat profilnya pindah dari tab Lead ke Database Siswa dalam satu simpan.
+1. Mendaftarkan Lead baru lewat tombol Daftarkan siswa di Database Siswa membuat profilnya pindah dari tab Lead ke Database Siswa dalam satu simpan.
 2. Orang yang sama didaftarkan ke program kedua di periode lain, dan perjalanannya tampil dua baris, urut dari yang lama.
 3. Jumlah daftar di profil sama dengan jumlah pendaftaran tidak batal.
 4. Semua siswa lama yang sudah punya program tetap tampil di Database Siswa setelah deploy, tanpa perlu diedit.

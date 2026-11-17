@@ -10,13 +10,19 @@ import { randomToken } from "@tnec/core/crypto";
 import { runInBackground, deliverPending, drainDeliveries } from "@tnec/core/delivery";
 import { startSpeakingWorker, stopSpeakingWorker } from "@tnec/core/speaking";
 import { handleAdmin, serveAdminPage, adminCount, setSetupCode } from "./src/api.js";
+import { startInviteQueueWorker, stopInviteQueueWorker } from "./src/invite-queue.js";
+
+/** The mockup roster import sends a whole CSV in one JSON body, bigger than the admin default. */
+const IMPORT_ROUTES = /\/api\/admin\/mockup\/sessions\/[\w-]+\/import/;
 
 export function createAdminHandler() {
-  return async (request, env, ctx) => {
+  const handler = async (request, env, ctx) => {
     const url = new URL(request.url);
     if (url.pathname.startsWith("/api/admin/")) return handleAdmin(request, env, url, ctx);
     return serveAdminPage(request, env, url);
   };
+  handler.bodyLimit = (method, pathname) => (method === "POST" && IMPORT_ROUTES.test(pathname) ? 2 * 1024 * 1024 : null);
+  return handler;
 }
 
 /** Prints how to create the first account when the database has no admin yet. */
@@ -44,11 +50,13 @@ if (isMain) {
   // again, so it finishes what an earlier run left and lets running work end before it stops.
   runInBackground(() => deliverPending(env));
   startSpeakingWorker(env);
+  startInviteQueueWorker(env);
   let stopping = false;
   const stop = async () => {
     if (stopping) return;
     stopping = true;
     stopSpeakingWorker();
+    stopInviteQueueWorker();
     await closeServers([server]);
     await drainDeliveries();
     await env.DB.close().catch(() => {});

@@ -19,7 +19,7 @@ export let dataReady = false;
 
 export const db = {
   tests: {}, levels: [], programs: [], tutors: [], tutorIds: new Map(), periods: [], classes: [],
-  students: [], attempts: [], enrolledAt: [], pendaftaran: [], publicUrl: location.origin,
+  students: [], attempts: [], enrolledAt: [], pendaftaran: [], sessions: [], emailUsage: { sent: 0, limit: 200 }, publicUrl: location.origin,
   whatsapp: { configured: false },
   certs: { templates: [], types: [], issued: [] },
   speaking: { configured: false, waiting: 0, review: 0, failed: 0, manual: 0, graded30: 0, avgSeconds: null, failedLastHour: 0 },
@@ -91,6 +91,8 @@ function applyBootstrap(data, cached = false) {
   db.classes = data.catalog.classes;
   db.certs = data.certificates;
   db.pendaftaran = data.pendaftaran || [];
+  db.sessions = data.sessions || [];
+  db.emailUsage = data.emailUsage || db.emailUsage;
   db.speaking = data.speaking || db.speaking;
   db.speakingCefr = data.speakingCefr || [];
   db.jenjang = data.jenjang || [];

@@ -194,3 +194,75 @@ export function buildResultEmail({ name, email, score, total, level, speaking = 
 
   return { subject, html, text };
 }
+
+/** The invite email for the bulk mockup sessions, in the same shell as the result email. */
+export function buildInviteEmail({ name, sessionName, schedule, link, code, deadline }) {
+  const safeName = escapeHtml(name);
+  const subject = `Undangan IELTS Mockup: ${sessionName}`;
+
+  const html = `<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>${escapeHtml(subject)}</title>
+</head>
+<body style="margin:0;padding:0;background:${SURFACE};font-family:Inter,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:${NAVY};">
+  <div style="max-width:600px;margin:0 auto;padding:24px 16px;">
+    <div style="background:${NAVY};border-radius:16px 16px 0 0;padding:28px 32px;">
+      <div style="font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:${YELLOW};font-weight:700;">Titik Nol English Course</div>
+      <h1 style="margin:8px 0 0;font-size:26px;line-height:1.2;color:#FFFFFF;font-weight:800;">Undangan IELTS Mockup</h1>
+    </div>
+    <div style="background:#FFFFFF;border:1px solid ${BORDER};border-top:0;border-radius:0 0 16px 16px;padding:32px;">
+      <p style="margin:0 0 20px;font-size:16px;line-height:1.6;">Halo ${safeName},</p>
+      <p style="margin:0 0 24px;font-size:16px;line-height:1.6;color:${GRAY};">
+        Berikut tautan dan kode tes kamu untuk IELTS Mockup ${escapeHtml(sessionName)}. Tautan dan kode ini hanya untuk kamu.
+      </p>
+
+      <div style="background:${SURFACE};border:1px solid ${BORDER};border-radius:12px;padding:24px;text-align:center;margin:0 0 24px;">
+        <div style="font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:${GRAY};font-weight:700;">Jadwal kamu</div>
+        <div style="margin:8px 0;font-size:17px;line-height:1.5;font-weight:700;color:${NAVY};">${escapeHtml(schedule)}</div>
+        <div style="font-size:13px;line-height:1.5;color:${GRAY};">Tes hanya bisa dibuka ${escapeHtml(deadline)}.</div>
+      </div>
+
+      <div style="margin:0 0 24px;border:1px solid ${BORDER};border-radius:12px;padding:20px 24px;text-align:center;">
+        <div style="font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:${GRAY};font-weight:700;">Kode tes kamu</div>
+        <div style="margin:8px 0;font-size:28px;letter-spacing:.18em;font-weight:800;color:${NAVY};">${escapeHtml(code)}</div>
+      </div>
+
+      <a href="${escapeHtml(link)}" style="display:block;background:${NAVY};color:#FFFFFF;text-decoration:none;text-align:center;font-size:15px;font-weight:700;padding:15px 24px;border-radius:999px;">Buka tautan tes</a>
+      <p style="margin:12px 0 24px;font-size:12px;line-height:1.5;color:${GRAY};word-break:break-all;">${escapeHtml(link)}</p>
+
+      <p style="margin:0 0 20px;font-size:14px;line-height:1.65;color:${GRAY};">
+        Siapkan headset atau speaker, pastikan koneksi internet stabil, dan kerjakan tes di tempat yang tenang.
+        Kalau ada yang ingin kamu tanyakan, balas email ini atau hubungi WhatsApp +62 823-3314-3544.
+      </p>
+    </div>
+    <div style="padding:20px 8px;text-align:center;font-size:12px;line-height:1.6;color:${GRAY};">
+      Titik Nol English Course<br>
+      ${escapeHtml(CAMPUS_ADDRESS)}<br>
+      <span style="color:${NAVY_700};">titiknolenglish.com</span>
+    </div>
+  </div>
+</body>
+</html>`;
+
+  const text = [
+    `Halo ${name},`,
+    "",
+    `Berikut tautan dan kode tes kamu untuk IELTS Mockup ${sessionName}.`,
+    "",
+    `Jadwal kamu: ${schedule}`,
+    `Tautan tes: ${link}`,
+    `Kode tes: ${code}`,
+    "",
+    `Tautan dan kode ini hanya untuk kamu. Tes hanya bisa dibuka ${deadline}.`,
+    "Siapkan headset atau speaker, pastikan koneksi stabil, dan kerjakan di tempat yang tenang.",
+    "",
+    "Titik Nol English Course",
+    CAMPUS_ADDRESS,
+    "titiknolenglish.com",
+  ].join("\n");
+
+  return { subject, html, text };
+}
