@@ -1,6 +1,9 @@
 // One command for everything: `npm start`.
-// Loads .env, brings the database schema up to date, then runs the test site and the dashboard.
+// Loads .env, builds the React dashboard client, brings the database schema up to date, then runs
+// the test site and the dashboard. The build step guarantees that what runs locally is always
+// built from the current client source.
 
+import { spawnSync } from "node:child_process";
 import { loadEnvFile, buildEnv } from "@tnec/core/env";
 import { migrate } from "@tnec/core/migrate";
 import { startServer, closeServers } from "@tnec/core/node-server";
@@ -8,6 +11,10 @@ import { runInBackground, deliverPending, drainDeliveries } from "@tnec/core/del
 import { startSpeakingWorker, stopSpeakingWorker } from "@tnec/core/speaking";
 import { createWebHandler } from "../apps/web/server.js";
 import { createAdminHandler, announceSetup } from "../apps/admin/server.js";
+
+const clientBuild = new URL("../apps/admin/client/build.mjs", import.meta.url);
+const built = spawnSync(process.execPath, [clientBuild], { stdio: "inherit" });
+if (built.status) process.exit(built.status);
 
 loadEnvFile();
 const env = buildEnv();

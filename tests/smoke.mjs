@@ -5,7 +5,7 @@
 // the first admin setup code, the background result delivery, and the certificate numbers and templates.
 // Runs without a database.
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import {
   QUESTIONS,
   TOTAL_QUESTIONS,
@@ -439,8 +439,8 @@ assert.equal(isIsoDate("2026-02-30"), false);
 assert.equal(isIsoDate("2026-02-28"), true);
 
 // The dashboard mirrors the number rules for its live preview, so both sides must agree.
-const adminJs = readFileSync(new URL("../apps/admin/public/admin/assets/admin.js", import.meta.url), "utf8");
-const mirrorSource = adminJs.slice(adminJs.indexOf("const CERT_RESETS"), adminJs.indexOf("/* ===================== Database"));
+const certMirror = readFileSync(new URL("../apps/admin/client/src/cert-number.js", import.meta.url), "utf8");
+const mirrorSource = certMirror.slice(certMirror.indexOf("const CERT_RESETS"), certMirror.indexOf("/* ===================== end of the certificate number rules")).replaceAll("export ", "");
 const clientRules = new Function("MONTHS_LONG", `${mirrorSource}; return { formatCertNumber, certFormatProblem, certPeriodKey };`)(Array(12).fill("Bulan"));
 for (const [format, reset] of formatCases) {
   assert.equal(clientRules.certFormatProblem(format, reset), numberFormatProblem(format, reset), `dashboard and server agree on ${format}`);
@@ -449,6 +449,14 @@ for (const [format, reset] of formatCases) {
     assert.equal(clientRules.formatCertNumber(format, 146, "MOM", certIso), formatCertificateNumber(format, { seq: 146, code: "MOM", iso: certIso }));
   }
 }
+
+// The React dashboard build output is committed, so Render needs no build command. The smoke check
+// guards against pushing a source change without rebuilding, and keeps the strict CSP possible.
+const builtIndex = readFileSync(new URL("../apps/admin/public/admin-ui/index.html", import.meta.url), "utf8");
+const entry = builtIndex.match(/src="(\/admin-ui\/assets\/[^"]+\.js)"/);
+assert.ok(entry, "the dashboard build output exists");
+assert.ok(existsSync(new URL(`../apps/admin/public${entry[1]}`, import.meta.url)), "the dashboard entry bundle exists on disk");
+assert.equal(/<script(?![^>]*\bsrc=)/i.test(builtIndex), false, "the built dashboard uses no inline script");
 
 // Every {{placeholder}} in a template is a built-in value or one of its fields, and every field shows up.
 for (const [key, template] of Object.entries(TEMPLATES)) {

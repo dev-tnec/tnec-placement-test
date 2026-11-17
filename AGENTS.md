@@ -31,7 +31,7 @@ The full flow passes in a headless browser against the `dev` branch: first admin
 | Database | Neon PostgreSQL through `pg`, the only runtime dependency |
 | Email | Cloudflare Email Sending REST API, `packages/core/src/mailer.js` |
 | WhatsApp | AttCos (CSQ API), `POST {ATTCOS_API_BASE}/messages`, on a WhatsApp account linked through Baileys |
-| Front end | Plain HTML, CSS, and JavaScript. No build step |
+| Front end | Test site: plain HTML, CSS, and JavaScript, no build step. Dashboard: React, built with Vite from `apps/admin/client` into `apps/admin/public/admin-ui`, and the build output is committed so the server only serves files |
 | Monorepo | npm workspaces: `apps/*` and `packages/*` |
 
 ## Repository layout
@@ -45,7 +45,9 @@ The full flow passes in a headless browser against the `dev` branch: first admin
 | `apps/admin/src/api.js` | Dashboard pages, sessions, first admin setup, and every `/api/admin` route |
 | `apps/admin/src/certificates.js` | Certificate types, number formats and counters, issuing, and the printable certificate page. See Certificates below |
 | `apps/admin/certificates/` | The certificate HTML templates with their CSS and drawings |
-| `apps/admin/public/admin/` | Dashboard `index.html`, `login.html`, and `assets/` (admin.css, admin.js, login.js, and certificate-page.css and certificate-page.js for the bar above a printable certificate) |
+| `apps/admin/client/` | The React dashboard client: `src/` (store, lib, ui atoms, dialogs, menus, views), the Vite config, and `build.mjs`. The design rules and scope are in `docs/prd-react-migration.md`. During the migration it is served at `/admin-ui/` next to the old dashboard at `/admin/` |
+| `apps/admin/public/admin-ui/` | The committed Vite build output of the React client. `npm start` rebuilds it before serving, and `tests/smoke.mjs` checks that the entry bundle exists and uses no inline script, so a source change cannot ship without a rebuild |
+| `apps/admin/public/admin/` | The old plain HTML dashboard, still served at `/admin/` until the React client reaches parity and the switch moves `/admin-ui` onto `/admin/` |
 | `packages/core/src/db.js` | Postgres pool with a small `prepare(sql).bind(...).first()/all()/run()` and `batch()` API. `?` placeholders become `$1..$n`; `batch()` is one transaction; read-only batches run in parallel; `transaction(work)` runs steps that need an earlier result, such as taking a certificate number, in one transaction |
 | `packages/core/src/env.js` | Loads `.env` (or `ENV_FILE`) and builds the shared `env` object |
 | `packages/core/src/node-server.js` | Node HTTP adapter for fetch-style handlers, static files, security headers |
@@ -72,7 +74,7 @@ The full flow passes in a headless browser against the `dev` branch: first admin
 ## Running
 
 1. Double-click `start.cmd` on Windows, or run `npm install` once and then `npm start`. PowerShell on this machine blocks `npm.ps1`, so from PowerShell use `node scripts/start.mjs` or `npm.cmd start`.
-2. Starting applies pending migrations, then serves the test on `WEB_PORT` (4000) and the dashboard on `ADMIN_PORT` (4001).
+2. Starting builds the React dashboard client, applies pending migrations, then serves the test on `WEB_PORT` (4000) and the dashboard on `ADMIN_PORT` (4001). The old dashboard is at `/admin/`; during the React migration the rebuilt client is at `/admin-ui/`.
 3. With no admin in the database, the login page at `/admin/login` turns into "Buat akun admin pertama". Requests from localhost need no code; any other request needs the setup code that the admin app prints when it starts. On Render the code comes from `ADMIN_SETUP_CODE`, so it stays the same across restarts. After the first account exists, setup is closed and more accounts come from `npm run admin:create`.
 4. A host that sets `PORT`, such as Render, gives that port to an app started on its own with `npm run start:web` or `npm run start:admin`.
 

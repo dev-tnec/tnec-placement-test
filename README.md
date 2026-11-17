@@ -17,7 +17,7 @@ On Windows, double-click `start.cmd`. It installs what it needs the first time, 
 
 From a terminal, the same thing is `npm install` once, then `npm start`. If PowerShell refuses `npm` because scripts are disabled, use `node scripts/start.mjs` instead. The settings live in `.env` at the repository root, and `.env.example` lists every key.
 
-Starting updates the database schema when needed, then runs both apps. The first time the dashboard opens with an empty database, the login page offers to create the first admin account. From the same computer no code is needed; from another computer, enter the setup code that `npm start` prints.
+Starting updates the database schema when needed, builds the React dashboard client from `apps/admin/client`, then runs both apps. The first time the dashboard opens with an empty database, the login page offers to create the first admin account. From the same computer no code is needed; from another computer, enter the setup code that `npm start` prints.
 
 ## Configuration
 
