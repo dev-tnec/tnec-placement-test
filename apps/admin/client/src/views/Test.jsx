@@ -1,5 +1,5 @@
-// The Placement, Pre-test, and Post-test pages: the question bank, the submission list, the Lead
-// tab, Pengaturan, and the full submission page with the speaking panel.
+// The Placement, Pre-test, Post-test, and IELTS Mockup pages: the question bank, the submission
+// list, the Lead tab, Pengaturan, and the full submission page with the speaking panel.
 // Ported from viewTest, renderQuestionsTab, renderAttemptsTab, renderLeadTab, renderSettingsTab,
 // viewAttempt, and speakingPanelHtml.
 
@@ -10,7 +10,7 @@ import {
   classById, classLabel, fmtClock, fmtDate, fmtDateTime, fmtSpan, fmtWa, pad, pct, speakingAudioUrl,
   speakingNeedsAttention, studentById, testOf, testSeconds, nilaiOf, levelByKey, latestAttemptOf,
   latestGraded, leads, isColdLead, lastActivityAt, levelLabel, exportAttempts, exportLeads, periodById,
-  programById, fmtTime,
+  programById, fmtTime, TEST_META,
 } from "../lib.js";
 import {
   AttemptStatus, Chip, ClassCell, Empty, Icon, LevelCell, Notice, OptList, PageHead, Pager, PassStatus,
@@ -21,13 +21,6 @@ import { MenuBtn } from "../menus.jsx";
 import { resendEmail, speakingRetry, speakingReviewed, speakingSkip } from "../actions.js";
 import { openQuestionEditor, openDaftar } from "../dialogs.jsx";
 import { $, busy, clearErrors, fieldError, toast } from "../dom.js";
-
-const TEST_META = {
-  placement: { name: "Placement Test", who: "calon siswa" },
-  pre: { name: "Pre-test", who: "siswa terdaftar" },
-  post: { name: "Post-test", who: "siswa terdaftar" },
-  "ielts-mockup": { name: "IELTS Mockup", who: "siswa undangan" },
-};
 
 /* Jumlah soal aktif versus the top level threshold. */
 function LevelMismatchNotice() {
@@ -115,8 +108,10 @@ function QuestionsTab() {
             <tr key={x.id} className={x.status === "draf" ? "is-draft" : ""} onClick={rowRun(() => openQuestionEditor(x.id))}>
               <td className="is-no is-top">{num ? pad(num) : <span className="muted">Draf</span>}</td>
               <td>
-                {x.part ? <span className="q-tag">Bagian {x.part}</span> : null}
-                {x.passage ? <span className="q-tag"><Icon name="book" cls="icon--sm" />Dengan bacaan</span> : null}
+                {(x.part || x.passage) ? <div className="q-tags">
+                  {x.part ? <span className="q-tag">Bagian {x.part}</span> : null}
+                  {x.passage ? <span className="q-tag"><Icon name="book" cls="icon--sm" />{x.skill === "Listening" ? "Dengan instruksi" : "Dengan bacaan"}</span> : null}
+                </div> : null}
                 <p className="q-prompt">{x.prompt}</p>
                 {x.type === "text"
                   ? <ul className="opts" aria-label="Jawaban yang diterima">

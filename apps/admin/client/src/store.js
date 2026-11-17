@@ -9,7 +9,7 @@ export const HOME = "/admin/";
 export const LOGIN = "/admin/login";
 
 export const PAGE_SIZE = 15;
-export const KEYS = ["A", "B", "C", "D"];
+export const KEYS = ["A", "B", "C", "D", "E", "F"];
 export const TEST_KEYS = ["placement", "pre", "post", "ielts-mockup"];
 
 export let NOW = Date.now();

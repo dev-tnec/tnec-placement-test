@@ -118,12 +118,14 @@ function QuestionDialog({ id }) {
       else if (new Set(accepted.map((a) => a.toLowerCase())).size !== accepted.length) fail($("#qe-accepted"), "qe-options-err", "Ada jawaban diterima yang ditulis dua kali.");
       body.accepted = accepted;
     } else {
+      const visible = isIelts ? KEYS : KEYS.slice(0, 4);
       const opts = {};
-      KEYS.forEach((k) => { opts[k] = $(`#qe-opt-${k}`)?.value.trim() || ""; });
-      const filled = KEYS.filter((k) => opts[k]);
-      if (filled.length < 2) {
-        filled.forEach((k) => $(`#qe-opt-${k}`).classList.add("is-invalid"));
-        fail($(`#qe-opt-${filled[filled.length - 1] || "A"}`) || $("#qe-opt-A"), "qe-options-err", "Isi minimal dua pilihan jawaban.");
+      visible.forEach((k) => { opts[k] = $(`#qe-opt-${k}`)?.value.trim() || ""; });
+      const filled = visible.filter((k) => opts[k]);
+      const required = isIelts ? 2 : 4;
+      if (filled.length < required) {
+        visible.filter((k) => !opts[k]).forEach((k) => $(`#qe-opt-${k}`)?.classList.add("is-invalid"));
+        fail($(`#qe-opt-${visible.find((k) => !opts[k]) || "A"}`), "qe-options-err", isIelts ? "Isi minimal dua pilihan jawaban." : "Isi keempat pilihan jawaban.");
       } else if (filled.some((k, i) => filled.slice(0, i).some((j) => opts[j].toLowerCase() === opts[k].toLowerCase()))) {
         fail($("#qe-opt-A"), "qe-options-err", "Ada pilihan jawaban yang sama. Setiap pilihan harus berbeda.");
       } else if (!key || !opts[key]) {
@@ -158,11 +160,13 @@ function QuestionDialog({ id }) {
             <textarea className="textarea" id="qe-prompt" rows="3" defaultValue={q ? q.prompt : ""} placeholder="Contoh: Yesterday she ___ to the market."></textarea>
             <p className="error" id="qe-prompt-err" hidden></p>
           </div>
-          <label className="check"><input type="checkbox" checked={hasPassage} onChange={(e) => { setHasPassage(e.target.checked); if (e.target.checked) setTimeout(() => $("#qe-passage")?.focus(), 0); }} /><span>Soal ini memakai bacaan</span></label>
+          <label className="check"><input type="checkbox" checked={hasPassage} onChange={(e) => { setHasPassage(e.target.checked); if (e.target.checked) setTimeout(() => $("#qe-passage")?.focus(), 0); }} /><span>{isIelts ? "Soal ini memakai bacaan atau instruksi" : "Soal ini memakai bacaan"}</span></label>
           <div className="field" hidden={!hasPassage}>
-            <label className="label" htmlFor="qe-passage">Bacaan</label>
+            <label className="label" htmlFor="qe-passage">{isIelts ? "Bacaan atau instruksi" : "Bacaan"}</label>
             <textarea className="textarea" id="qe-passage" rows="5" defaultValue={q ? q.passage : ""}></textarea>
-            <p className="hint">Bacaan tampil di atas soal, seperti pada soal tentang kata presence.</p>
+            <p className="hint">{isIelts
+              ? "Teks ini tampil di atas soal: petunjuk pengerjaan untuk soal listening, atau bacaan untuk soal reading."
+              : "Bacaan tampil di atas soal, seperti pada soal tentang kata presence."}</p>
             <p className="error" id="qe-passage-err" hidden></p>
           </div>
           {isIelts ? <fieldset className="field">

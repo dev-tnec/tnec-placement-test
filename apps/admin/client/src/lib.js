@@ -107,6 +107,7 @@ export const TEST_META = {
   placement: { name: "Placement Test", nav: "tes-placement", who: "calon siswa" },
   pre: { name: "Pre-test", nav: "tes-pre", who: "siswa terdaftar" },
   post: { name: "Post-test", nav: "tes-post", who: "siswa terdaftar" },
+  "ielts-mockup": { name: "IELTS Mockup", nav: "tes-ielts", who: "siswa undangan" },
 };
 export const SISWA_CHIPS = [
   ["all", "Semua"],

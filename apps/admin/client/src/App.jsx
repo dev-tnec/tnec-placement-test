@@ -3,7 +3,7 @@
 
 import { useEffect, useState } from "react";
 import { dataReady, db, notify, reload, route, ui, useRoute, useVersion, TEST_KEYS, LOGIN } from "./store.js";
-import { isColdLead, leads, exportStudents, exportAttempts } from "./lib.js";
+import { isColdLead, leads, exportStudents, exportAttempts, TEST_META } from "./lib.js";
 import { Icon, PageHead, Empty } from "./ui.jsx";
 import { closeMenu } from "./menus.jsx"; // also registers the menu listeners
 import { deleteStudents, deleteAttempts } from "./actions.js";
@@ -13,13 +13,6 @@ import { Sertifikat } from "./views/Sertifikat.jsx";
 import { TestPage, AttemptDetail } from "./views/Test.jsx";
 import { ProgramKelas } from "./views/Program.jsx";
 import { DialogHost, ConfirmHost } from "./dialogs.jsx";
-
-const TEST_META = {
-  placement: { name: "Placement Test", nav: "tes-placement" },
-  pre: { name: "Pre-test", nav: "tes-pre" },
-  post: { name: "Post-test", nav: "tes-post" },
-  "ielts-mockup": { name: "IELTS Mockup", nav: "tes-ielts" },
-};
 
 /* ===================== Sidebar ===================== */
 function Sidebar({ nav }) {

@@ -903,7 +903,10 @@ function readQuestionInput(body) {
   }
 
   const options = {};
-  for (const k of CHOICES) options[k] = text(body.options?.[k], 300);
+  for (const k of CHOICES) {
+    const value = text(body.options?.[k], 300);
+    if (value) options[k] = value;
+  }
   const filled = CHOICES.filter((k) => options[k]);
   if (filled.length < 2) throw new HttpError(400, "Isi minimal dua pilihan jawaban.");
   if (filled.some((k, i) => filled.slice(0, i).some((j) => options[j].toLowerCase() === options[k].toLowerCase()))) throw new HttpError(400, "Ada pilihan jawaban yang sama. Setiap pilihan harus berbeda.");
