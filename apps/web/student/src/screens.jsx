@@ -71,6 +71,8 @@ export function Intro({ config, invite, consent, onConsent, code, onCode, codeEr
   const isInvite = Boolean(invite);
   const isIelts = invite?.test === "ielts-mockup";
   const isPre = invite?.test === "pre";
+  const sectionsMode = config?.timeMode === "sections" && isIelts;
+  const sectionText = (config?.sectionPlan || []).map((s) => `${s.skill} ${Math.round(s.seconds / 60)} menit`).join(", ");
   const needsCode = Boolean(invite?.needsCode);
   const allConsent = consent.terms && consent.privacy && consent.honesty;
   const codeOk = !needsCode || code.trim().length >= 6;
@@ -93,9 +95,11 @@ export function Intro({ config, invite, consent, onConsent, code, onCode, codeEr
         : `Tes ini berisi ${total} soal pilihan ganda. Hasilnya kami pakai untuk menentukan apakah kamu sudah siap lanjut ke level berikutnya.`
     : `Tes ini berisi ${total} soal pilihan ganda yang mengukur kemampuan bahasa Inggris kamu. Setelah selesai, level, skor, dan rekomendasi program akan langsung muncul, dan hasilnya juga kami kirim ke email dan WhatsApp kamu.`;
 
-  const how2 = perMode
-    ? `Tes berlangsung paling lama ${duration} tanpa jeda, dengan batas waktu di setiap soal. Selama tes, layar akan otomatis masuk ke mode penuh agar kamu bisa fokus.`
-    : `Tes berlangsung selama ${duration} tanpa jeda. Selama tes, layar akan otomatis masuk ke mode penuh agar kamu bisa fokus, dan waktu terus berjalan sampai tes selesai.`;
+  const how2 = sectionsMode
+    ? `Tes berjalan dalam empat bagian dengan waktu masing-masing: ${sectionText}. Setiap bagian terkunci saat waktunya habis, dan kamu tidak bisa kembali ke bagian sebelumnya.`
+    : perMode
+      ? `Tes berlangsung paling lama ${duration} tanpa jeda, dengan batas waktu di setiap soal. Selama tes, layar akan otomatis masuk ke mode penuh agar kamu bisa fokus.`
+      : `Tes berlangsung selama ${duration} tanpa jeda. Selama tes, layar akan otomatis masuk ke mode penuh agar kamu bisa fokus, dan waktu terus berjalan sampai tes selesai.`;
 
   const how3Title = invite ? (isIelts ? "Melihat band kamu" : "Melihat nilai kamu") : "Melihat hasil dan rekomendasi";
   const how3Body = invite
@@ -104,13 +108,17 @@ export function Intro({ config, invite, consent, onConsent, code, onCode, codeEr
       : "Setelah jawaban terkirim, nilai kamu langsung muncul di layar dan tercatat di data kelas, jadi tutor bisa membahasnya bersama kamu."
     : "Setelah tes selesai, kamu mengisi nama, email, dan nomor WhatsApp. Level, skor, dan rekomendasi program akan langsung muncul, lalu kami kirimkan juga ke email dan WhatsApp kamu.";
 
-  const ruleTime = perMode
-    ? `Tes terdiri dari ${total} soal pilihan ganda, dan setiap soal punya batas waktunya sendiri. Saat waktu satu soal habis, soal berikutnya langsung muncul, dan soal sebelumnya tidak bisa dibuka lagi. Tombol kirim baru bisa dipakai setelah semua soal dijawab.`
-    : `Tes terdiri dari ${total} soal pilihan ganda yang harus diselesaikan dalam ${duration}. Waktu terus berjalan sejak tes dimulai dan tidak bisa dijeda. Tombol kirim baru bisa dipakai setelah semua soal dijawab.`;
+  const ruleTime = sectionsMode
+    ? `Tes terdiri dari 82 soal dan dua esai, dibagi menjadi ${sectionText}. Di dalam Listening, kamu bisa berpindah soal Part 1 sampai Part 4 selama audio diputar. Saat waktu satu bagian habis, bagian itu terkunci dan tes pindah ke bagian berikutnya.`
+    : perMode
+      ? `Tes terdiri dari ${total} soal pilihan ganda, dan setiap soal punya batas waktunya sendiri. Saat waktu satu soal habis, soal berikutnya langsung muncul, dan soal sebelumnya tidak bisa dibuka lagi. Tombol kirim baru bisa dipakai setelah semua soal dijawab.`
+      : `Tes terdiri dari ${total} soal pilihan ganda yang harus diselesaikan dalam ${duration}. Waktu terus berjalan sejak tes dimulai dan tidak bisa dijeda. Tombol kirim baru bisa dipakai setelah semua soal dijawab.`;
 
-  const startNote = perMode
-    ? `Tes berlangsung paling lama ${duration}, dan jawaban hanya bisa dikirim satu kali.`
-    : `Tes berlangsung ${duration}, dan jawaban hanya bisa dikirim satu kali.`;
+  const startNote = sectionsMode
+    ? `Tes berlangsung ${duration} dalam empat bagian, dan jawaban hanya bisa dikirim satu kali.`
+    : perMode
+      ? `Tes berlangsung paling lama ${duration}, dan jawaban hanya bisa dikirim satu kali.`
+      : `Tes berlangsung ${duration}, dan jawaban hanya bisa dikirim satu kali.`;
 
   const data1 = invite
     ? "Kami menyimpan jawaban, nilai, waktu pengerjaan, dan catatan pelanggaran selama tes, lalu mencatatnya di data kamu sebagai siswa Titik Nol."
@@ -127,7 +135,9 @@ export function Intro({ config, invite, consent, onConsent, code, onCode, codeEr
     : "Setelah tes selesai, kamu mengisi nama, email, dan nomor WhatsApp. Level, skor, dan rekomendasi program akan muncul di layar, lalu dikirim ke email dan WhatsApp kamu.";
   const data4 = invite
     ? isIelts
-      ? "Kalau waktu habis, jawaban kamu yang sudah terisi terkirim otomatis dan tetap menghasilkan band. Selama tautan dan kodemu belum dipakai, kamu bisa mengulang dari awal."
+      ? sectionsMode
+        ? "Kalau waktu satu bagian habis, bagian itu terkunci dan tes pindah ke bagian berikutnya. Jawaban yang sudah terisi tetap dikirim di akhir Writing dan Speaking."
+        : "Kalau waktu habis, jawaban kamu yang sudah terisi terkirim otomatis dan tetap menghasilkan band. Selama tautan dan kodemu belum dipakai, kamu bisa mengulang dari awal."
       : "Kalau waktu habis sebelum kamu selesai, percobaan ini gagal dan jawaban kamu tidak dikirim. Selama tautan ini masih berlaku, kamu bisa mengulang tes dari awal dengan waktu yang baru."
     : "Kalau waktu habis sebelum kamu selesai, percobaan ini gagal dan jawaban kamu tidak dikirim. Kamu bisa mengulang tes dari awal dengan waktu yang baru. Hasil tes ini dipakai untuk penempatan kelas, bukan sertifikat resmi.";
 
@@ -285,17 +295,24 @@ export function Intro({ config, invite, consent, onConsent, code, onCode, codeEr
   );
 }
 
-export function TestScreen({ attempt, index, answers, flagged, perMode, timeLeft, questionLeft, onChoose, onAnswerText, onPrev, onNext, onSkip, onFlag, onGoTo, onFinish, audioSection, audioPlayed, audioNote, onPlayAudio, onAudioEnded, audioRef, fsWarning, finishNote }) {
+export function TestScreen({ attempt, index, answers, flagged, perMode, timeLeft, questionLeft, sectionMode, sectionSkill, sectionTotal, sectionPosition, sectionLeft, sectionQuestions, finishLabel, onSectionFinish, onChoose, onAnswerText, onPrev, onNext, onSkip, onFlag, onGoTo, onFinish, audioSection, audioPlayed, audioNote, onPlayAudio, onAudioEnded, audioRef, fsWarning, finishNote }) {
   const question = attempt.questions[index];
   if (!question) return null;
   const total = attempt.total;
   const section = question.sectionId ? attempt.sections.find((item) => item.id === question.sectionId) : null;
   const passage = section?.passage || question.passage;
   const image = section?.image || "";
-  const answered = Object.keys(answers).length;
-  const percent = Math.round(((index + 1) / total) * 100);
-  const remaining = perMode ? questionLeft : timeLeft;
+  const navItems = sectionMode ? sectionQuestions : attempt.questions.map((item, position) => ({ q: item, i: position }));
+  const displayPosition = sectionMode ? sectionPosition + 1 : index + 1;
+  const displayTotal = sectionMode ? sectionTotal : total;
+  const answered = sectionMode ? sectionQuestions.filter(({ q }) => answers[q.id]).length : Object.keys(answers).length;
+  const flaggedCount = sectionMode ? sectionQuestions.filter(({ q }) => flagged.has(q.id)).length : flagged.size;
+  const percent = Math.round((displayPosition / displayTotal) * 100);
+  const remaining = sectionMode ? sectionLeft : perMode ? questionLeft : timeLeft;
   const warning = remaining > 0 && (perMode ? remaining <= 5 : remaining <= 60);
+  const nextLabel = sectionMode
+    ? sectionPosition === sectionTotal - 1 ? finishLabel : "Soal selanjutnya"
+    : index === total - 1 ? "Selesaikan tes" : "Soal selanjutnya";
   const isFlagged = flagged.has(question.id);
   const answer = answers[question.id];
   const minWords = question.minWords || 150;
@@ -308,15 +325,15 @@ export function TestScreen({ attempt, index, answers, flagged, perMode, timeLeft
         <div className="test-status__inner">
           <div className="testbar__progress">
             <div className="testbar__labels">
-              <span id="progress-label">Soal {index + 1} dari {total}</span>
+              <span id="progress-label">Soal {displayPosition} dari {displayTotal}</span>
               <span id="progress-percent">{percent}% selesai</span>
             </div>
-            <progress id="progress" value={index + 1} max={total}>{percent}%</progress>
+            <progress id="progress" value={displayPosition} max={displayTotal}>{percent}%</progress>
           </div>
           <div className={`timer${warning ? " is-warning" : ""}`} id="timer" role="timer" aria-live="off">
             <Clock />
             <span id="timer-value">{formatTime(remaining)}</span>
-            <span className="timer__label" id="timer-label">{perMode ? "untuk soal ini" : "tersisa"}</span>
+            <span className="timer__label" id="timer-label">{sectionMode ? sectionSkill : perMode ? "untuk soal ini" : "tersisa"}</span>
           </div>
         </div>
       </div>
@@ -340,7 +357,7 @@ export function TestScreen({ attempt, index, answers, flagged, perMode, timeLeft
 
           <div className="question-card">
             <div className="question-card__top">
-              <span className="badge" id="question-badge">Soal {index + 1} · {question.skill || "Grammar"}{question.part ? ` · Bagian ${question.part}` : ""}</span>
+              <span className="badge" id="question-badge">Soal {displayPosition} · {question.skill || "Grammar"}{question.part ? ` · Bagian ${question.part}` : ""}</span>
               {!perMode ? (
                 <button className={`btn btn--ghost btn--sm${isFlagged ? " btn--flagged" : ""}`} id="flag-btn" type="button" aria-pressed={isFlagged} onClick={onFlag}>
                   <Flag /><span id="flag-text">{isFlagged ? "Ditandai" : "Tandai soal"}</span>
@@ -395,11 +412,11 @@ export function TestScreen({ attempt, index, answers, flagged, perMode, timeLeft
 
             <div className="question-card__nav">
               {!perMode ? (
-                <button className="btn btn--secondary" id="prev-btn" type="button" onClick={onPrev} disabled={index === 0}><Back /> Sebelumnya</button>
+                <button className="btn btn--secondary" id="prev-btn" type="button" onClick={onPrev} disabled={sectionMode ? sectionPosition === 0 : index === 0}><Back /> Sebelumnya</button>
               ) : null}
               <button className="btn btn--link" id="skip-btn" type="button" onClick={onSkip}>Lewati soal</button>
               <button className="btn btn--navy" id="next-btn" type="button" onClick={onNext}>
-                <span id="next-label">{index === total - 1 ? "Selesaikan tes" : "Soal selanjutnya"}</span><Arrow />
+                <span id="next-label">{nextLabel}</span><Arrow />
               </button>
             </div>
           </div>
@@ -408,17 +425,17 @@ export function TestScreen({ attempt, index, answers, flagged, perMode, timeLeft
             <div className="navigator">
               <div className="navigator__head">
                 <h2 className="navigator__title" id="nav-title">Navigasi soal</h2>
-                <span className="navigator__count" id="nav-count">{total} soal</span>
+                <span className="navigator__count" id="nav-count">{displayTotal} soal</span>
               </div>
               <div className="legend">
                 <span className="legend__item"><span className="dot dot--answered" aria-hidden="true" />Terjawab <strong id="nav-answered">{answered}</strong></span>
                 <span className="legend__item"><span className="dot dot--current" aria-hidden="true" />Aktif</span>
-                <span className="legend__item"><span className="dot dot--flagged" aria-hidden="true" />Ditandai <strong id="nav-flagged">{flagged.size}</strong></span>
+                <span className="legend__item"><span className="dot dot--flagged" aria-hidden="true" />Ditandai <strong id="nav-flagged">{flaggedCount}</strong></span>
               </div>
               <div className="nav-grid" id="nav-grid">
-                {attempt.questions.map((item, position) => {
+                {navItems.map(({ q: item, i: globalIndex }, position) => {
                   const isAnswered = Boolean(answers[item.id]);
-                  const isCurrent = position === index;
+                  const isCurrent = globalIndex === index;
                   const isItemFlagged = flagged.has(item.id);
                   return (
                     <button
@@ -428,14 +445,16 @@ export function TestScreen({ attempt, index, answers, flagged, perMode, timeLeft
                       disabled={perMode}
                       aria-current={isCurrent ? "true" : undefined}
                       aria-label={`Soal ${position + 1}${isAnswered ? ", sudah dijawab" : ""}${isItemFlagged ? ", ditandai" : ""}`}
-                      onClick={() => onGoTo(position)}
+                      onClick={() => onGoTo(globalIndex)}
                     >
                       {position + 1}
                     </button>
                   );
                 })}
               </div>
-              <button className="btn btn--primary btn--block" id="finish-btn" type="button" onClick={onFinish}><Check /> Selesaikan dan kirim</button>
+              <button className="btn btn--primary btn--block" id="finish-btn" type="button" onClick={sectionMode ? onSectionFinish : onFinish}>
+                {sectionMode && finishLabel !== "Selesaikan dan kirim" ? <Arrow /> : <Check />} {sectionMode ? finishLabel : "Selesaikan dan kirim"}
+              </button>
               <p className="micro" id="finish-note">{finishNote}</p>
             </div>
           </aside>
@@ -451,7 +470,7 @@ export function TestScreen({ attempt, index, answers, flagged, perMode, timeLeft
   );
 }
 
-export function SpeakingScreen({ stage, mockup, speaking, recording, speakError, showSkip, checkUrl, recUrl, speakBusy, prepLeft, canRecord, sendLabel, checkStartHidden, noteOverride, videoPlaying, checkStartRef, answerStartRef, onStartRecording, onStop, onRetryCheck, onCheckOk, onRetake, onSend, onSkip, onPlayVideo, onVideoEnded, onVideoError, videoRef, waveContainerRef, onOpenPrivacy, titleRef }) {
+export function SpeakingScreen({ stage, mockup, speaking, recording, speakError, showSkip, checkUrl, recUrl, speakBusy, prepLeft, canRecord, sendLabel, checkStartHidden, noteOverride, videoPlaying, speakingLeft, checkStartRef, answerStartRef, onStartRecording, onStop, onRetryCheck, onCheckOk, onRetake, onSend, onSkip, onPlayVideo, onVideoEnded, onVideoError, videoRef, waveContainerRef, onOpenPrivacy, titleRef }) {
   const isMockup = Boolean(mockup?.started);
   const part = mockup?.plan?.parts[mockup.pi];
   const question = part?.questions[mockup.qi];
@@ -467,6 +486,12 @@ export function SpeakingScreen({ stage, mockup, speaking, recording, speakError,
         ? "Tonton examiner, gunakan 60 detik untuk menyiapkan jawaban, lalu rekam."
         : "Tonton pertanyaan dari examiner, lalu rekam jawabanmu. Kamu bisa memutar ulang pertanyaannya sebelum mulai."
       : `Jawab dalam bahasa Inggris selama ${speaking?.minSeconds || 15} sampai ${speaking?.seconds || 45} detik, dalam satu tarikan tanpa membaca teks. Tekan Mulai jawab saat kamu siap.`);
+
+  const speakingTimer = speakingLeft !== null ? (
+    <span className={`timer${speakingLeft <= 60 ? " is-warning" : ""}`} role="timer" aria-live="off">
+      <Clock /><span>{formatTime(speakingLeft)}</span><span className="timer__label">tersisa</span>
+    </span>
+  ) : null;
 
   const feedback = (
     <>
@@ -489,7 +514,10 @@ export function SpeakingScreen({ stage, mockup, speaking, recording, speakError,
             <div className="question-card" id="speak-check-card">
               <div className="question-card__top">
                 <span className="badge">Bagian speaking</span>
-                <span className="question-card__meta">Langkah 1 dari 2</span>
+                <div className="speak-top__meta">
+                  <span className="question-card__meta">Langkah 1 dari 2</span>
+                  {speakingTimer}
+                </div>
               </div>
               <div className="question-card__body">
                 <p className="eyebrow">Sebelum mulai</p>
@@ -524,7 +552,10 @@ export function SpeakingScreen({ stage, mockup, speaking, recording, speakError,
             <div className="question-card" id="speak-answer-card">
               <div className="question-card__top">
                 <span className="badge">{isMockup ? "IELTS Mockup Speaking" : "Bagian speaking"}</span>
-                <span className="question-card__meta" id="speaking-step">{stepMeta}</span>
+                <div className="speak-top__meta">
+                  <span className="question-card__meta" id="speaking-step">{stepMeta}</span>
+                  {speakingTimer}
+                </div>
               </div>
               <div className="question-card__body">
                 <p className="eyebrow">Pertanyaan speaking</p>

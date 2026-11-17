@@ -1630,3 +1630,5 @@ kbd {
 .speak-cue__title { margin: 0 0 var(--space-2); font-weight: 600; color: var(--navy-900); }
 .speak-cue__line { margin: 0; color: var(--text-secondary); font-size: 14px; }
 #speak-prep { margin: var(--space-2) 0 0; font-weight: 600; color: var(--navy-800); }
+/* The speaking block timer sits with the step meta in the card top bar. */
+.speak-top__meta { display: flex; align-items: center; gap: var(--space-3); flex-wrap: wrap; }

@@ -163,6 +163,8 @@ The prompt canvas is a white rounded rectangle with a 1px border, a small upperc
 
 The navigator is a 5 by 5 grid of 25 cells. Answered cells are solid navy, the current cell has a navy outline, flagged cells have a yellow dot in the top right. The finish button is navy and full width. When a test uses time per question, the back button and the flag button are hidden, navigator cells cannot be clicked, the timer label reads "untuk soal ini", and the next question opens by itself when the time runs out.
 
+When a test uses time per section, the navigator shows only the questions of the current section and the timer label names that section, for example Listening. The back button is disabled on the first question of the section, and the finish button reads "Lanjut ke Reading", "Lanjut ke Writing", or "Lanjut ke Speaking". The section locks when its time ends or when the student presses that button, and the next section opens on its first question with a fresh timer.
+
 A keyboard hint sits below the grid on desktop only. It is removed on mobile because there is no keyboard.
 
 ### Details
@@ -230,7 +232,7 @@ A label row with a 22px custom box. The native input is visually hidden. The box
 
 ### Timer
 
-A white pill with a 1px border, a clock icon, tabular numerals, and the label "tersisa". Under 60 seconds it switches to a red border and red text and pulses the shadow. The pulse stops under `prefers-reduced-motion`.
+A white pill with a 1px border, a clock icon, tabular numerals, and the label "tersisa". Under 60 seconds it switches to a red border and red text and pulses the shadow. The pulse stops under `prefers-reduced-motion`. In the IELTS mockup the label names the section instead, for example Listening, and the same pill sits in the speaking card top bar next to the step meta.
 
 ### Level ladder
 

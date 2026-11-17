@@ -55,6 +55,10 @@ export default function App() {
   const [canRecord, setCanRecord] = useState(false);
   const [noteOverride, setNoteOverride] = useState("");
   const [videoPlaying, setVideoPlaying] = useState(false);
+  const [sectionPlan, setSectionPlan] = useState(null);
+  const [sectionIndex, setSectionIndex] = useState(0);
+  const [sectionLeft, setSectionLeft] = useState(0);
+  const [speakingLeft, setSpeakingLeft] = useState(null);
 
   const deadline = useRef(0);
   const questionDeadline = useRef(0);
@@ -105,6 +109,16 @@ export default function App() {
   const chooseRef = useRef(null);
   const nextRef = useRef(null);
   const prevRef = useRef(null);
+  const sectionDeadline = useRef(0);
+  const sectionLocked = useRef(false);
+  const sectionModeRef = useRef(false);
+  const sectionIndexRef = useRef(0);
+  const sectionPlanRef = useRef(null);
+  const endSectionRef = useRef(null);
+  const speakingDeadline = useRef(0);
+  const speakingLocked = useRef(false);
+  const speakingCountRef = useRef(0);
+  const finishSpeakingByTimeRef = useRef(null);
 
   screenRef.current = screen;
   attemptRef.current = attempt;
@@ -162,9 +176,24 @@ export default function App() {
   }, [audioSection?.id]);
 
   const durationText = spanText(config?.durationSeconds ?? 300);
-  const finishNote = perMode
-    ? "Setiap soal punya waktunya sendiri. Soal berikutnya muncul otomatis saat waktu habis, dan jawaban terkirim setelah soal terakhir. Tombol kirim baru bisa dipakai setelah semua soal dijawab."
-    : "Periksa kembali jawaban kamu sebelum mengirim, karena jawaban tidak bisa diubah setelah terkirim. Semua soal juga harus sudah dijawab sebelum jawaban bisa dikirim.";
+  const currentSection = sectionPlan?.[sectionIndex] || null;
+  const sectionMode = Boolean(currentSection);
+  const sectionSkill = currentSection?.skill || null;
+  const sectionQuestions = useMemo(() => {
+    if (!attempt || !sectionSkill) return [];
+    return attempt.questions.map((q, i) => ({ q, i })).filter(({ q }) => q.skill === sectionSkill);
+  }, [attempt, sectionSkill]);
+  const sectionPosition = sectionQuestions.findIndex(({ i }) => i === index);
+  const sectionTotal = sectionQuestions.length;
+  const finishLabel = sectionSkill === "Listening" ? "Lanjut ke Reading" : sectionSkill === "Reading" ? "Lanjut ke Writing" : mockup?.plan ? "Lanjut ke Speaking" : "Selesaikan dan kirim";
+  const sectionNote = sectionMode
+    ? `Bagian ${sectionSkill} terkunci saat waktunya habis atau saat kamu menekan tombol selesai. Kamu tidak bisa kembali ke bagian ini.`
+    : "";
+  const finishNote = sectionMode
+    ? sectionNote
+    : perMode
+      ? "Setiap soal punya waktunya sendiri. Soal berikutnya muncul otomatis saat waktu habis, dan jawaban terkirim setelah soal terakhir. Tombol kirim baru bisa dipakai setelah semua soal dijawab."
+      : "Periksa kembali jawaban kamu sebelum mengirim, karena jawaban tidak bisa diubah setelah terkirim. Semua soal juga harus sudah dijawab sebelum jawaban bisa dikirim.";
 
   /* ---------- Load the test settings ---------- */
 
@@ -233,11 +262,26 @@ export default function App() {
 
   function beginAttempt(data) {
     const isPer = data.timeMode === "per";
+    const plan = Array.isArray(data.sectionPlan) && data.sectionPlan.length ? data.sectionPlan : null;
+    const first = plan?.[0] || null;
+    const firstIndex = first ? data.questions.findIndex((q) => q.skill === first.skill) : 0;
     setAttempt({ id: data.attemptId, questions: data.questions, total: data.total, sections: data.sections || [] });
     setPerMode(isPer);
     setAutoSubmit(Boolean(data.autoSubmit));
     setMaxStrikes(data.maxViolations || 3);
-    setIndex(0);
+    setSectionPlan(plan);
+    setSectionIndex(0);
+    setSectionLeft(first ? first.seconds : 0);
+    setSpeakingLeft(null);
+    sectionPlanRef.current = plan;
+    sectionIndexRef.current = 0;
+    sectionLocked.current = false;
+    sectionModeRef.current = Boolean(plan);
+    sectionDeadline.current = first ? Date.now() + first.seconds * 1000 : 0;
+    speakingDeadline.current = 0;
+    speakingLocked.current = false;
+    speakingCountRef.current = 0;
+    setIndex(firstIndex < 0 ? 0 : firstIndex);
     setAnswers({});
     setFlagged(new Set());
     setStrikes(0);
@@ -313,6 +357,10 @@ export default function App() {
     if (!attempt || ending) return;
     if (position < 0 || position >= attempt.total) return;
     if (perMode && position <= index) return;
+    if (sectionModeRef.current) {
+      const skill = sectionPlanRef.current?.[sectionIndexRef.current]?.skill;
+      if (skill && attempt.questions[position]?.skill !== skill) return;
+    }
     setIndex(position);
   }
 
@@ -330,11 +378,29 @@ export default function App() {
 
   function next() {
     if (!attempt) return;
+    if (sectionModeRef.current) {
+      const skill = sectionPlanRef.current?.[sectionIndexRef.current]?.skill;
+      const indices = attempt.questions.map((q, i) => (q.skill === skill ? i : -1)).filter((i) => i >= 0);
+      const position = indices.indexOf(index);
+      if (position === indices.length - 1) { endSectionRef.current?.(); return; }
+      goTo(indices[position + 1]);
+      return;
+    }
     if (index === attempt.total - 1) { openSubmit(); return; }
     goTo(index + 1);
   }
 
-  function prev() { goTo(index - 1); }
+  function prev() {
+    if (!attempt) return;
+    if (sectionModeRef.current) {
+      const skill = sectionPlanRef.current?.[sectionIndexRef.current]?.skill;
+      const indices = attempt.questions.map((q, i) => (q.skill === skill ? i : -1)).filter((i) => i >= 0);
+      const position = indices.indexOf(index);
+      if (position > 0) goTo(indices[position - 1]);
+      return;
+    }
+    goTo(index - 1);
+  }
 
   function toggleFlag() {
     if (!attempt || perMode) return;
@@ -354,6 +420,12 @@ export default function App() {
 
   function tick() {
     if (!attemptRef.current) return;
+    if (sectionModeRef.current) {
+      const remaining = Math.max(0, Math.ceil((sectionDeadline.current - Date.now()) / 1000));
+      setSectionLeft(remaining);
+      if (remaining === 0) endSectionRef.current?.();
+      return;
+    }
     if (perModeRef.current) {
       const remaining = Math.max(0, Math.ceil((questionDeadline.current - Date.now()) / 1000));
       setQuestionLeft(remaining);
@@ -398,6 +470,59 @@ export default function App() {
     questionDeadline.current = Date.now() + (current?.seconds || 30) * 1000;
     setQuestionLeft(current?.seconds || 30);
   }, [screen, attempt, perMode, index]);
+
+  /* ---------- Section timers ---------- */
+
+  function finishAttempt() {
+    autoSubmitted.current = true;
+    submitAnswersRef.current?.();
+  }
+
+  function finishWrittenSection() {
+    if (mockupRef.current && !mockupRef.current.done) { beginMockupSpeaking(); return; }
+    finishAttempt();
+  }
+
+  function endSection() {
+    if (!sectionPlanRef.current || sectionLocked.current) return;
+    sectionLocked.current = true;
+    setDialogs((current) => ({ ...current, violation: false }));
+    const nextIndex = sectionIndexRef.current + 1;
+    const next = sectionPlanRef.current[nextIndex];
+    if (!next || next.skill === "Speaking") { finishWrittenSection(); return; }
+    sectionIndexRef.current = nextIndex;
+    setSectionIndex(nextIndex);
+    const first = attemptRef.current?.questions.findIndex((q) => q.skill === next.skill) ?? -1;
+    if (first >= 0) setIndex(first);
+    sectionDeadline.current = Date.now() + next.seconds * 1000;
+    setSectionLeft(next.seconds);
+    sectionLocked.current = false;
+    announce(`Bagian ${next.skill} dimulai.`);
+  }
+  endSectionRef.current = endSection;
+
+  function finishSpeakingByTime() {
+    if (speakingLocked.current) return;
+    speakingLocked.current = true;
+    setSpeakingLeft(0);
+    if (speakingCountRef.current === 0) { skipSpeaking(); return; }
+    setMockup((current) => ({ ...current, done: true }));
+    clearInterval(prepTimer.current);
+    prepTimer.current = null;
+    releaseMic();
+    finishAttempt();
+  }
+  finishSpeakingByTimeRef.current = finishSpeakingByTime;
+
+  useEffect(() => {
+    if (screen !== "speaking" || !mockup?.started || mockup?.done || speakingLeft === null) return undefined;
+    const id = setInterval(() => {
+      const remaining = Math.max(0, Math.ceil((speakingDeadline.current - Date.now()) / 1000));
+      setSpeakingLeft(remaining);
+      if (remaining === 0) finishSpeakingByTimeRef.current?.();
+    }, 250);
+    return () => clearInterval(id);
+  }, [screen, mockup?.started, mockup?.done, speakingLeft === null]);
 
   /* ---------- Submit and contact ---------- */
 
@@ -448,6 +573,7 @@ export default function App() {
       if (Date.now() < deadline.current) {
         setEnding(false);
         showToast(`${error.message || "Jawaban gagal dikirim."} Jawaban kamu masih tersimpan di halaman ini, silakan coba kirim lagi.`);
+        if (sectionModeRef.current) { setDialogs((current) => ({ ...current, submit: true })); return; }
         if (perMode) { setQuestionLeft(0); return; }
       } else {
         timeUp.current = true;
@@ -786,6 +912,7 @@ export default function App() {
           headers: { "content-type": recBlob.type, "x-duration": String(recDuration.current) },
           body: recBlob,
         });
+        speakingCountRef.current += 1;
         clearRecording();
         advanceMockupSpeaking();
       } else {
@@ -820,10 +947,11 @@ export default function App() {
     try {
       await api(`/api/attempts/${attempt.id}/speaking-skip`, { method: "POST", body: { reason: "mic" } });
       if (isMockup) {
+        speakingLocked.current = true;
         setMockup((current) => ({ ...current, done: true }));
         clearRecording();
         releaseMic();
-        openSubmit(true);
+        finishAttempt();
       } else {
         clearRecording();
         releaseMic();
@@ -846,6 +974,7 @@ export default function App() {
     setCheckStartHidden(false);
     setCanRecord(false);
     setPrepLeft(null);
+    setSpeakingLeft(null);
     setScreen("speaking");
     if (!recordingSupported()) {
       speakUnavailable("Browser atau perangkat ini tidak mendukung perekaman suara, jadi bagian speaking tidak bisa dikerjakan. Silakan lanjut tanpa rekaman: hasil tes kamu tetap kami proses, hanya tanpa nilai speaking.", false);
@@ -858,6 +987,11 @@ export default function App() {
     if (!mockup?.plan) return;
     clearInterval(prepTimer.current);
     prepTimer.current = null;
+    const speakingSeconds = sectionPlanRef.current?.find((s) => s.skill === "Speaking")?.seconds || 900;
+    speakingDeadline.current = Date.now() + speakingSeconds * 1000;
+    setSpeakingLeft(speakingSeconds);
+    speakingLocked.current = false;
+    speakingCountRef.current = 0;
     setMockup((current) => ({ ...current, started: true, done: false, pi: 0, qi: 0 }));
     setStage("check");
     setScreen("speaking");
@@ -933,11 +1067,12 @@ export default function App() {
     const part = current.plan.parts[current.pi];
     if (current.qi + 1 < part.questions.length) { setMockupQuestion(current.pi, current.qi + 1); return; }
     if (current.pi + 1 < current.plan.parts.length) { setMockupQuestion(current.pi + 1, 0); return; }
+    speakingLocked.current = true;
     setMockup((value) => ({ ...value, done: true }));
     clearInterval(prepTimer.current);
     prepTimer.current = null;
     releaseMic();
-    openSubmit(true);
+    finishAttempt();
   }
 
   /* ---------- Render ---------- */
@@ -974,11 +1109,26 @@ export default function App() {
             perMode={perMode}
             timeLeft={timeLeft}
             questionLeft={questionLeft}
+            sectionMode={sectionMode}
+            sectionSkill={sectionSkill}
+            sectionTotal={sectionTotal}
+            sectionPosition={sectionPosition}
+            sectionLeft={sectionLeft}
+            sectionQuestions={sectionQuestions}
+            finishLabel={finishLabel}
+            onSectionFinish={endSection}
             onChoose={choose}
             onAnswerText={answerText}
             onPrev={prev}
             onNext={next}
-            onSkip={() => goTo(index + 1)}
+            onSkip={() => {
+              if (sectionMode) {
+                const nextItem = sectionQuestions[sectionPosition + 1];
+                if (nextItem) goTo(nextItem.i);
+              } else {
+                goTo(index + 1);
+              }
+            }}
             onFlag={toggleFlag}
             onGoTo={goTo}
             onFinish={() => openSubmit()}
@@ -1009,6 +1159,7 @@ export default function App() {
             checkStartHidden={checkStartHidden}
             noteOverride={noteOverride}
             videoPlaying={videoPlaying}
+            speakingLeft={speakingLeft}
             checkStartRef={checkStartRef}
             answerStartRef={answerStartRef}
             onStartRecording={startRecording}

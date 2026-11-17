@@ -107,6 +107,19 @@ async function resolvePackage(env, testKey, requestedId) {
 // Speaking runs on the placement test only, and only with a question to answer.
 const speakingOn = (test) => test.key === "placement" && test.speakingEnabled && Boolean(test.speakingPrompt);
 
+// The IELTS mockup uses four section timers: Listening, Reading, Writing, and the speaking
+// interview. The values live on the test row so the dashboard can change them.
+const SECTION_DEFAULTS = { Listening: 1920, Reading: 3600, Writing: 3600, Speaking: 900 };
+function sectionPlan(test) {
+  if (test.timeMode !== "sections") return null;
+  return [
+    { skill: "Listening", seconds: Number(test.listeningSeconds) || SECTION_DEFAULTS.Listening },
+    { skill: "Reading", seconds: Number(test.readingSeconds) || SECTION_DEFAULTS.Reading },
+    { skill: "Writing", seconds: Number(test.writingSeconds) || SECTION_DEFAULTS.Writing },
+    { skill: "Speaking", seconds: Number(test.speakingBlockSeconds) || SECTION_DEFAULTS.Speaking },
+  ];
+}
+
 function publicConfig({ test, questions, durationSeconds }) {
   const values = { total: questions.length, duration: spanText(durationSeconds), strikes: test.maxViolations, speakingSeconds: test.speakingSeconds };
   return {
@@ -117,6 +130,7 @@ function publicConfig({ test, questions, durationSeconds }) {
     totalQuestions: questions.length,
     maxViolations: test.maxViolations,
     whatsapp: WHATSAPP,
+    sectionPlan: sectionPlan(test),
     speaking: speakingOn(test)
       ? { enabled: true, seconds: test.speakingSeconds, minSeconds: test.speakingMinSeconds, prompt: test.speakingPrompt }
       : { enabled: false },
@@ -213,6 +227,7 @@ async function createAttempt(request, env) {
     timeMode: test.timeMode,
     maxViolations: test.maxViolations,
     autoSubmit: test.autoSubmit,
+    sectionPlan: sectionPlan(test),
     mockupSpeaking: test.key === "ielts-mockup" && test.speakingEnabled ? mockupSpeakingPlan() : null,
     sections: sections.map((s) => ({ id: s.id, title: s.title, skill: s.skill, part: s.part, passage: s.passage, audio: s.audio, image: s.image })),
     questions: questions.map((q) => ({

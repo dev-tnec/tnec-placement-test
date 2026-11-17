@@ -427,6 +427,12 @@ function SettingsTab({ testKey }) {
   const [min, setMin] = useState(Math.floor(st.totalSeconds / 60));
   const [sec, setSec] = useState(st.totalSeconds % 60);
   const [perDefault, setPerDefault] = useState(st.perDefault);
+  const [sectionTimes, setSectionTimes] = useState({
+    listening: Math.round((st.listeningSeconds ?? 1920) / 60),
+    reading: Math.round((st.readingSeconds ?? 3600) / 60),
+    writing: Math.round((st.writingSeconds ?? 3600) / 60),
+    speaking: Math.round((st.speakingBlockSeconds ?? 900) / 60),
+  });
   const [pass, setPass] = useState(st.passScore);
   const [openTest, setOpenTest] = useState(st.open);
   const [viol, setViol] = useState(st.maxViolations);
@@ -441,6 +447,11 @@ function SettingsTab({ testKey }) {
   const n = activeQuestions(t).length;
   const total = mode === "total" ? (Number(min) || 0) * 60 + (Number(sec) || 0) : activeQuestions(t).reduce((s, q) => s + q.seconds, 0);
   const timeDirty = mode !== st.timeMode || (mode === "total" && total !== st.totalSeconds) || (mode === "per" && Number(perDefault) !== st.perDefault);
+  const sectionTotalSeconds = (Number(sectionTimes.listening) + Number(sectionTimes.reading) + Number(sectionTimes.writing) + Number(sectionTimes.speaking)) * 60;
+  const sectionDirty = Number(sectionTimes.listening) * 60 !== (st.listeningSeconds ?? 1920)
+    || Number(sectionTimes.reading) * 60 !== (st.readingSeconds ?? 3600)
+    || Number(sectionTimes.writing) * 60 !== (st.writingSeconds ?? 3600)
+    || Number(sectionTimes.speaking) * 60 !== (st.speakingBlockSeconds ?? 900);
   const recent = db.attempts.filter((a) => a.test === "post" && a.status === "done" && a.startedAt >= Date.now() - 30 * 86400000);
   const passCount = recent.filter((a) => nilaiOf(a) >= Number(pass)).length;
 
@@ -460,6 +471,30 @@ function SettingsTab({ testKey }) {
     const done = busy(e.currentTarget, "Menyimpan...");
     await mutate(() => api(`/api/admin/tests/${testKey}`, { method: "PUT", body }),
       () => (mode === "total" ? `Waktu total ${fmtSpan(body.totalSeconds)} tersimpan untuk tes berikutnya.` : `Waktu per soal tersimpan. Total tes sekarang ${fmtSpan(testSeconds(t))}.`));
+    done();
+  }
+
+  async function saveSections(e) {
+    clearErrors($("#panel-time"));
+    const values = Object.fromEntries(Object.entries(sectionTimes).map(([key, value]) => [key, Number(value)]));
+    for (const [key, value] of Object.entries(values)) {
+      if (!Number.isInteger(value) || value < 1 || value > 180) {
+        fieldError(document.getElementById(`set-sec-${key}`), "set-time-err", "Isi menit untuk setiap bagian, 1 sampai 180.");
+        document.getElementById(`set-sec-${key}`)?.focus();
+        return;
+      }
+    }
+    const done = busy(e.currentTarget, "Menyimpan...");
+    await mutate(() => api(`/api/admin/tests/${testKey}`, {
+      method: "PUT",
+      body: {
+        timeMode: "sections",
+        listeningSeconds: values.listening * 60,
+        readingSeconds: values.reading * 60,
+        writingSeconds: values.writing * 60,
+        speakingBlockSeconds: values.speaking * 60,
+      },
+    }), `Waktu per bagian tersimpan: Listening ${values.listening} menit, Reading ${values.reading} menit, Writing ${values.writing} menit, Speaking ${values.speaking} menit.`);
     done();
   }
 
@@ -534,6 +569,44 @@ function SettingsTab({ testKey }) {
   }
 
   return <div className="stack">
+    {testKey === "ielts-mockup" ? (
+      <section className="panel" id="panel-time">
+        <header className="panel__head"><div>
+          <h2 className="panel__title">Waktu per bagian</h2>
+          <p className="panel__desc">Setiap bagian punya hitungan sendiri. Saat waktunya habis, bagian itu terkunci dan tes pindah ke bagian berikutnya. Peserta tidak bisa kembali ke bagian sebelumnya.</p>
+        </div></header>
+        <div className="panel__body">
+          <div className="form-grid">
+            <div className="field">
+              <label className="label" htmlFor="set-sec-listening">Listening</label>
+              <div className="unit-row"><span className="unit"><input className="input tnum" id="set-sec-listening" type="number" min="1" max="180" value={sectionTimes.listening} onChange={(e) => setSectionTimes((s) => ({ ...s, listening: e.target.value }))} /><span>menit</span></span></div>
+              <p className="hint">30 menit audio dan 2 menit untuk memeriksa jawaban.</p>
+            </div>
+            <div className="field">
+              <label className="label" htmlFor="set-sec-reading">Reading</label>
+              <div className="unit-row"><span className="unit"><input className="input tnum" id="set-sec-reading" type="number" min="1" max="180" value={sectionTimes.reading} onChange={(e) => setSectionTimes((s) => ({ ...s, reading: e.target.value }))} /><span>menit</span></span></div>
+              <p className="hint">Tiga bacaan dengan 40 soal.</p>
+            </div>
+            <div className="field">
+              <label className="label" htmlFor="set-sec-writing">Writing</label>
+              <div className="unit-row"><span className="unit"><input className="input tnum" id="set-sec-writing" type="number" min="1" max="180" value={sectionTimes.writing} onChange={(e) => setSectionTimes((s) => ({ ...s, writing: e.target.value }))} /><span>menit</span></span></div>
+              <p className="hint">Dua task esai.</p>
+            </div>
+            <div className="field">
+              <label className="label" htmlFor="set-sec-speaking">Speaking</label>
+              <div className="unit-row"><span className="unit"><input className="input tnum" id="set-sec-speaking" type="number" min="1" max="180" value={sectionTimes.speaking} onChange={(e) => setSectionTimes((s) => ({ ...s, speaking: e.target.value }))} /><span>menit</span></span></div>
+              <p className="hint">Wawancara 18 pertanyaan, termasuk persiapan Part 2.</p>
+            </div>
+          </div>
+          <p className="note note--gap">Listening memakai satu audio untuk Part 1 sampai Part 4. Peserta bebas berpindah soal di dalam Listening selama audio diputar.</p>
+          <p className="error" id="set-time-err" hidden></p>
+        </div>
+        <div className="panel__foot panel__foot--end">
+          <span className="readout__sub">Total {fmtSpan(sectionTotalSeconds)}</span>
+          <button className="btn btn--primary" type="button" disabled={!sectionDirty} onClick={saveSections}>Simpan waktu bagian</button>
+        </div>
+      </section>
+    ) : (
     <section className="panel" id="panel-time">
       <header className="panel__head"><div>
         <h2 className="panel__title">Waktu pengerjaan</h2>
@@ -584,6 +657,7 @@ function SettingsTab({ testKey }) {
         <button className="btn btn--primary" type="button" disabled={!timeDirty} onClick={saveTime}>Simpan pengaturan waktu</button>
       </div>
     </section>
+    )}
 
     {testKey === "post" ? <section className="panel" id="panel-pass">
       <header className="panel__head"><div>

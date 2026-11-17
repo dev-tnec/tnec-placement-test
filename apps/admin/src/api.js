@@ -869,9 +869,30 @@ async function updateTestSettings(request, env, user, url, key) {
   const body = await readJson(request);
   const row = await env.DB.prepare("SELECT * FROM tests WHERE key = ?").bind(key).first();
   const next = { ...row };
-  if (body.timeMode !== undefined) { if (!["total", "per"].includes(body.timeMode)) throw new HttpError(400, "Mode waktu tidak dikenal."); next.time_mode = body.timeMode; }
+  if (body.timeMode !== undefined) {
+    if (!["total", "per", "sections"].includes(body.timeMode)) throw new HttpError(400, "Mode waktu tidak dikenal.");
+    if (body.timeMode === "sections" && key !== "ielts-mockup") throw new HttpError(400, "Mode waktu per bagian hanya untuk IELTS Mockup.");
+    next.time_mode = body.timeMode;
+  }
   if (body.totalSeconds !== undefined) { const v = int(body.totalSeconds, { min: 60, max: 10800 }); if (v === null) throw new HttpError(400, "Durasi tes harus antara 1 dan 180 menit."); next.total_seconds = v; }
   if (body.perDefault !== undefined) { const v = int(body.perDefault, { min: 5, max: 180 }); if (v === null) throw new HttpError(400, "Waktu bawaan per soal harus antara 5 dan 180 detik."); next.per_default = v; }
+  let sectionChanged = false;
+  for (const [field, column, label] of [
+    ["listeningSeconds", "listening_seconds", "Listening"],
+    ["readingSeconds", "reading_seconds", "Reading"],
+    ["writingSeconds", "writing_seconds", "Writing"],
+    ["speakingBlockSeconds", "speaking_block_seconds", "Speaking"],
+  ]) {
+    if (body[field] === undefined) continue;
+    const v = int(body[field], { min: 60, max: 10800 });
+    if (v === null) throw new HttpError(400, `Waktu ${label} harus antara 1 dan 180 menit.`, { field });
+    next[column] = v;
+    sectionChanged = true;
+  }
+  if (sectionChanged || next.time_mode === "sections") {
+    const sum = (next.listening_seconds || 0) + (next.reading_seconds || 0) + (next.writing_seconds || 0) + (next.speaking_block_seconds || 0);
+    if (sum) next.total_seconds = sum;
+  }
   if (body.open !== undefined) next.is_open = body.open ? 1 : 0;
   if (body.maxViolations !== undefined) { const v = int(body.maxViolations, { min: 1, max: 5 }); if (v === null) throw new HttpError(400, "Batas pelanggaran harus antara 1 dan 5."); next.max_violations = v; }
   if (body.passScore !== undefined && key === "post") { const v = int(body.passScore, { min: 0, max: 100 }); if (v === null) throw new HttpError(400, "Nilai kelulusan harus angka bulat dari 0 sampai 100."); next.pass_score = v; }
@@ -882,9 +903,9 @@ async function updateTestSettings(request, env, user, url, key) {
     next.audio_url = url || null;
   }
   readSpeakingSettings(body, key, next);
-  await env.DB.prepare(`UPDATE tests SET time_mode = ?, total_seconds = ?, per_default = ?, is_open = ?, max_violations = ?, pass_score = ?,
+  await env.DB.prepare(`UPDATE tests SET time_mode = ?, total_seconds = ?, per_default = ?, listening_seconds = ?, reading_seconds = ?, writing_seconds = ?, speaking_block_seconds = ?, is_open = ?, max_violations = ?, pass_score = ?,
       speaking_enabled = ?, speaking_seconds = ?, speaking_min_seconds = ?, speaking_prompt = ?, speaking_dialect = ?, auto_submit = ?, audio_url = ?, updated_at = ?, updated_by = ? WHERE key = ?`)
-    .bind(next.time_mode, next.total_seconds, next.per_default, next.is_open, next.max_violations, next.pass_score,
+    .bind(next.time_mode, next.total_seconds, next.per_default, next.listening_seconds ?? null, next.reading_seconds ?? null, next.writing_seconds ?? null, next.speaking_block_seconds ?? null, next.is_open, next.max_violations, next.pass_score,
       next.speaking_enabled, next.speaking_seconds, next.speaking_min_seconds, next.speaking_prompt, next.speaking_dialect,
       next.auto_submit ?? 0, next.audio_url ?? null, nowSeconds(), user.name, key).run();
   return json({ ok: true });

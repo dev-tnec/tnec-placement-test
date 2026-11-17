@@ -23,9 +23,9 @@ Rilis pertama mencakup Listening dan Reading, karena keduanya dinilai dari kunci
 1. Siswa membuka tautan undangan dari WhatsApp. Halaman meminta kode 6 karakter yang juga ada di pesan itu.
 2. Kode benar: halaman pengantar menampilkan nama, nama paket, jumlah soal per bagian, durasi tiap bagian, dan aturan. Kode salah tiga kali: undangan terkunci sampai dibuat ulang.
 3. Siswa menyetujui persetujuan lalu mulai. Browser masuk mode layar penuh dan aturan pelanggaran fokus berlaku seperti tes lain.
-4. Bagian Listening: satu pemutar audio di bagian atas, diputar sekali, tanpa tombol geser. 40 soal mengikuti urutan audio.
+4. Bagian Listening: satu berkas audio untuk Part 1 sampai Part 4, diputar sekali, tanpa tombol geser. Siswa bebas berpindah soal Part 1 sampai Part 4 selama audio berbunyi; kartu audio tetap terpasang dan suaranya tidak berhenti saat pindah soal.
 5. Setelah soal listening ke-40, siswa lanjut ke bagian Reading: tiga bacaan panjang, 40 soal.
-6. Waktu keseluruhan satu hitungan. Saat waktu habis, jawaban terkirim otomatis, berbeda dengan placement test yang gagal. Jumlah waktunya diatur di Pengaturan, default 95 menit.
+6. Tes berjalan dalam empat bagian dengan waktu sendiri: Listening 32 menit (30 menit audio ditambah 2 menit memeriksa), Reading 60, Writing 60, dan Speaking 15. Saat waktu satu bagian habis, bagian itu terkunci, tes pindah ke bagian berikutnya, dan siswa tidak bisa kembali. Empat waktunya diatur di Pengaturan, dan totalnya 167 menit. Jawaban terkirim otomatis setelah bagian Speaking selesai, berbeda dengan placement test yang gagal.
 7. Layar hasil menampilkan skor mentah tiap skill, band tiap skill, dan band keseluruhan, dengan kalimat bahwa band adalah perkiraan dan bukan skor resmi IELTS.
 
 ## 4. Model soal baru
@@ -50,9 +50,12 @@ Penilaian: soal `choice` dibandingkan dengan huruf kuncinya; soal `text` dinorma
 
 ## 6. Waktu dan pengiriman
 
-1. Mode waktu total yang sudah ada dipakai, `total_seconds` default 5700 detik untuk 95 menit.
-2. Kolom baru `tests.auto_submit`: 1 berarti waktu habis mengirim jawaban apa adanya, 0 berarti waktu habis menggagalkan percobaan seperti placement test. `ielts-mockup` bernilai 1, tes lain 0.
-3. Anti-cheat, pencatat pelanggaran, dan penghapusan percobaan gagal berjalan seperti tes lain. Batas pelanggaran bisa diatur per tes.
+1. Mode waktu baru `sections` dipakai khusus `ielts-mockup`. Empat kolom di `tests`: `listening_seconds` 1920, `reading_seconds` 3600, `writing_seconds` 3600, dan `speaking_block_seconds` 900. `total_seconds` menyimpan jumlahnya, 10020 detik, dan dihitung ulang setiap kali tim menyimpan empat waktu itu. `speaking_seconds` tetap batas satu rekaman placement, bukan blok speaking mockup.
+2. Server mengirim `sectionPlan` berisi empat bagian beserta detiknya di `GET /api/config`, `GET /api/invites/:token`, dan `POST /api/attempts`. Runner memakai rencana itu untuk timer, kunci bagian, dan tombol "Lanjut ke Reading", "Lanjut ke Writing", atau "Lanjut ke Speaking".
+3. Kolom `tests.auto_submit`: 1 berarti jawaban terkirim apa adanya di akhir bagian tulis, 0 berarti percobaan gagal seperti placement test. `ielts-mockup` bernilai 1, tes lain 0.
+4. Anti-cheat, pencatat pelanggaran, dan penghapusan percobaan gagal berjalan seperti tes lain. Batas pelanggaran bisa diatur per tes.
+
+Keputusan pemilik 17 November 2026: format computer-based 32/60/60/15, dan setiap bagian terkunci saat waktunya habis.
 
 ## 7. Konversi band
 
@@ -88,7 +91,7 @@ Sesuai bagian 6 PRD pendaftaran, yang tetap berlaku: undangan per siswa dengan `
 | Sidebar | Menu "IELTS Mockup" dengan Soal & Jawaban, Submission, dan Pengaturan seperti tes lain |
 | Soal & Jawaban | Editor soal mendukung tipe `text`: daftar jawaban diterima, bagian, dan bacaan. Soal listening diberi label bagian |
 | Submission | Detail menampilkan skor mentah per skill, band per skill, band keseluruhan, jawaban isian berhadapan dengan yang diterima, dan waktu audio diputar |
-| Pengaturan | Durasi total, saklar kirim otomatis saat waktu habis, alamat audio, buka atau tutup sesi, batas pelanggaran |
+| Pengaturan | Empat durasi bagian, saklar kirim otomatis, buka atau tutup sesi, batas pelanggaran |
 | Profil siswa | Tombol undangan IELTS Mockup di samping pre-test dan post-test |
 | Lead dan Pendaftaran | Tanpa perubahan untuk fitur ini |
 
@@ -138,9 +141,9 @@ Batasan kunci tes dan undangan, kolom `invites.code` dan `invites.opens_at`, ser
 |---|---|---|
 | GET | `/api/invites/:token` | Untuk `ielts-mockup` membalas `needsCode: true` dan nama paket, tanpa membuka soal |
 | POST | `/api/attempts` | Menerima `inviteCode`; salah mengembalikan 403 dengan sisa percobaan; soal `text` memakai bentuk jawaban baru |
-| POST | `/api/attempts/:id/audio-played` | Baru: menandai audio diputar, sekali per attempt |
-| GET | `/api/attempts/:id/submit` | Untuk `ielts-mockup` membalas band per skill dan band keseluruhan; waktu habis dengan `auto_submit` mengirim otomatis |
-| POST | `/api/admin/tests/ielts-mockup/settings` | Menambah durasi, saklar kirim otomatis, dan alamat audio |
+| POST | `/api/attempts/:id/audio-played` | Baru: menandai audio diputar, sekali per attempt, untuk bagian Listening yang memegang berkas audio |
+| GET | `/api/attempts/:id/submit` | Untuk `ielts-mockup` membalas band per skill dan band keseluruhan; kirim otomatis di akhir bagian tulis |
+| PUT | `/api/admin/tests/ielts-mockup` | Empat durasi bagian, saklar kirim otomatis, buka atau tutup sesi, dan batas pelanggaran |
 
 ## 15. Fase kedua: Writing dan Speaking
 
@@ -162,9 +165,9 @@ Writing dan Speaking sudah jalan sejak 17 November 2026 dengan keputusan pemilik
 ## 17. Acceptance criteria
 
 1. Siswa membuka undangan, memasukkan kode, dan hanya bisa mulai dengan kode yang benar; tiga kali salah mengunci undangan.
-2. Audio listening terputar sekali per attempt, dan tidak bisa diputar lagi setelah muat ulang.
+2. Audio listening terputar sekali per attempt, tidak bisa diputar lagi setelah muat ulang, dan tetap berbunyi saat siswa pindah soal Part 1 sampai Part 4.
 3. Soal isian teks dinilai benar dengan ejaan yang berbeda tapi diterima, dan salah dengan jawaban di luar daftar.
-4. Waktu habis mengirim jawaban otomatis dan tetap menghasilkan band, tidak menggagalkan percobaan.
+4. Waktu bagian habis mengunci bagian itu dan memindahkan tes ke bagian berikutnya; jawaban terkirim otomatis di akhir bagian tulis dan tetap menghasilkan band, tidak menggagalkan percobaan.
 5. Band listening dan reading mengikuti tabel konversi benih, dan band keseluruhan adalah rata-ratanya dibulatkan ke kelipatan setengah.
 6. Layar hasil memuat kalimat perkiraan dan tidak menyebut skor resmi.
 7. Tes tidak bisa dibuka tanpa undangan meski `is_open` menyala.
@@ -174,6 +177,4 @@ Writing dan Speaking sudah jalan sejak 17 November 2026 dengan keputusan pemilik
 
 ## 18. Pertanyaan terbuka
 
-1. Apakah siswa boleh berpindah bebas antar soal listening, atau soal terkunci setelah audio lewat seperti aturan IELTS sungguhan? Rekomendasi rilis pertama: bebas, sederhana dan jujur untuk perkiraan band.
-2. Berapa lama jeda antar bagian diizinkan, atau satu hitungan 95 menit tanpa jeda?
-3. Untuk fase kedua, penilaian Writing dan Speaking lewat Cloudflare Workers AI seperti platform lama, atau lewat guru saja dulu?
+1. Untuk fase kedua, penilaian Writing dan Speaking lewat Cloudflare Workers AI seperti platform lama, atau lewat guru saja dulu?
