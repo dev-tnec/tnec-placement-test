@@ -721,7 +721,7 @@ export function AttemptDetail({ testKey, id }) {
     const bands = a.bands || { skills: [], overall: 0 };
     cells.push(cell("Band keseluruhan", bands.overall || "-", "perkiraan dari Listening dan Reading"));
     for (const sk of bands.skills) {
-      cells.push(cell(`${sk.skill} (band ${sk.band})`, `${sk.raw}<small> / 40</small>`, `benar ${sk.raw} dari 40`));
+      cells.push(cell(`${sk.skill} (band ${sk.band})`, <>{sk.raw}<small> / 40</small></>, `benar ${sk.raw} dari 40`));
     }
     cells.push(cell("Audio", a.audioPlayedAt ? "Diputar" : "Belum diputar", a.audioPlayedAt ? fmtDateTime(a.audioPlayedAt) : "aturan mock: sekali per attempt"));
   } else if (testKey === "placement") {
