@@ -395,6 +395,24 @@ assert.equal(speakingType("audio/mpeg"), null, "mp3 is refused, the recorder nev
 assert.deepEqual(retryDelays({ SPEAKING_RETRY_SECONDS: "5, 10" }), [5, 10]);
 assert.deepEqual(retryDelays({}), [60, 300]);
 
+/* ---------- IELTS mockup: text answers, band conversion, and band rounding ---------- */
+import { normalizeTextAnswer, bandForRaw, overallBand } from "@tnec/core/bands";
+
+assert.equal(normalizeTextAnswer("  Radio   Programme! "), "radio programme");
+assert.equal(normalizeTextAnswer("LS14 2JW"), "ls14 2jw");
+assert.equal(normalizeTextAnswer("a-radio-program"), "a radio program");
+assert.equal(normalizeTextAnswer(""), "");
+const scale = Array.from({ length: 41 }, (_, raw) => ({ raw, band: raw >= 39 ? 9 : raw >= 37 ? 8.5 : raw >= 35 ? 8 : raw >= 32 ? 7.5 : raw >= 30 ? 7 : raw >= 26 ? 6.5 : raw >= 23 ? 6 : raw >= 18 ? 5.5 : raw >= 16 ? 5 : raw >= 13 ? 4.5 : raw >= 10 ? 4 : raw >= 8 ? 3.5 : raw >= 6 ? 3 : raw >= 4 ? 2.5 : raw >= 3 ? 2 : raw >= 2 ? 1.5 : raw >= 1 ? 1 : 0 }));
+assert.equal(bandForRaw(scale, 40), 9);
+assert.equal(bandForRaw(scale, 38), 8.5);
+assert.equal(bandForRaw(scale, 24), 6);
+assert.equal(bandForRaw(scale, 0), 0);
+assert.equal(bandForRaw([], 20), 0, "a missing scale scores zero, never throws");
+assert.equal(overallBand([6, 5.5]), 6, "the mean rounds to the nearest half");
+assert.equal(overallBand([6.5, 5.5, 6, 7]), 6.5);
+assert.equal(overallBand([6.25, 5.75]), 6);
+assert.equal(overallBand([]), 0);
+
 let finished = false;
 runInBackground(() => new Promise((resolve) => setTimeout(() => { finished = true; resolve(); }, 150)));
 const loud = console.error;

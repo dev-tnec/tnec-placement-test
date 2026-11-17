@@ -3,6 +3,8 @@
 // Invite flow (?undangan=token, pre-test and post-test): consent -> test -> submit -> score.
 // Questions, timing, and limits come from the server; the answer key never reaches this file.
 
+import { createLiveWaveform } from "./live-waveform.js";
+
 const $ = (selector, root = document) => root.querySelector(selector);
 const $$ = (selector, root = document) => [...root.querySelectorAll(selector)];
 
@@ -23,6 +25,7 @@ const LEVEL_LABELS = {
   "toefl-scoring": "TOEFL/IELTS Scoring",
 };
 const CHOICES = ["A", "B", "C", "D"];
+const KEY_LETTERS = new Set(["A", "B", "C", "D", "E", "F"]);
 const FOCUS_TYPES = new Set(["fullscreen_exit", "tab_hidden", "window_blur"]);
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 // The server keeps a per-question attempt open a little longer than the sum of the question times.
@@ -53,6 +56,8 @@ const els = {
   passageText: $("#passage-text"),
   prompt: $("#question-prompt"),
   optionsList: $("#options-list"),
+  answerField: $("#answer-field"),
+  answerInput: $("#answer-input"),
   prevBtn: $("#prev-btn"),
   skipBtn: $("#skip-btn"),
   nextBtn: $("#next-btn"),
@@ -129,6 +134,18 @@ const els = {
   timeupDialog: $("#timeup-dialog"),
   timeupRetry: $("#timeup-retry"),
   timeupBack: $("#timeup-back"),
+  codeField: $("#code-field"),
+  codeInput: $("#invite-code"),
+  codeError: $("#code-error"),
+  audioCard: $("#audio-card"),
+  audioPlay: $("#audio-play"),
+  audioNote: $("#audio-note"),
+  listeningAudio: $("#listening-audio"),
+  scorePlain: $("#score-plain"),
+  scoreBand: $("#score-band"),
+  bandOverall: $("#band-overall"),
+  bandList: $("#band-list"),
+  scoreNote: $("#score-note"),
   toast: $("#toast"),
   live: $("#live"),
 };
@@ -137,8 +154,11 @@ const state = {
   config: null,
   invite: null,
   inviteInfo: null,
+  inviteCode: "",
   attempt: null,
   perMode: false,
+  autoSubmit: false,
+  audio: null,
   maxStrikes: 3,
   index: 0,
   answers: {},
@@ -160,9 +180,6 @@ const state = {
   toastTimer: null,
   speaking: null,
   recStream: null,
-  recCtx: null,
-  recAnalyser: null,
-  recMeterId: null,
   recTimerId: null,
   recorder: null,
   recChunks: [],
@@ -212,8 +229,7 @@ async function init() {
 
   state.inviteInfo = state.config.invite || null;
   applySettings(state.config);
-  if (state.inviteInfo) applyInviteCopy(state.inviteInfo, state.config);
-  if (!state.config.open) {
+  if (state.inviteInfo) applyInviteCopy(state.inviteInfo, state.config);  if (!state.config.open) {
     showIntroNotice(
       state.inviteInfo
         ? `${state.inviteInfo.testName} sedang ditutup sementara. Hubungi admin atau tutor kamu di Titik Nol untuk menanyakan jadwalnya.`
@@ -242,6 +258,8 @@ async function init() {
   els.speakRetake.addEventListener("click", retakeRecording);
   els.speakSend.addEventListener("click", sendRecording);
   els.speakSkip.addEventListener("click", skipSpeaking);
+  els.codeInput.addEventListener("input", () => { state.inviteCode = els.codeInput.value.trim(); syncConsent(); });
+  els.audioPlay.addEventListener("click", playListeningAudio);
   els.violationClose.addEventListener("click", reenterFullscreen);
   els.endRetry.addEventListener("click", retry);
   els.endBack.addEventListener("click", backToStart);
@@ -306,6 +324,28 @@ async function init() {
 
 /* ---------- Settings from the server ---------- */
 
+/* One play per attempt, enforced by the server: the first press marks the attempt, a reload or a
+   second press gets a refusal. After the audio ends the button disappears. */
+async function playListeningAudio() {
+  if (!state.audio || !state.attempt) return;
+  els.audioPlay.disabled = true;
+  try {
+    await api(`/api/attempts/${state.attempt.id}/audio-played`, { method: "POST" });
+  } catch (error) {
+    els.audioNote.textContent = error.message || "Audio sudah pernah diputar untuk tes ini.";
+    els.audioPlay.hidden = true;
+    return;
+  }
+  els.listeningAudio.play().catch(() => {
+    els.audioNote.textContent = "Browser kamu memblokir suara. Periksa izin suara di address bar, lalu muat ulang halaman.";
+  });
+  els.audioNote.textContent = "Audio sedang diputar. Dengarkan sampai selesai; audionya tidak bisa diputar lagi.";
+  els.listeningAudio.addEventListener("ended", () => {
+    els.audioPlay.hidden = true;
+    els.audioNote.textContent = "Audio selesai. Lanjutkan menjawab soal listening, lalu bagian reading.";
+  }, { once: true });
+}
+
 function spanText(seconds) {
   const m = Math.floor(seconds / 60);
   const s = seconds % 60;
@@ -353,32 +393,44 @@ function applySettings(config) {
 function applyInviteCopy(info, config) {
   const total = config.totalQuestions;
   const pre = info.test === "pre";
-  const name = info.testName.toLowerCase();
+  const ielts = info.test === "ielts-mockup";
+  const name = ielts ? "IELTS Mockup" : info.testName.toLowerCase();
   setCopy("eyebrow", info.testName);
 
   const accent = document.createElement("span");
   accent.className = "hero__accent";
   accent.textContent = spanText(config.durationSeconds);
   $("#intro-title").replaceChildren(
-    `Halo ${info.firstName}, selesaikan ${name} kamu dalam `,
+    ielts
+      ? `Halo ${info.firstName}, kerjakan ${name} paket ${info.packageName || "Desember"} dalam `
+      : `Halo ${info.firstName}, selesaikan ${name} kamu dalam `,
     accent,
     ".",
   );
-  setCopy("intro-lead", pre
-    ? `Tes ini berisi ${total} soal pilihan ganda. Nilainya kami pakai sebagai titik awal untuk melihat perkembangan kamu selama program.`
-    : `Tes ini berisi ${total} soal pilihan ganda. Hasilnya kami pakai untuk menentukan apakah kamu sudah siap lanjut ke level berikutnya.`);
+  setCopy("intro-lead", ielts
+    ? `Mock test ini meniru tes IELTS sungguhan: ${total} soal Listening yang menyertai satu audio, lalu ${total} soal Reading dari tiga bacaan. Hasilnya berupa perkiraan band untuk tiap skill.`
+    : pre
+      ? `Tes ini berisi ${total} soal pilihan ganda. Nilainya kami pakai sebagai titik awal untuk melihat perkembangan kamu selama program.`
+      : `Tes ini berisi ${total} soal pilihan ganda. Hasilnya kami pakai untuk menentukan apakah kamu sudah siap lanjut ke level berikutnya.`);
 
   for (const el of $$('[data-only="placement"]')) el.hidden = true;
+  els.codeField.hidden = !info.needsCode;
   setCopy("step3-index", "02");
-  setCopy("step3-meta", pre ? "Nilai langsung muncul" : "Nilai dan kelulusan");
-  setCopy("how3-title", "Melihat nilai kamu");
-  setCopy("how3-body", "Setelah jawaban terkirim, nilai kamu langsung muncul di layar dan tercatat di data kelas, jadi tutor bisa membahasnya bersama kamu.");
+  setCopy("step3-meta", ielts ? "Band langsung muncul" : pre ? "Nilai langsung muncul" : "Nilai dan kelulusan");
+  setCopy("how3-title", ielts ? "Melihat band kamu" : "Melihat nilai kamu");
+  setCopy("how3-body", ielts
+    ? "Setelah jawaban terkirim, skor mentah dan band kamu langsung muncul di layar untuk Listening dan Reading, lengkap dengan band keseluruhan."
+    : "Setelah jawaban terkirim, nilai kamu langsung muncul di layar dan tercatat di data kelas, jadi tutor bisa membahasnya bersama kamu.");
   setCopy("data-1", "Kami menyimpan jawaban, nilai, waktu pengerjaan, dan catatan pelanggaran selama tes, lalu mencatatnya di data kamu sebagai siswa Titik Nol.");
   setCopy("data-2", "Data itu kami pakai untuk menghitung nilai dan memantau perkembangan belajar kamu bersama tutor. Data tidak dijual dan tidak dipakai untuk iklan.");
-  setCopy("data-3", pre
-    ? "Setelah jawaban terkirim, nilai kamu langsung muncul di layar. Kamu tidak perlu mengisi data kontak lagi."
-    : "Setelah jawaban terkirim, nilai dan hasil kelulusan kamu langsung muncul di layar. Kamu tidak perlu mengisi data kontak lagi.");
-  setCopy("data-4", "Kalau waktu habis sebelum kamu selesai, percobaan ini gagal dan jawaban kamu tidak dikirim. Selama tautan ini masih berlaku, kamu bisa mengulang tes dari awal dengan waktu yang baru.");
+  setCopy("data-3", ielts
+    ? "Setelah jawaban terkirim, band kamu langsung muncul di layar. Kamu tidak perlu mengisi data kontak lagi."
+    : pre
+      ? "Setelah jawaban terkirim, nilai kamu langsung muncul di layar. Kamu tidak perlu mengisi data kontak lagi."
+      : "Setelah jawaban terkirim, nilai dan hasil kelulusan kamu langsung muncul di layar. Kamu tidak perlu mengisi data kontak lagi.");
+  setCopy("data-4", ielts
+    ? "Kalau waktu habis, jawaban kamu yang sudah terisi terkirim otomatis dan tetap menghasilkan band. Selama tautan dan kodemu belum dipakai, kamu bisa mengulang dari awal."
+    : "Kalau waktu habis sebelum kamu selesai, percobaan ini gagal dan jawaban kamu tidak dikirim. Selama tautan ini masih berlaku, kamu bisa mengulang tes dari awal dengan waktu yang baru.");
   document.title = `${info.testName} - Titik Nol English Course`;
 }
 
@@ -435,19 +487,30 @@ function confirmLegal() {
 
 function syncConsent() {
   const allChecked = els.consentBoxes.every((box) => box.checked);
-  els.startBtn.disabled = !allChecked || !state.config?.open;
+  const codeOk = !state.inviteInfo?.needsCode || state.inviteCode.length >= 6;
+  els.startBtn.disabled = !allChecked || !codeOk || !state.config?.open;
 }
 
 function attemptBody() {
   return {
     consent: { accepted: true, version: state.config.consentVersion },
     ...(state.invite ? { invite: state.invite } : {}),
+    ...(state.inviteInfo?.needsCode ? { inviteCode: state.inviteCode } : {}),
   };
 }
 
 async function startTest(event) {
   event.preventDefault();
   if (!state.config || els.startBtn.disabled) return;
+  if (state.inviteInfo?.needsCode) {
+    els.codeError.hidden = true;
+    if (state.inviteCode.length < 6) {
+      els.codeError.textContent = "Masukkan kode 6 karakter yang ada di pesan WhatsApp kamu.";
+      els.codeError.hidden = false;
+      els.codeInput.focus();
+      return;
+    }
+  }
 
   els.startBtn.disabled = true;
   const label = els.startBtn.firstChild;
@@ -460,10 +523,17 @@ async function startTest(event) {
     beginAttempt(data);
   } catch (error) {
     await exitFullscreen();
-    toast(error.message || "Tes gagal dimulai. Silakan coba lagi.");
+    if (error.status === 403 && state.inviteInfo?.needsCode) {
+      els.codeError.textContent = error.message || "Kode belum benar.";
+      els.codeError.hidden = false;
+      els.codeInput.focus();
+      els.codeInput.select();
+    } else {
+      toast(error.message || "Tes gagal dimulai. Silakan coba lagi.");
+    }
     if (error.status === 423 || error.status === 410 || error.status === 404) {
       showIntroNotice(error.message);
-    } else {
+    } else if (error.status !== 403) {
       els.startBtn.disabled = false;
     }
   } finally {
@@ -478,6 +548,8 @@ function beginAttempt(data) {
     total: data.total,
   };
   state.perMode = data.timeMode === "per";
+  state.autoSubmit = Boolean(data.autoSubmit);
+  state.audio = data.audio || null;
   state.maxStrikes = data.maxViolations || state.maxStrikes;
   state.index = 0;
   state.answers = {};
@@ -509,6 +581,15 @@ function beginAttempt(data) {
   els.finishNote.textContent = state.perMode
     ? "Setiap soal punya waktunya sendiri. Soal berikutnya muncul otomatis saat waktu habis, dan jawaban terkirim setelah soal terakhir. Tombol kirim baru bisa dipakai setelah semua soal dijawab."
     : "Periksa kembali jawaban kamu sebelum mengirim, karena jawaban tidak bisa diubah setelah terkirim. Semua soal juga harus sudah dijawab sebelum jawaban bisa dikirim.";
+
+  // The listening audio of the IELTS mockup: one play per attempt, marked on the server.
+  els.audioCard.hidden = !state.audio;
+  if (state.audio) {
+    els.listeningAudio.src = state.audio.url;
+    els.audioPlay.hidden = false;
+    els.audioPlay.disabled = false;
+    els.audioNote.textContent = "Putar audionya saat kamu siap. Audio hanya bisa diputar satu kali, jadi pastikan tempatmu tenang dan speaker atau headsetmu menyala.";
+  }
 
   showScreen("test");
   buildNavigator();
@@ -554,7 +635,8 @@ function buildNavigator() {
 
 function renderQuestion() {
   const question = state.attempt.questions[state.index];
-  els.questionBadge.textContent = `Soal ${state.index + 1} \u00b7 ${question.skill || "Grammar"}`;
+  const partLabel = question.part ? ` \u00b7 Bagian ${question.part}` : "";
+  els.questionBadge.textContent = `Soal ${state.index + 1} \u00b7 ${question.skill || "Grammar"}${partLabel}`;
   els.prompt.textContent = question.prompt;
 
   if (question.passage) {
@@ -566,33 +648,53 @@ function renderQuestion() {
   }
 
   els.optionsList.replaceChildren();
-  for (const letter of CHOICES) {
+  if (question.type === "text") {
+    const field = document.createElement("div");
+    field.className = "field answer-field";
     const label = document.createElement("label");
-    label.className = "option";
-
+    label.className = "label";
+    label.htmlFor = `q-${question.id}`;
+    label.textContent = "Jawaban kamu";
     const input = document.createElement("input");
-    input.type = "radio";
-    input.name = `q-${question.id}`;
-    input.value = letter;
-    input.className = "sr-only";
-    input.checked = state.answers[question.id] === letter;
-    input.addEventListener("change", () => choose(question.id, letter));
+    input.className = "input";
+    input.id = `q-${question.id}`;
+    input.type = "text";
+    input.autocomplete = "off";
+    input.maxLength = 300;
+    input.value = state.answers[question.id] || "";
+    input.addEventListener("input", () => answerText(question.id, input.value));
+    field.append(label, input);
+    els.optionsList.append(field);
+  } else {
+    const letters = Object.keys(question.options || {});
+    for (const letter of letters) {
+      const label = document.createElement("label");
+      label.className = "option";
 
-    const key = document.createElement("span");
-    key.className = "option__key";
-    key.textContent = letter;
+      const input = document.createElement("input");
+      input.type = "radio";
+      input.name = `q-${question.id}`;
+      input.value = letter;
+      input.className = "sr-only";
+      input.checked = state.answers[question.id] === letter;
+      input.addEventListener("change", () => choose(question.id, letter));
 
-    const text = document.createElement("span");
-    text.className = "option__text";
-    text.textContent = question.options[letter];
+      const key = document.createElement("span");
+      key.className = "option__key";
+      key.textContent = letter;
 
-    const mark = document.createElement("span");
-    mark.className = "option__mark";
-    mark.setAttribute("aria-hidden", "true");
+      const text = document.createElement("span");
+      text.className = "option__text";
+      text.textContent = question.options[letter];
 
-    label.append(input, key, text, mark);
-    if (input.checked) label.classList.add("is-selected");
-    els.optionsList.append(label);
+      const mark = document.createElement("span");
+      mark.className = "option__mark";
+      mark.setAttribute("aria-hidden", "true");
+
+      label.append(input, key, text, mark);
+      if (input.checked) label.classList.add("is-selected");
+      els.optionsList.append(label);
+    }
   }
 
   if (state.perMode) state.questionDeadline = Date.now() + (question.seconds || 30) * 1000;
@@ -604,6 +706,14 @@ function renderQuestion() {
 function choose(questionId, letter) {
   state.answers[questionId] = letter;
   syncOptionSelection();
+  syncNavigator();
+}
+
+/** A typed answer counts as answered only when it is not blank. */
+function answerText(questionId, value) {
+  const trimmed = value.trim();
+  if (trimmed) state.answers[questionId] = trimmed;
+  else delete state.answers[questionId];
   syncNavigator();
 }
 
@@ -746,6 +856,14 @@ function tick() {
     clearInterval(state.timerId);
     if (!state.timeUp) {
       state.timeUp = true;
+      // A mockup with auto submit sends whatever is answered; every other test fails the attempt.
+      if (state.autoSubmit) {
+        if (!state.autoSubmitted) {
+          state.autoSubmitted = true;
+          submitAnswers();
+        }
+        return;
+      }
       state.ending = true;
       if (!els.timeupDialog.open) els.timeupDialog.showModal();
     }
@@ -786,8 +904,7 @@ async function submitAnswers() {
   if (!state.autoSubmitted && Object.keys(state.answers).length < state.attempt.total) {
     openSubmit();
     return;
-  }
-  state.submitting = true;
+  }  state.submitting = true;
   state.ending = true;
   clearInterval(state.timerId);
   closeDialogs();
@@ -1002,7 +1119,8 @@ async function startRecording(mode) {
   els.speakTimer.hidden = false;
   stopBtn.hidden = false;
   stopBtn.disabled = limits.min > 1;
-  startMeter();
+  els.recWave.hidden = false;
+  recWave.start(state.recStream).then((ok) => { if (!ok) els.recWave.hidden = true; });
   announce("Perekaman dimulai.");
 
   state.recTimerId = setInterval(() => {
@@ -1019,7 +1137,7 @@ async function startRecording(mode) {
 function stopRecording() {
   clearInterval(state.recTimerId);
   state.recTimerId = null;
-  stopMeter();
+  recWave.stop();
   if (state.recorder && state.recorder.state !== "inactive") state.recorder.stop();
 }
 
@@ -1101,7 +1219,7 @@ function clearRecording() {
 
 /** Releases the microphone once the speaking part is over. */
 function releaseMic() {
-  stopMeter();
+  recWave.stop();
   if (state.recStream) state.recStream.getTracks().forEach((track) => track.stop());
   state.recStream = null;
 }
@@ -1164,68 +1282,9 @@ async function skipSpeaking() {
   }
 }
 
-/* The sound wave: one bar per frequency band of the voice range, so the row visibly rises and
-   falls with the voice like a voice memo. The overall level still drives the "too loud" state. */
-const WAVE_BARS = 40;
-
-function startMeter() {
-  try {
-    state.recCtx = new AudioContext();
-    const source = state.recCtx.createMediaStreamSource(state.recStream);
-    state.recAnalyser = state.recCtx.createAnalyser();
-    state.recAnalyser.fftSize = 1024;
-    source.connect(state.recAnalyser);
-  } catch {
-    state.recCtx = null;
-    state.recAnalyser = null;
-    return;
-  }
-  if (!els.recWave.childElementCount) {
-    for (let i = 0; i < WAVE_BARS; i += 1) els.recWave.append(document.createElement("span"));
-  }
-  const bars = [...els.recWave.children];
-  const time = new Uint8Array(state.recAnalyser.fftSize);
-  const freq = new Uint8Array(state.recAnalyser.frequencyBinCount);
-  const nyquist = state.recCtx.sampleRate / 2;
-  const binAt = (hz) => Math.min(freq.length - 1, Math.max(0, Math.round((hz / nyquist) * freq.length)));
-  // Log spaced bands from 120 Hz to 9 kHz, the range of a speaking voice.
-  const edges = bars.map((_, i) => binAt(120 * (9000 / 120) ** (i / (bars.length - 1))));
-  const tick = () => {
-    if (!state.recAnalyser) return;
-    state.recAnalyser.getByteTimeDomainData(time);
-    let sum = 0;
-    for (const value of time) {
-      const x = (value - 128) / 128;
-      sum += x * x;
-    }
-    els.speakMeter.classList.toggle("is-loud", Math.min(1, Math.sqrt(sum / time.length) * 6) > 0.9);
-    state.recAnalyser.getByteFrequencyData(freq);
-    bars.forEach((bar, i) => {
-      const from = edges[i];
-      const to = i + 1 < edges.length ? Math.max(from + 1, edges[i + 1]) : freq.length;
-      let band = 0;
-      let count = 0;
-      for (let j = from; j < to; j += 1) {
-        band += freq[j];
-        count += 1;
-      }
-      const level = Math.min(1, ((band / Math.max(1, count)) / 200) ** 0.8);
-      bar.style.transform = `scaleY(${(0.12 + level * 0.88).toFixed(3)})`;
-    });
-    state.recMeterId = requestAnimationFrame(tick);
-  };
-  tick();
-}
-
-function stopMeter() {
-  cancelAnimationFrame(state.recMeterId);
-  state.recMeterId = null;
-  state.recAnalyser = null;
-  if (state.recCtx) state.recCtx.close().catch(() => {});
-  state.recCtx = null;
-  for (const bar of els.recWave.children) bar.style.transform = "scaleY(0.12)";
-  els.speakMeter.classList.remove("is-loud");
-}
+/* The sound wave is the ElevenLabs UI LiveWaveform component, ported to a small vanilla module
+   because this app has no React. It draws a live mirrored spectrum of the microphone. */
+const recWave = createLiveWaveform(els.recWave, { height: 24 });
 
 /* ---------- Waiting for the score, and the result behind a private link ---------- */
 
@@ -1456,9 +1515,41 @@ function deliveryNote(delivery, email) {
   return "Salinan hasil belum bisa kami kirim ke email maupun WhatsApp kamu, jadi simpan halaman ini atau hubungi admin melalui WhatsApp.";
 }
 
-// Pre-test and post-test results. The student is already known, so there is no contact step.
+// Results for invited tests. Pre-test and post-test show a score out of 100; the IELTS mockup
+// shows the band estimate instead, with the official-score disclaimer.
 function renderScore(result) {
   const first = state.inviteInfo?.firstName || "";
+  els.scorePlain.hidden = Boolean(result.skills);
+  els.scoreBand.hidden = !result.skills;
+  els.bandList.hidden = !result.skills;
+  els.scoreNote.textContent = result.skills
+    ? "Hasil ini sudah tercatat di data kamu sebagai siswa Titik Nol English Course, jadi halaman ini boleh ditutup."
+    : "Nilai ini sudah tercatat di data kamu sebagai siswa Titik Nol English Course, jadi halaman ini boleh ditutup.";
+
+  if (result.skills) {
+    $("#score-eyebrow").textContent = `Hasil ${result.testName}`;
+    $("#score-title").textContent = "Perkiraan band kamu";
+    els.bandOverall.textContent = String(result.overall ?? 0);
+    els.bandList.replaceChildren();
+    for (const skill of result.skills) {
+      const li = document.createElement("li");
+      li.className = "band-list__row";
+      const name = document.createElement("span");
+      name.textContent = skill.skill;
+      const band = document.createElement("strong");
+      band.textContent = String(skill.band);
+      const raw = document.createElement("span");
+      raw.className = "band-list__raw";
+      raw.textContent = `${skill.raw} dari 40 benar`;
+      li.append(name, band, raw);
+      els.bandList.append(li);
+    }
+    $("#score-summary").textContent = `Terima kasih sudah mengerjakan mock IELTS${first ? `, ${first}` : ""}.`;
+    $("#score-headline").textContent = "Band keseluruhan kamu";
+    $("#score-description").textContent = `${result.disclaimer} Band pada tes resmi ditentukan dari empat skill, jadi band ini akan lengkap setelah bagian Writing dan Speaking tersedia.`;
+    return;
+  }
+
   $("#score-eyebrow").textContent = `Hasil ${result.testName}`;
   $("#score-title").textContent = `Nilai kamu ${result.nilai}`;
   $("#score-value").textContent = String(result.score);
@@ -1617,8 +1708,9 @@ function onKeydown(event) {
 
   if (event.target.closest("input, textarea")) return;
 
-  if (!mod && !event.altKey && CHOICES.includes(key.toUpperCase())) {
-    choose(state.attempt.questions[state.index].id, key.toUpperCase());
+  const current = state.attempt.questions[state.index];
+  if (!mod && !event.altKey && KEY_LETTERS.has(key.toUpperCase()) && current.type !== "text" && current.options?.[key.toUpperCase()]) {
+    choose(current.id, key.toUpperCase());
     return;
   }
   if (event.key === "ArrowRight") {

@@ -6,6 +6,7 @@ import {
   TEST_NAMES, PER_MODE_GRACE_SECONDS, loadTest, loadQuestions, loadLevels, levelFor, publicLevel, programCards,
   focusStrikes, addActivity, upsertStudentFromContact, newId,
 } from "@tnec/core/store";
+import { normalizeTextAnswer, bandForRaw, overallBand } from "@tnec/core/bands";
 import { CONSENT_VERSION, PRIVACY, TERMS, WHATSAPP, fillLegal } from "@tnec/core/legal";
 import { whatsappConfigured } from "@tnec/core/whatsapp";
 import { deliverInBackground, runInBackground, EMAIL_SKIPPED } from "@tnec/core/delivery";
@@ -26,7 +27,7 @@ const SKIP_REASONS = {
 };
 const SUBMIT_GRACE_SECONDS = 15;
 const ATTEMPT_ID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
-const CHOICES = new Set(["A", "B", "C", "D"]);
+const CHOICES = new Set(["A", "B", "C", "D", "E", "F"]);
 const VIOLATION_TYPES = new Set(["fullscreen_exit", "tab_hidden", "window_blur", "copy_attempt", "shortcut_blocked"]);
 
 export async function handlePublic(request, env, url = new URL(request.url)) {
@@ -51,12 +52,13 @@ async function handleApi(request, env, url) {
 
   if (path === "/api/attempts" && request.method === "POST") return createAttempt(request, env);
 
-  const match = path.match(/^\/api\/attempts\/([0-9a-f-]{36})\/(violation|submit|contact|speaking|speaking-skip)$/);
+  const match = path.match(/^\/api\/attempts\/([0-9a-f-]{36})\/(violation|submit|contact|speaking|speaking-skip|audio-played)$/);
   if (match && request.method === "POST") {
     const [, attemptId, action] = match;
     if (!ATTEMPT_ID_RE.test(attemptId)) throw new HttpError(400, "ID percobaan tidak valid.");
     if (action === "violation") return logViolation(request, env, attemptId);
     if (action === "submit") return submitAttempt(request, env, attemptId);
+    if (action === "audio-played") return markAudioPlayed(env, attemptId);
     if (action === "speaking") return uploadSpeaking(request, env, attemptId);
     if (action === "speaking-skip") return skipSpeaking(request, env, attemptId);
     return saveContact(request, env, attemptId);
@@ -110,6 +112,7 @@ async function findInvite(env, token) {
   ).bind(await sha256Hex(token)).first();
   if (!row) throw new HttpError(404, "Tautan tes ini tidak ditemukan. Minta tautan baru ke admin Titik Nol.");
   if (row.used_at) throw new HttpError(410, "Tautan ini sudah dipakai untuk mengirim jawaban. Hubungi admin Titik Nol kalau kamu perlu mengulang.");
+  if (row.code_tries >= 3) throw new HttpError(423, "Kode sudah salah tiga kali, jadi undangan ini terkunci. Minta admin membuatkan undangan baru.");
   if (row.expires_at < nowSeconds()) throw new HttpError(410, "Tautan ini sudah kedaluwarsa. Minta tautan baru ke admin Titik Nol.");
   return row;
 }
@@ -119,7 +122,13 @@ async function getInvite(env, token) {
   const live = await liveTest(env, invite.test_key);
   return json({
     ...publicConfig(live),
-    invite: { test: invite.test_key, testName: TEST_NAMES[invite.test_key], firstName: String(invite.student_name).split(/\s+/)[0] },
+    invite: {
+      test: invite.test_key,
+      testName: TEST_NAMES[invite.test_key],
+      firstName: String(invite.student_name).split(/\s+/)[0],
+      needsCode: Boolean(invite.code),
+      packageName: invite.test_key === "ielts-mockup" ? "December Test 1" : null,
+    },
   });
 }
 
@@ -137,6 +146,16 @@ async function createAttempt(request, env) {
 
   const invite = body.invite ? await findInvite(env, String(body.invite)) : null;
   const testKey = invite ? invite.test_key : "placement";
+  if (invite?.code) {
+    const code = String(body.inviteCode || "").replace(/\s+/g, "").toLowerCase();
+    if (!code) throw new HttpError(400, "Masukkan kode 6 karakter dari pesan WhatsApp kamu.");
+    if (code !== String(invite.code).toLowerCase()) {
+      const row = await env.DB.prepare("UPDATE invites SET code_tries = code_tries + 1 WHERE id = ? RETURNING code_tries").bind(invite.id).first();
+      const left = Math.max(0, 3 - (row?.code_tries ?? 3));
+      if (left <= 0) throw new HttpError(423, "Kode sudah salah tiga kali, jadi undangan ini terkunci. Minta admin membuatkan undangan baru.");
+      throw new HttpError(403, `Kode belum benar. Sisa ${left} percobaan lagi sebelum undangan terkunci.`, { field: "inviteCode" });
+    }
+  }
   const { test, questions, durationSeconds } = await liveTest(env, testKey);
   if (!test.open) throw new HttpError(423, "Tes ini sedang ditutup sementara. Silakan coba lagi nanti atau hubungi admin Titik Nol.");
   if (!questions.length) throw new HttpError(423, "Tes ini belum punya soal aktif. Hubungi admin Titik Nol.");
@@ -167,15 +186,28 @@ async function createAttempt(request, env) {
     total: questions.length,
     timeMode: test.timeMode,
     maxViolations: test.maxViolations,
+    autoSubmit: test.autoSubmit,
+    ...(test.audioUrl ? { audio: { url: test.audioUrl, played: false } } : {}),
     questions: questions.map((q) => ({
       id: q.id,
       skill: q.skill,
       prompt: q.prompt,
+      type: q.type,
+      ...(q.part ? { part: q.part } : {}),
       ...(q.passage ? { passage: q.passage } : {}),
-      options: q.options,
+      ...(q.type === "choice" ? { options: q.options } : {}),
       ...(perMode ? { seconds: q.seconds } : {}),
     })),
   });
+}
+
+/* The listening audio plays once per attempt. A second request is refused, so a reload never
+   grants another play. */
+async function markAudioPlayed(env, attemptId) {
+  const attempt = await getAttempt(env, attemptId);
+  if (attempt.audio_played_at) throw new HttpError(409, "Audio sudah pernah diputar untuk tes ini, dan aturan mock IELTS hanya mengizinkan satu kali.");
+  await env.DB.prepare("UPDATE attempts SET audio_played_at = ? WHERE id = ?").bind(nowSeconds(), attemptId).run();
+  return json({ ok: true });
 }
 
 async function getAttempt(env, attemptId) {
@@ -202,7 +234,16 @@ async function logViolation(request, env, attemptId) {
   return json({ ok: true, counted: Boolean(row) });
 }
 
-function inviteResult(attempt, score, total, passed) {
+function inviteResult(attempt, score, total, passed, bands) {
+  if (bands) {
+    return {
+      test: attempt.test_key,
+      testName: TEST_NAMES[attempt.test_key],
+      overall: bands.overall,
+      skills: bands.skills,
+      disclaimer: "Hasil ini adalah perkiraan dan bukan skor resmi IELTS. Skor resmi hanya diterbitkan oleh British Council atau IDP.",
+    };
+  }
   const nilai = total ? Math.round((score / total) * 100) : 0;
   return {
     test: attempt.test_key,
@@ -215,15 +256,47 @@ function inviteResult(attempt, score, total, passed) {
   };
 }
 
+/* The mockup bands: raw per skill from the graded answers, band per skill from band_scales, and the
+   overall band as the mean rounded to the nearest half. Stored on the attempt so a later scale edit
+   never changes a finished result. */
+/* The mockup bands: raw per skill, band per skill from band_scales, and the overall band as the
+   mean rounded to the nearest half. Stored on the attempt so editing a scale never changes a
+   finished result. */
+async function computeBands(env, correctBySkill) {
+  const skills = [];
+  for (const [skill, correct] of correctBySkill) {
+    const { results } = await env.DB.prepare(
+      "SELECT raw, band FROM band_scales WHERE test_key = 'ielts-mockup' AND skill = ?",
+    ).bind(skill).all();
+    const raw = correct;
+    const band = results.length ? bandForRaw(results.map((r) => ({ raw: r.raw, band: Number(r.band) })), raw) : 0;
+    skills.push({ skill, raw, band });
+  }
+  return { skills, overall: overallBand(skills.map((s) => s.band)) };
+}
+
+/** One answer against one question: letters for choice, loose text matching for text questions. */
+function gradeAnswer(question, raw) {
+  if (question.type === "text") {
+    const value = normalizeTextAnswer(raw);
+    const accepted = (question.accepted || []).map(normalizeTextAnswer);
+    const hit = accepted.find((a) => a !== "" && a === value);
+    return { correct: Boolean(hit), key: hit || (question.accepted || [])[0] || "" };
+  }
+  const choice = normalizeChoice(raw);
+  return { correct: choice === question.answer, key: question.answer };
+}
+
 async function submitAttempt(request, env, attemptId) {
   const body = await readJson(request, PUBLIC_BODY_LIMIT);
   const attempt = await getAttempt(env, attemptId);
 
   if (attempt.status === "submitted") {
+    const stored = attempt.bands ? JSON.parse(attempt.bands) : null;
     return json({
       ok: true,
       total: attempt.total,
-      ...(attempt.invite_id ? { result: inviteResult(attempt, attempt.score, attempt.total, attempt.passed) } : {}),
+      ...(attempt.invite_id ? { result: inviteResult(attempt, attempt.score, attempt.total, attempt.passed, stored) } : {}),
     });
   }
 
@@ -244,30 +317,38 @@ async function submitAttempt(request, env, attemptId) {
   const list = ids.map((id) => byId.get(id)).filter(Boolean);
 
   let score = 0;
+  const correctBySkill = new Map();
   const statements = list.map((question) => {
-    const choice = normalizeChoice(rawAnswers[question.id]);
-    const isCorrect = choice === question.answer ? 1 : 0;
+    const raw = rawAnswers[question.id];
+    const graded = gradeAnswer(question, raw);
+    const isCorrect = graded.correct ? 1 : 0;
     score += isCorrect;
+    correctBySkill.set(question.skill, (correctBySkill.get(question.skill) || 0) + isCorrect);
+    const stored = question.type === "text" ? String(raw ?? "").slice(0, 300) : normalizeChoice(raw);
     return env.DB.prepare(
       `INSERT INTO answers (attempt_id, question_id, choice, is_correct, answer_key) VALUES (?, ?, ?, ?, ?)
        ON CONFLICT (attempt_id, question_id) DO UPDATE SET choice = EXCLUDED.choice, is_correct = EXCLUDED.is_correct, answer_key = EXCLUDED.answer_key`,
-    ).bind(attemptId, question.id, choice, isCorrect, question.answer);
+    ).bind(attemptId, question.id, stored, isCorrect, graded.key);
   });
 
   const total = list.length;
+  const testKey = attempt.test_key || "placement";
   let levelKey = null;
   let passed = null;
-  if ((attempt.test_key || "placement") === "placement") {
+  let bands = null;
+  if (testKey === "placement") {
     levelKey = levelFor(await loadLevels(env), score).key;
-  } else if (attempt.test_key === "post") {
+  } else if (testKey === "post") {
     passed = (total ? Math.round((score / total) * 100) : 0) >= (attempt.pass_score ?? 70) ? 1 : 0;
+  } else if (testKey === "ielts-mockup") {
+    bands = await computeBands(env, correctBySkill);
   }
   const timedOut = now > attempt.expires_at ? 1 : 0;
 
   statements.push(env.DB.prepare(
     `UPDATE attempts SET status = 'submitted', submitted_at = ?, score = ?, total = ?, level_key = ?, timed_out = ?,
-            duration_seconds = ?, passed = ? WHERE id = ?`,
-  ).bind(now, score, total, levelKey, timedOut, Math.max(0, now - attempt.started_at), passed, attemptId));
+            duration_seconds = ?, passed = ?, bands = ? WHERE id = ?`,
+  ).bind(now, score, total, levelKey, timedOut, Math.max(0, now - attempt.started_at), passed, bands ? JSON.stringify(bands) : attempt.bands, attemptId));
 
   if (attempt.invite_id) {
     const nilai = total ? Math.round((score / total) * 100) : 0;
@@ -276,7 +357,9 @@ async function submitAttempt(request, env, attemptId) {
       env, attempt.student_id, "test",
       attempt.test_key === "post"
         ? `Mengerjakan post-test dengan nilai ${nilai} dan ${passed ? "dinyatakan lulus" : "belum mencapai nilai kelulusan"}.`
-        : `Mengerjakan pre-test dengan nilai ${nilai}.`,
+        : attempt.test_key === "ielts-mockup"
+          ? `Mengerjakan IELTS Mockup dengan band keseluruhan ${bands ? bands.overall : 0}.`
+          : `Mengerjakan pre-test dengan nilai ${nilai}.`,
       null, { attemptId }, now,
     ));
   }
@@ -289,7 +372,7 @@ async function submitAttempt(request, env, attemptId) {
     ok: true,
     total,
     timedOut: Boolean(timedOut),
-    ...(attempt.invite_id ? { result: inviteResult(attempt, score, total, passed) } : {}),
+    ...(attempt.invite_id ? { result: inviteResult(attempt, score, total, passed, bands) } : {}),
   });
 }
 

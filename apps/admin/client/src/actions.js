@@ -93,7 +93,7 @@ export async function deleteAttempts(ids, single) {
 }
 
 export async function sendTestLink(s, key) {
-  const t = testOf(key), name = key === "placement" ? "Placement Test" : key === "pre" ? "Pre-test" : "Post-test";
+  const t = testOf(key), name = key === "placement" ? "Placement Test" : key === "pre" ? "Pre-test" : key === "post" ? "Post-test" : "IELTS Mockup";
   if (!activeQuestions(t).length) {
     toast(`${name} belum punya soal aktif. Aktifkan soal dulu sebelum mengirim tautan.`, { label: "Buka soal", run: () => { location.hash = `#/tes/${key}/soal`; } });
     return;
@@ -106,12 +106,14 @@ export async function sendTestLink(s, key) {
     const r = await api(`/api/admin/students/${s.id}/invite`, { method: "POST", body: { test: key } });
     openWhatsApp(s, {
       title: `Kirim tautan ${name} ke ${firstName(s.name)}`,
-      text: testLinkText(s, key, r.link, r.expiresAt),
+      text: testLinkText(s, key, r.link, r.expiresAt, r.code),
       label: `Mengirim tautan ${name}`,
       link: r.link,
       linkHint: key === "placement"
         ? "Tautan umum placement test. Hasilnya masuk ke data siswa ini kalau email atau nomor WhatsApp yang diisi sama."
-        : `Tautan khusus untuk ${firstName(s.name)}. Hanya bisa dipakai sekali dan berlaku sampai ${fmtDateLong(r.expiresAt)}.`,
+        : key === "ielts-mockup"
+          ? `Tautan khusus untuk ${firstName(s.name)}. Kode 6 karakter di bawah ini wajib dimasukkan sebelum tes dimulai, dan tautan berlaku sampai ${r.expiresAt ? new Date(r.expiresAt).toLocaleDateString("id-ID", { day: "numeric", month: "long", year: "numeric" }) : "kedaluwarsa"}.`
+          : `Tautan khusus untuk ${firstName(s.name)}. Hanya bisa dipakai sekali dan berlaku sampai ${r.expiresAt ? new Date(r.expiresAt).toLocaleDateString("id-ID", { day: "numeric", month: "long", year: "numeric" }) : "kedaluwarsa"}.`,
     });
   } catch (error) {
     if (!sessionEnded(error)) toast(error.message);

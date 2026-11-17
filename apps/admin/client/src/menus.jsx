@@ -66,7 +66,7 @@ export function contextMenu(kind, id) {
     const s = db.students.find((x) => x.id === id);
     if (!s) return [];
     return [{ heading: "Kirim tautan lewat WhatsApp" },
-      ...[["placement", "Placement Test"], ["pre", "Pre-test"], ["post", "Post-test"]].map(([k, name]) => ({ label: name, run: () => sendTestLink(s, k) }))];
+      ...[["placement", "Placement Test"], ["pre", "Pre-test"], ["post", "Post-test"], ["ielts-mockup", "IELTS Mockup"]].map(([k, name]) => ({ label: name, run: () => sendTestLink(s, k) }))];
   }
   if (kind === "attempt") {
     const a = db.attempts.find((x) => x.id === id);

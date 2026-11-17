@@ -7,8 +7,8 @@
 <meta name="theme-color" content="#0A1B38">
 <title>Tes Penempatan Online - Titik Nol English Course</title>
 <link rel="icon" href="/favicon.svg" type="image/svg+xml">
-<link rel="stylesheet" href="/assets/app.css?v=20">
-<script type="module" src="/assets/app.js?v=19"></script>
+<link rel="stylesheet" href="/assets/app.css?v=21">
+<script type="module" src="/assets/app.js?v=21"></script>
 </head>
 <body data-screen="intro">
 <a class="skip-link" href="#main">Lewati ke konten</a>
@@ -199,6 +199,11 @@
           </label>
 
           <div class="consent__action">
+            <div class="field" id="code-field" hidden>
+              <label class="label" for="invite-code">Kode akses dari pesan WhatsApp</label>
+              <input class="input" id="invite-code" type="text" inputmode="text" maxlength="12" autocomplete="off" placeholder="6 karakter">
+              <p class="error" id="code-error" role="alert" hidden></p>
+            </div>
             <button class="btn btn--primary btn--lg" id="start-btn" type="submit" disabled>
               Mulai tes sekarang
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
@@ -241,6 +246,17 @@
       </p>
 
       <div class="test-grid">
+        <div class="audio-card" id="audio-card" hidden>
+          <p class="audio-card__label">Audio Listening</p>
+          <p class="audio-card__note" id="audio-note">Putar audionya saat kamu siap. Audio hanya bisa diputar satu kali, jadi pastikan tempatmu tenang dan speaker atau headsetmu menyala.</p>
+          <button class="btn btn--primary btn--lg" id="audio-play" type="button">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+              <path d="M8 5v14l11-7z"></path>
+            </svg>
+            Putar audio sekali ini
+          </button>
+          <audio id="listening-audio" preload="none"></audio>
+        </div>
         <div class="question-card">
           <div class="question-card__top">
             <span class="badge" id="question-badge">Soal 1 &middot; Grammar &amp; Structure</span>
@@ -703,11 +719,16 @@
           </div>
           <h1 class="result-card__level" id="score-title" tabindex="-1">Nilai kamu</h1>
           <p class="result-card__summary" id="score-summary"></p>
-          <div class="result-score">
+          <div class="result-score" id="score-plain">
             <span class="result-score__value" id="score-value">0</span>
             <span class="result-score__total" id="score-total">/ 0</span>
             <span class="result-score__label">jawaban benar</span>
           </div>
+          <div class="result-score result-score--band" id="score-band" hidden>
+            <span class="result-score__value" id="band-overall">0</span>
+            <span class="result-score__label">band keseluruhan</span>
+          </div>
+          <ul class="band-list" id="band-list" hidden></ul>
         </div>
 
         <div class="result-body panel">
@@ -716,7 +737,7 @@
             <p class="result-program" id="score-headline"></p>
           </div>
           <p class="result-description" id="score-description"></p>
-          <p class="micro">Nilai ini sudah tercatat di data kamu sebagai siswa Titik Nol English Course, jadi halaman ini boleh ditutup.</p>
+          <p class="micro" id="score-note">Nilai ini sudah tercatat di data kamu sebagai siswa Titik Nol English Course, jadi halaman ini boleh ditutup.</p>
         </div>
       </div>
     </div>

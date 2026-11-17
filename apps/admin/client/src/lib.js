@@ -76,6 +76,7 @@ export const LOG_TEXT = {
   copy_attempt: "Percobaan menyalin teks diblokir",
   shortcut_blocked: "Shortcut developer diblokir",
   submit: "Jawaban dikirim dan dinilai di server",
+  audio_played: "Audio listening diputar, sekali per percobaan",
   timeout: "Waktu habis, tes dihentikan tanpa mengirim jawaban",
   violation_stop: "Batas pelanggaran tercapai, tes dihentikan tanpa mengirim jawaban",
   email_sent: "Kontak diisi dan email hasil terkirim",
@@ -266,12 +267,13 @@ export function greetingFor(s) {
   return `${intro} Saya mau menindaklanjuti minat kamu untuk belajar bahasa Inggris di Titik Nol. Kalau berkenan, saya bisa bantu jelaskan pilihan program dan jadwal kelas terdekat.`;
 }
 
-export function testLinkText(s, key, link, expiresAt) {
+export function testLinkText(s, key, link, expiresAt, code) {
   const t = testOf(key);
   const facts = `${activeQuestions(t).length} soal dan dikerjakan dalam ${fmtSpan(testSeconds(t))}`;
   const first = firstName(s.name);
   const until = expiresAt ? ` Tautan ini khusus untuk kamu dan berlaku sampai ${fmtDateLong(expiresAt)}.` : "";
   if (key === "placement") return `Halo ${first}, ini tautan placement test Titik Nol English Course:\n${link}\n\nTesnya berisi ${facts}. Setelah selesai, rekomendasi level dan program akan dikirim ke email kamu. Kerjakan di tempat yang tenang dengan koneksi internet yang stabil, ya.`;
+  if (key === "ielts-mockup") return `Halo ${first}, ini tautan IELTS Mockup dari Titik Nol English Course:\n${link}\n\nKode akses kamu: ${code}\n\nMasukkan kode itu sebelum tes dimulai. Tesnya berisi ${facts}, audio listening diputar satu kali, dan hasilnya berupa perkiraan band untuk Listening dan Reading. Kerjakan di tempat yang tenang dengan koneksi internet yang stabil, ya.${until}`;
   if (key === "pre") return `Halo ${first}, sebelum kelas dimulai, silakan kerjakan pre-test lewat tautan ini:\n${link}\n\nPre-test berisi ${facts}. Nilainya kami pakai sebagai titik awal untuk melihat perkembangan kamu selama program.${until}`;
   return `Halo ${first}, program kamu sudah hampir selesai. Silakan kerjakan post-test lewat tautan ini:\n${link}\n\nPost-test berisi ${facts}. Hasilnya kami pakai untuk menentukan apakah kamu sudah siap lanjut ke level berikutnya.${until}`;
 }

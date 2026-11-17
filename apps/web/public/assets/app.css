@@ -1404,6 +1404,85 @@ kbd {
   color: var(--text-on-dark-muted);
 }
 
+/* The IELTS band rows inside the navy result card. */
+.band-list {
+  margin: var(--space-6) 0 0;
+  padding: var(--space-6) 0 0;
+  border-top: 1px solid rgba(255, 255, 255, .12);
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.band-list__row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 2px var(--space-4);
+  align-items: baseline;
+  color: var(--text-on-dark);
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.band-list__row strong {
+  font-size: 22px;
+  font-weight: 800;
+  letter-spacing: -.02em;
+  color: var(--yellow-400);
+  font-variant-numeric: tabular-nums;
+}
+
+.band-list__raw {
+  grid-column: 1 / -1;
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--text-on-dark-muted);
+}
+
+/* The code entry of the IELTS mockup invite, inside the consent action row. */
+#code-field { margin-bottom: var(--space-4); }
+
+#code-field .input {
+  max-width: 260px;
+  text-transform: uppercase;
+  letter-spacing: .18em;
+  font-weight: 700;
+  text-align: center;
+}
+
+/* The listening audio card sits above the question card in the test grid. */
+.audio-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-6);
+  border: 1px solid var(--gray-200);
+  border-radius: var(--radius-lg);
+  background: var(--white);
+  box-shadow: var(--shadow-card);
+}
+
+.audio-card__label {
+  margin: 0;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+}
+
+.audio-card__note {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--text-secondary);
+}
+
+.audio-card .btn { align-self: flex-start; }
+
+.audio-card audio { display: none; }
+
 .ladder { margin-top: var(--space-6); }
 
 .ladder__item {

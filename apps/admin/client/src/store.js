@@ -10,7 +10,7 @@ export const LOGIN = "/admin/login";
 
 export const PAGE_SIZE = 15;
 export const KEYS = ["A", "B", "C", "D"];
-export const TEST_KEYS = ["placement", "pre", "post"];
+export const TEST_KEYS = ["placement", "pre", "post", "ielts-mockup"];
 
 export let NOW = Date.now();
 export let ME = "";
@@ -110,8 +110,8 @@ export const ui = {
   test: "placement",
   pendaftaran: { q: "", studentId: null },
   students: { q: "", stage: "all", level: "", program: "", period: "", tutor: "", sort: "activity", dir: "desc", page: 1, selected: new Set() },
-  questions: { placement: { q: "", skill: "all" }, pre: { q: "", skill: "all" }, post: { q: "", skill: "all" } },
-  attempts: { placement: attemptFilter("30"), pre: attemptFilter("all"), post: attemptFilter("all") },
+  questions: { placement: { q: "", skill: "all" }, pre: { q: "", skill: "all" }, post: { q: "", skill: "all" }, "ielts-mockup": { q: "", skill: "all" } },
+  attempts: { placement: attemptFilter("30"), pre: attemptFilter("all"), post: attemptFilter("all"), "ielts-mockup": attemptFilter("all") },
   classes: { period: "", program: "" },
   certs: { q: "", type: "", status: "all", page: 1 },
   answers: "all",

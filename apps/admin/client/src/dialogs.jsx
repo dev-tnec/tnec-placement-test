@@ -93,8 +93,10 @@ function QuestionDialog({ id }) {
   const per = t.settings.timeMode === "per";
   const name = TEST_META[ui.test].name;
   const num = q ? questionNumber(t, q) : null;
-  const [key, setKey] = useState(q ? q.answer : "");
+  const [key, setKey] = useState(q && q.type !== "text" ? q.answer : "");
   const [hasPassage, setHasPassage] = useState(Boolean(q && q.passage));
+  const [type, setType] = useState(q ? q.type : "choice");
+  const isIelts = ui.test === "ielts-mockup";
 
   async function save(e) {
     e.preventDefault();
@@ -102,26 +104,39 @@ function QuestionDialog({ id }) {
     clearErrors(form);
     const prompt = $("#qe-prompt").value.trim();
     const passage = hasPassage ? $("#qe-passage").value.trim() : "";
-    const opts = {};
-    KEYS.forEach((k) => { opts[k] = $(`#qe-opt-${k}`).value.trim(); });
     let first = null;
     const fail = (input, errId, msg) => { fieldError(input, errId, msg); if (!first) first = input; };
     if (!prompt) fail($("#qe-prompt"), "qe-prompt-err", "Teks soal wajib diisi.");
     if (hasPassage && !passage) fail($("#qe-passage"), "qe-passage-err", "Bacaan wajib diisi kalau opsi bacaan dicentang.");
-    const empty = KEYS.filter((k) => !opts[k]);
-    if (empty.length) {
-      empty.forEach((k) => $(`#qe-opt-${k}`).classList.add("is-invalid"));
-      fail($(`#qe-opt-${empty[0]}`), "qe-options-err", empty.length === 4 ? "Isi keempat pilihan jawaban." : `Pilihan ${joinWords(empty)} masih kosong.`);
-    } else if (new Set(KEYS.map((k) => opts[k].toLowerCase())).size < 4) {
-      fail($("#qe-opt-A"), "qe-options-err", "Ada pilihan jawaban yang sama. Setiap pilihan harus berbeda.");
-    } else if (!key) {
-      fail(null, "qe-options-err", "Pilih satu jawaban yang benar dengan mengklik hurufnya.");
+
+    const body = { prompt, passage, type, skill: $("#qe-skill").value, status: $("#qe-status").value, ...(per ? { seconds: Number($("#qe-seconds")?.value) } : {}) };
+    if (isIelts) body.part = $("#qe-part").value || null;
+
+    if (type === "text") {
+      const accepted = $("#qe-accepted").value.split(/\n/).map((a) => a.trim()).filter(Boolean);
+      if (!accepted.length) fail($("#qe-accepted"), "qe-options-err", "Tulis minimal satu jawaban yang diterima, satu per baris.");
+      else if (new Set(accepted.map((a) => a.toLowerCase())).size !== accepted.length) fail($("#qe-accepted"), "qe-options-err", "Ada jawaban diterima yang ditulis dua kali.");
+      body.accepted = accepted;
+    } else {
+      const opts = {};
+      KEYS.forEach((k) => { opts[k] = $(`#qe-opt-${k}`)?.value.trim() || ""; });
+      const filled = KEYS.filter((k) => opts[k]);
+      if (filled.length < 2) {
+        filled.forEach((k) => $(`#qe-opt-${k}`).classList.add("is-invalid"));
+        fail($(`#qe-opt-${filled[filled.length - 1] || "A"}`) || $("#qe-opt-A"), "qe-options-err", "Isi minimal dua pilihan jawaban.");
+      } else if (filled.some((k, i) => filled.slice(0, i).some((j) => opts[j].toLowerCase() === opts[k].toLowerCase()))) {
+        fail($("#qe-opt-A"), "qe-options-err", "Ada pilihan jawaban yang sama. Setiap pilihan harus berbeda.");
+      } else if (!key || !opts[key]) {
+        fail(null, "qe-options-err", "Pilih satu jawaban yang benar dengan mengklik hurufnya.");
+      }
+      body.options = opts;
+      body.answer = key;
     }
+
     const seconds = Number($("#qe-seconds")?.value);
     if (per && (!Number.isInteger(seconds) || seconds < 5 || seconds > 180)) fail($("#qe-seconds"), "qe-seconds-err", "Waktu soal harus antara 5 dan 180 detik.");
     if (first) { first.focus(); return; }
 
-    const body = { prompt, passage, options: opts, answer: key, skill: $("#qe-skill").value, status: $("#qe-status").value, ...(per ? { seconds } : {}) };
     const done = busy(form.querySelector('[type="submit"]'), "Menyimpan...");
     const editing = q ? q.id : null;
     const result = await mutate(
@@ -133,7 +148,7 @@ function QuestionDialog({ id }) {
   }
 
   return (
-    <Modal id="dlg-question" focus="#qe-prompt" onClose={closeDialog} aria-labelledby="qe-title">
+    <Modal id="dlg-question" focus="#qe-prompt" onClose={closeDialog}>
       <form className="dialog__form" onSubmit={save} noValidate>
         <Head title={q ? (num ? `Ubah soal ${num}` : "Ubah soal draf") : "Tambah soal"}
           sub={q ? `${name}, ${q.skill}, ${q.status === "aktif" ? "aktif di tes" : "masih draf dan belum tampil di tes"}` : `${name}. Soal baru masuk di urutan terakhir.`} />
@@ -150,11 +165,29 @@ function QuestionDialog({ id }) {
             <p className="hint">Bacaan tampil di atas soal, seperti pada soal tentang kata presence.</p>
             <p className="error" id="qe-passage-err" hidden></p>
           </div>
-          <fieldset className="field">
+          {isIelts ? <fieldset className="field">
+            <legend className="label">Bentuk jawaban</legend>
+            <div className="modes" role="radiogroup" aria-label="Bentuk jawaban">
+              <label className={`mode${type === "choice" ? " is-on" : ""}`}>
+                <input type="radio" name="qe-type" value="choice" checked={type === "choice"} onChange={() => setType("choice")} /><span className="mode__mark" aria-hidden="true"></span>
+                <span><span className="mode__title">Pilihan</span><span className="mode__desc">Peserta memilih satu huruf, dua sampai enam pilihan.</span></span>
+              </label>
+              <label className={`mode${type === "text" ? " is-on" : ""}`}>
+                <input type="radio" name="qe-type" value="text" checked={type === "text"} onChange={() => setType("text")} /><span className="mode__mark" aria-hidden="true"></span>
+                <span><span className="mode__title">Isian teks</span><span className="mode__desc">Peserta mengetik jawaban, dinilai longgar terhadap daftar jawaban yang diterima.</span></span>
+              </label>
+            </div>
+          </fieldset> : null}
+          {type === "text" ? <div className="field">
+            <label className="label" htmlFor="qe-accepted">Jawaban yang diterima</label>
+            <textarea className="textarea" id="qe-accepted" rows="4" defaultValue={q && q.accepted ? q.accepted.join("\n") : ""} placeholder={"Satu jawaban per baris, contoh:\nlake\nthe lake"}></textarea>
+            <p className="hint">Huruf besar atau kecil, tanda baca, dan spasi ganda tidak dipedulikan saat menilai.</p>
+            <p className="error" id="qe-options-err" hidden></p>
+          </div> : <fieldset className="field">
             <legend className="label">Pilihan jawaban</legend>
-            <p className="hint">Klik huruf di sebelah kiri untuk menandai jawaban yang benar. Setiap soal memakai empat pilihan, A sampai D, sesuai tampilan tes.</p>
+            <p className="hint">Klik huruf di sebelah kiri untuk menandai jawaban yang benar. Kosongkan pilihan yang tidak dipakai; {isIelts ? "soal IELTS boleh dua sampai enam pilihan." : "soal Tes Penempatan memakai empat pilihan, A sampai D."}</p>
             <div className="opt-edit">
-              {KEYS.map((k) => (
+              {(isIelts ? KEYS : KEYS.slice(0, 4)).map((k) => (
                 <div key={k} className={`opt-row${key === k ? " is-key" : ""}`}>
                   <label className="key-label"><input className="key-radio" type="radio" name="qe-key" value={k} checked={key === k} onChange={() => setKey(k)} /><span className="key" aria-hidden="true">{k}</span><span className="sr-only">Tandai {k} sebagai jawaban benar</span></label>
                   <input className="input" id={`qe-opt-${k}`} defaultValue={q ? q.options[k] : ""} aria-label={`Teks pilihan ${k}`} autoComplete="off" />
@@ -163,12 +196,20 @@ function QuestionDialog({ id }) {
               ))}
             </div>
             <p className="error" id="qe-options-err" hidden></p>
-          </fieldset>
+          </fieldset>}
           <div className={per ? "form-grid form-grid--3" : "form-grid"} id="qe-meta">
             <div className="field">
               <label className="label" htmlFor="qe-skill">Skill</label>
-              <select className="select" id="qe-skill" defaultValue={q ? q.skill : "Grammar"}><option>Grammar</option><option>Vocabulary</option><option>Reading</option></select>
+              <select className="select" id="qe-skill" defaultValue={q ? q.skill : (isIelts ? "Listening" : "Grammar")}>
+                <OptList list={isIelts ? [["Listening", "Listening"], ["Reading", "Reading"]] : [["Grammar", "Grammar"], ["Vocabulary", "Vocabulary"], ["Reading", "Reading"]]} />
+              </select>
             </div>
+            {isIelts ? <div className="field">
+              <label className="label" htmlFor="qe-part">Bagian</label>
+              <select className="select" id="qe-part" defaultValue={q && q.part ? String(q.part) : ""}>
+                <OptList list={[["", "Tanpa bagian"], ["1", "Bagian 1"], ["2", "Bagian 2"], ["3", "Bagian 3"], ["4", "Bagian 4"]]} />
+              </select>
+            </div> : null}
             <div className="field" hidden={!per}>
               <label className="label" htmlFor="qe-seconds">Waktu soal</label>
               <div className="unit-row"><span className="unit"><input className="input" id="qe-seconds" type="number" min="5" max="180" step="1" inputMode="numeric" defaultValue={q ? q.seconds : t.settings.perDefault} /><span>detik</span></span></div>

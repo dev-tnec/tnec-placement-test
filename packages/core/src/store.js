@@ -5,8 +5,8 @@ import { LEVELS as LEVEL_COPY } from "./levels.js";
 import { randomToken } from "./crypto.js";
 import { nowSeconds } from "./http.js";
 
-export const TEST_KEYS = ["placement", "pre", "post"];
-export const TEST_NAMES = { placement: "Placement Test", pre: "Pre-test", post: "Post-test" };
+export const TEST_KEYS = ["placement", "pre", "post", "ielts-mockup"];
+export const TEST_NAMES = { placement: "Placement Test", pre: "Pre-test", post: "Post-test", "ielts-mockup": "IELTS Mockup" };
 export const FOCUS_TYPES = new Set(["fullscreen_exit", "tab_hidden", "window_blur"]);
 export const PER_MODE_GRACE_SECONDS = 120;
 
@@ -22,6 +22,8 @@ export function mapTest(row) {
     open: Boolean(row.is_open),
     maxViolations: row.max_violations,
     passScore: row.pass_score,
+    autoSubmit: Boolean(row.auto_submit),
+    audioUrl: row.audio_url || "",
     speakingEnabled: Boolean(row.speaking_enabled),
     speakingSeconds: row.speaking_seconds ?? 45,
     speakingMinSeconds: row.speaking_min_seconds ?? 15,
@@ -37,14 +39,21 @@ export async function loadTest(env, key) {
 }
 
 export function mapQuestion(row) {
+  const options = {};
+  for (const key of ["A", "B", "C", "D", "E", "F"]) {
+    if (row[`option_${key.toLowerCase()}`]) options[key] = row[`option_${key.toLowerCase()}`];
+  }
   return {
     id: row.id,
     test: row.test_key,
     position: row.position,
     skill: row.skill,
+    part: row.part ?? null,
+    type: row.type || "choice",
+    accepted: row.accepted ? JSON.parse(row.accepted) : null,
     prompt: row.prompt,
     passage: row.passage || "",
-    options: { A: row.option_a, B: row.option_b, C: row.option_c, D: row.option_d },
+    options,
     answer: row.answer,
     seconds: row.seconds,
     status: row.status,

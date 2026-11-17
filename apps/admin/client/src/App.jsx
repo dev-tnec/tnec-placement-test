@@ -18,6 +18,7 @@ const TEST_META = {
   placement: { name: "Placement Test", nav: "tes-placement" },
   pre: { name: "Pre-test", nav: "tes-pre" },
   post: { name: "Post-test", nav: "tes-post" },
+  "ielts-mockup": { name: "IELTS Mockup", nav: "tes-ielts" },
 };
 
 /* ===================== Sidebar ===================== */
@@ -35,6 +36,7 @@ function Sidebar({ nav }) {
     ["tes-placement", "#/tes/placement/soal", "clipboard", "Placement Test"],
     ["tes-pre", "#/tes/pre/soal", "note", "Pre-test"],
     ["tes-post", "#/tes/post/soal", "cap", "Post-test"],
+    ["tes-ielts", "#/tes/ielts-mockup/soal", "layers", "IELTS Mockup"],
   ];
   return (
     <aside className="sidebar" aria-label="Navigasi dasbor">

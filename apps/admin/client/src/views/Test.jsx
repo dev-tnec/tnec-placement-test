@@ -26,6 +26,7 @@ const TEST_META = {
   placement: { name: "Placement Test", who: "calon siswa" },
   pre: { name: "Pre-test", who: "siswa terdaftar" },
   post: { name: "Post-test", who: "siswa terdaftar" },
+  "ielts-mockup": { name: "IELTS Mockup", who: "siswa undangan" },
 };
 
 /* Jumlah soal aktif versus the top level threshold. */
@@ -81,7 +82,8 @@ function QuestionsTab() {
   const rows = t.questions.filter((x) => (f.skill === "all" || x.skill === f.skill)
     && (!q || `${x.prompt} ${x.passage} ${Object.values(x.options).join(" ")}`.toLowerCase().includes(q)));
   const counts = { all: t.questions.length };
-  SKILLS.forEach((k) => { counts[k] = t.questions.filter((x) => x.skill === k).length; });
+  const skills = [...new Set(t.questions.map((x) => x.skill))];
+  skills.forEach((k) => { counts[k] = t.questions.filter((x) => x.skill === k).length; });
 
   return <div className="stack">
     {ui.test === "placement" ? <LevelMismatchNotice /> : null}
@@ -92,7 +94,7 @@ function QuestionsTab() {
             onChange={(e) => { clearTimeout(questionTimer); const v = e.target.value; questionTimer = setTimeout(() => { f.q = v; notify(); }, 140); }} />
         </label>
         <div className="chips" role="group" aria-label="Saring skill">
-          {[["all", "Semua"], ...SKILLS.map((k) => [k, k])].map(([k, label]) => (
+          {[["all", "Semua"], ...skills.map((k) => [k, k])].map(([k, label]) => (
             <Chip key={k} value={k} label={label} n={counts[k]} pressed={f.skill === k} onClick={(v) => { f.skill = v; notify(); }} />
           ))}
         </div>
@@ -113,11 +115,16 @@ function QuestionsTab() {
             <tr key={x.id} className={x.status === "draf" ? "is-draft" : ""} onClick={rowRun(() => openQuestionEditor(x.id))}>
               <td className="is-no is-top">{num ? pad(num) : <span className="muted">Draf</span>}</td>
               <td>
+                {x.part ? <span className="q-tag">Bagian {x.part}</span> : null}
                 {x.passage ? <span className="q-tag"><Icon name="book" cls="icon--sm" />Dengan bacaan</span> : null}
                 <p className="q-prompt">{x.prompt}</p>
-                <ul className="opts" aria-label={`Pilihan jawaban, kunci ${x.answer}`}>
-                  {KEYS.map((k) => <li key={k} className={`opt${k === x.answer ? " is-key" : ""}`}><span className="opt__key">{k}</span><span className="opt__text">{x.options[k]}</span></li>)}
-                </ul>
+                {x.type === "text"
+                  ? <ul className="opts" aria-label="Jawaban yang diterima">
+                    <li className="opt is-key"><span className="opt__key">Kunci</span><span className="opt__text">{(x.accepted || []).join(", ")}</span></li>
+                  </ul>
+                  : <ul className="opts" aria-label={`Pilihan jawaban, kunci ${x.answer}`}>
+                    {Object.keys(x.options).map((k) => <li key={k} className={`opt${k === x.answer ? " is-key" : ""}`}><span className="opt__key">{k}</span><span className="opt__text">{x.options[k]}</span></li>)}
+                  </ul>}
               </td>
               <td className="hide-md">{x.skill}</td>
               <td className="hide-sm">
@@ -167,7 +174,9 @@ function SubmissionsTab() {
 
   const head = ui.test === "placement"
     ? <><th scope="col">Peserta</th><th scope="col">Skor</th><th scope="col" className="hide-sm">Level</th><th scope="col" className="hide-md">Durasi</th><th scope="col" className="hide-md">Pelanggaran</th><th scope="col" className="hide-xl">Email hasil</th></>
-    : <><th scope="col">Siswa</th><th scope="col" className="hide-md">Program</th><th scope="col" className="hide-tab">Tutor / Kelas</th>{ui.test === "post" ? <><th scope="col" className="hide-xl">Pre-test</th><th scope="col">Nilai</th><th scope="col">Hasil</th></> : <><th scope="col">Nilai</th><th scope="col" className="hide-lg">Durasi</th></>}</>;
+    : ui.test === "ielts-mockup"
+      ? <><th scope="col">Peserta</th><th scope="col">Listening</th><th scope="col">Reading</th><th scope="col">Band keseluruhan</th><th scope="col" className="hide-md">Audio</th></>
+      : <><th scope="col">Siswa</th><th scope="col" className="hide-md">Program</th><th scope="col" className="hide-tab">Tutor / Kelas</th>{ui.test === "post" ? <><th scope="col" className="hide-xl">Pre-test</th><th scope="col">Nilai</th><th scope="col">Hasil</th></> : <><th scope="col">Nilai</th><th scope="col" className="hide-lg">Durasi</th></>}</>;
 
   return <section className="panel">
     <div className="toolbar">
@@ -228,6 +237,20 @@ function AttemptRow({ a, sel, onToggle }) {
     ? <><a className="cell-main" href={href}>{s.name}</a><span className="cell-sub cell-ellipsis">{s.email}</span></>
     : <><a className="cell-main" href={href}>{a.contactName || "Tanpa nama"}</a><span className="cell-sub">ID {a.short}</span></>;
   const tail = <><td className="hide-lg nowrap">{fmtDateTime(a.startedAt)}</td><td><AttemptStatus a={a} /></td><td className="is-action chev hide-xl"><Icon name="chevron-right" /></td></>;
+  if (a.test === "ielts-mockup") {
+    const bands = a.bands || { skills: [], overall: 0 };
+    const listen = bands.skills.find((x) => x.skill === "Listening");
+    const read = bands.skills.find((x) => x.skill === "Reading");
+    return <tr className={sel ? "is-selected" : ""} onClick={rowClick(href)}>
+      <td className="is-check"><input type="checkbox" checked={sel} aria-label={`Pilih submission ${s ? s.name : a.contactName || a.short}`} onChange={(e) => onToggle(a.id, e.target.checked)} /></td>
+      <td>{person}</td>
+      <td className="nowrap tnum">{listen ? `${listen.raw} / 40, band ${listen.band}` : <span className="muted">Tidak ada</span>}</td>
+      <td className="nowrap tnum">{read ? `${read.raw} / 40, band ${read.band}` : <span className="muted">Tidak ada</span>}</td>
+      <td><strong className="tnum">{bands.overall || "-"}</strong></td>
+      <td className="hide-md">{a.audioPlayedAt ? <><Icon name="clock" cls="icon--sm" /> {fmtDateTime(a.audioPlayedAt)}</> : <span className="muted">Belum diputar</span>}</td>
+      {tail}
+    </tr>;
+  }
   if (a.test === "placement") {
     const level = a.levelKey ? levelByKey(a.levelKey) : null;
     const email = a.emailStatus === "sent" ? "Terkirim"
@@ -332,7 +355,8 @@ function SettingsTab({ testKey }) {
     const body = { timeMode: mode };
     if (mode === "total") {
       const m = Number(min), s = Number(sec), tot = m * 60 + s;
-      if (!Number.isInteger(m) || !Number.isInteger(s) || s < 0 || s > 59 || tot < 60 || tot > 3600) { fieldError($("#set-min"), "set-time-err", "Durasi tes harus antara 1 dan 60 menit, dengan detik dari 0 sampai 59."); $("#set-min").focus(); return; }
+      const maxMinutes = testKey === "ielts-mockup" ? 120 : 60;
+      if (!Number.isInteger(m) || !Number.isInteger(s) || s < 0 || s > 59 || tot < 60 || tot > maxMinutes * 60) { fieldError($("#set-min"), "set-time-err", `Durasi tes harus antara 1 dan ${maxMinutes} menit, dengan detik dari 0 sampai 59.`); $("#set-min").focus(); return; }
       body.totalSeconds = tot;
     } else {
       const v = Number(perDefault);
@@ -406,6 +430,18 @@ function SettingsTab({ testKey }) {
     ? "Kalau ditutup, halaman tes menampilkan pesan bahwa tes sedang tidak tersedia. Pakai ini saat tim sedang merombak soal."
     : "Siswa terdaftar membuka tes lewat tautan pribadi dari admin. Kalau ditutup, tautan itu menampilkan pesan bahwa tes belum dibuka.";
   const sum = db.speaking;
+  const [mockupAudio, setMockupAudio] = useState(st.audioUrl || "");
+  const [mockupAuto, setMockupAuto] = useState(st.autoSubmit);
+
+  async function saveMockupDelivery(e) {
+    clearErrors($("#panel-mockup"));
+    const url = mockupAudio.trim();
+    if (url && !url.startsWith("/")) { fieldError($("#set-audio"), "mockup-err", "Alamat audio harus dimulai dengan / dan dihosting di situs tes ini."); $("#set-audio").focus(); return; }
+    const done = busy(e.currentTarget, "Menyimpan...");
+    await mutate(() => api(`/api/admin/tests/ielts-mockup`, { method: "PUT", body: { audioUrl: url, autoSubmit: mockupAuto } }),
+      mockupAuto ? "Tersimpan. Saat waktu habis, jawaban terkirim otomatis." : "Tersimpan. Saat waktu habis, percobaan dianggap gagal.");
+    done();
+  }
 
   return <div className="stack">
     <section className="panel" id="panel-time">
@@ -478,6 +514,29 @@ function SettingsTab({ testKey }) {
         </div>
       </div>
       <div className="panel__foot panel__foot--end"><button className="btn btn--primary" type="button" disabled={Number(pass) === st.passScore} onClick={savePass}>Simpan nilai kelulusan</button></div>
+    </section> : null}
+
+    {testKey === "ielts-mockup" ? <section className="panel" id="panel-mockup">
+      <header className="panel__head"><div>
+        <h2 className="panel__title">Audio dan pengiriman</h2>
+        <p className="panel__desc">Audio listening diputar satu kali per percobaan. Alamatnya dihosting di situs tes ini dan dimulai dengan garis miring.</p>
+      </div></header>
+      <div className="panel__body rules">
+        <div className="field">
+          <label className="label" htmlFor="set-audio">Alamat audio listening</label>
+          <input className="input" id="set-audio" type="text" value={mockupAudio} onChange={(e) => setMockupAudio(e.target.value)} placeholder="/audio/ielts-dec-1.mp3" />
+          <p className="hint">Berkasnya disimpan tim teknis di bawah apps/web/public/audio.</p>
+          <p className="error" id="mockup-err" hidden></p>
+        </div>
+        <div className="field">
+          <label className="switch"><input type="checkbox" checked={mockupAuto} onChange={(e) => setMockupAuto(e.target.checked)} /><span className="switch__track" aria-hidden="true"></span>Kirim jawaban otomatis saat waktu habis</label>
+          <p className="hint">Aturan mock IELTS: waktu habis mengirim jawaban apa adanya dan tetap menghasilkan band. Matikan untuk menggagalkan percobaan seperti placement test.</p>
+        </div>
+      </div>
+      <div className="panel__foot panel__foot--end">
+        <span className="hint">{st.audioUrl ? `Audio sekarang: ${st.audioUrl}` : "Belum ada alamat audio."}</span>
+        <button className="btn btn--primary" type="button" onClick={saveMockupDelivery}>Simpan audio dan pengiriman</button>
+      </div>
     </section> : null}
 
     <section className="panel" id="panel-rules">
@@ -601,7 +660,8 @@ export function AttemptDetail({ testKey, id }) {
     return { no: i + 1, q, r: { choice: x.choice, ok: x.ok, key: x.key || (q ? q.answer : "") } };
   });
   const hasAnswers = answerRows.length > 0;
-  const skillRows = hasAnswers ? SKILLS.map((k) => {
+  const answerSkills = [...new Set(answerRows.filter((x) => x.q).map((x) => x.q.skill))];
+  const skillRows = hasAnswers ? answerSkills.map((k) => {
     const rows = answerRows.filter((x) => x.q && x.q.skill === k);
     return { k, ok: rows.filter((x) => x.r.ok).length, n: rows.length };
   }).filter((r) => r.n) : [];
@@ -617,7 +677,7 @@ export function AttemptDetail({ testKey, id }) {
     if (e.type === "consent" && a.consent) text += ` versi ${a.consent}`;
     if (e.by) text += ` oleh ${e.by}`;
     return (
-      <li key={i} className="feed__item"><span className="feed__icon" aria-hidden="true"><Icon name={e.strike ? "alert" : e.type.startsWith("email") ? "mail" : e.type.startsWith("speaking") ? "mic" : e.type === "voided" ? "ban" : "clock"} /></span>
+      <li key={i} className="feed__item"><span className="feed__icon" aria-hidden="true"><Icon name={e.strike ? "alert" : e.type.startsWith("email") ? "mail" : e.type.startsWith("speaking") ? "mic" : e.type === "audio_played" ? "clock" : e.type === "voided" ? "ban" : "clock"} /></span>
         <div><p className="feed__text">{text}</p><p className="feed__meta"><span className="log__time">{fmtDate(e.at)}, {fmtTime(e.at, true)}</span></p></div></li>
     );
   });
@@ -630,7 +690,14 @@ export function AttemptDetail({ testKey, id }) {
   const c = s ? classById(s.classId) : null;
   const detailNote = a.loading ? "rincian sedang dimuat" : hasAnswers ? `${wrong} salah dan ${blank} kosong` : "";
   const cells = [];
-  if (testKey === "placement") {
+  if (testKey === "ielts-mockup") {
+    const bands = a.bands || { skills: [], overall: 0 };
+    cells.push(cell("Band keseluruhan", bands.overall || "-", "perkiraan dari Listening dan Reading"));
+    for (const sk of bands.skills) {
+      cells.push(cell(`${sk.skill} (band ${sk.band})`, `${sk.raw}<small> / 40</small>`, `benar ${sk.raw} dari 40`));
+    }
+    cells.push(cell("Audio", a.audioPlayedAt ? "Diputar" : "Belum diputar", a.audioPlayedAt ? fmtDateTime(a.audioPlayedAt) : "aturan mock: sekali per attempt"));
+  } else if (testKey === "placement") {
     cells.push(cell("Skor", a.score === null ? "Tidak dinilai" : <>{a.score}<small> / {total}</small></>, a.score === null ? "percobaan gagal tidak punya skor" : detailNote || `${a.score} jawaban benar`));
     cells.push(cell("Level", level ? level.label : "Tidak ada", level ? level.program : "level hanya untuk tes yang dinilai"));
   } else {
@@ -686,8 +753,10 @@ export function AttemptDetail({ testKey, id }) {
               <tr key={no}>
                 <td className="is-no">{pad(no)}</td>
                 <td>{q ? <span className="clamp-1">{q.prompt}</span> : <span className="muted">Soal ini sudah dihapus dari bank soal.</span>}</td>
-                <td>{r.choice ? <span className={r.ok ? "" : "is-wrong"}>{r.choice}{q ? `, ${q.options[r.choice]}` : ""}</span> : <span className="muted">Tidak dijawab</span>}</td>
-                <td className="hide-sm">{r.key}{q && q.options[r.key] ? `, ${q.options[r.key]}` : ""}</td>
+                <td>{r.choice
+                  ? <span className={r.ok ? "" : "is-wrong"}>{r.choice}{q && q.options && q.options[r.choice] ? `, ${q.options[r.choice]}` : ""}</span>
+                  : <span className="muted">Tidak dijawab</span>}</td>
+                <td className="hide-sm">{r.key}{q && q.options && q.options[r.key] ? `, ${q.options[r.key]}` : ""}{q && q.accepted && q.type === "text" ? <span className="cell-sub">Diterima: {(q.accepted || []).join(", ")}</span> : ""}</td>
                 <td>{r.ok ? <span className="result result--ok"><Icon name="check" />Benar</span> : r.choice ? <span className="result result--bad"><Icon name="x" />Salah</span> : <span className="result result--none">Kosong</span>}</td>
               </tr>
             ))}</tbody>
