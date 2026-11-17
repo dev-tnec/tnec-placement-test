@@ -106,8 +106,8 @@ const els = {
   speakNote: $("#speak-note"),
   speakError: $("#speak-error"),
   speakMeter: $("#speak-meter"),
-  speakMeterFill: $("#speak-meter-fill"),
   speakTimer: $("#speak-timer"),
+  recWave: $("#rec-wave"),
   speakStart: $("#speak-start"),
   speakStop: $("#speak-stop"),
   speakSkip: $("#speak-skip"),
@@ -1146,6 +1146,10 @@ async function skipSpeaking() {
   }
 }
 
+/* The sound wave: one bar per slice of the mic signal, so the student sees the recording is
+   live. The overall level still drives the "too loud" state. */
+const WAVE_BARS = 28;
+
 function startMeter() {
   try {
     state.recCtx = new AudioContext();
@@ -1158,18 +1162,29 @@ function startMeter() {
     state.recAnalyser = null;
     return;
   }
+  if (!els.recWave.childElementCount) {
+    for (let i = 0; i < WAVE_BARS; i += 1) els.recWave.append(document.createElement("span"));
+  }
+  const bars = [...els.recWave.children];
   const data = new Uint8Array(state.recAnalyser.fftSize);
+  const chunk = Math.ceil(data.length / bars.length);
+  const rms = (from, to) => {
+    let sum = 0;
+    for (let i = from; i < to; i += 1) {
+      const x = (data[i] - 128) / 128;
+      sum += x * x;
+    }
+    return Math.sqrt(sum / Math.max(1, to - from));
+  };
   const tick = () => {
     if (!state.recAnalyser) return;
     state.recAnalyser.getByteTimeDomainData(data);
-    let sum = 0;
-    for (const value of data) {
-      const x = (value - 128) / 128;
-      sum += x * x;
-    }
-    const level = Math.min(1, Math.sqrt(sum / data.length) * 6);
-    els.speakMeterFill.style.transform = `scaleX(${level.toFixed(3)})`;
-    els.speakMeter.classList.toggle("is-loud", level > 0.9);
+    els.speakMeter.classList.toggle("is-loud", Math.min(1, rms(0, data.length) * 6) > 0.9);
+    bars.forEach((bar, i) => {
+      const from = i * chunk;
+      const level = Math.min(1, rms(from, Math.min(from + chunk, data.length)) * 6);
+      bar.style.transform = `scaleY(${(0.12 + level * 0.88).toFixed(3)})`;
+    });
     state.recMeterId = requestAnimationFrame(tick);
   };
   tick();
@@ -1181,7 +1196,7 @@ function stopMeter() {
   state.recAnalyser = null;
   if (state.recCtx) state.recCtx.close().catch(() => {});
   state.recCtx = null;
-  els.speakMeterFill.style.transform = "scaleX(0)";
+  for (const bar of els.recWave.children) bar.style.transform = "scaleY(0.12)";
   els.speakMeter.classList.remove("is-loud");
 }
 

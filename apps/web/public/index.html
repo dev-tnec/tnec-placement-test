@@ -7,8 +7,8 @@
 <meta name="theme-color" content="#0A1B38">
 <title>Tes Penempatan Online - Titik Nol English Course</title>
 <link rel="icon" href="/favicon.svg" type="image/svg+xml">
-<link rel="stylesheet" href="/assets/app.css?v=10">
-<script type="module" src="/assets/app.js?v=14"></script>
+<link rel="stylesheet" href="/assets/app.css?v=11">
+<script type="module" src="/assets/app.js?v=15"></script>
 </head>
 <body data-screen="intro">
 <a class="skip-link" href="#main">Lewati ke konten</a>
@@ -334,6 +334,16 @@
     <div class="wrap wrap--details">
       <div class="speaking-grid">
 
+        <!-- The recording indicator, shared by the voice check and the answer -->
+        <div class="rec-card" id="speak-meter" hidden>
+          <div class="rec-card__head">
+            <span class="rec-dot" aria-hidden="true"></span>
+            <p class="rec-label">Merekam suara kamu</p>
+            <p class="rec-timer" id="speak-timer" role="timer" aria-live="off">00:00</p>
+          </div>
+          <div class="rec-wave" id="rec-wave" aria-hidden="true"></div>
+        </div>
+
         <!-- Step 1: the voice check -->
         <div class="question-card" id="speak-check-card">
           <div class="question-card__top">
@@ -355,11 +365,6 @@
             </ol>
 
             <p class="banner banner--warning" id="speak-error" hidden></p>
-
-            <div class="speak-meter" id="speak-meter" hidden>
-              <span class="speak-meter__fill" id="speak-meter-fill"></span>
-            </div>
-            <p class="speak-timer" id="speak-timer" role="timer" aria-live="off" hidden>00:00</p>
 
             <div class="speak-actions">
               <button class="btn btn--primary btn--lg" id="speak-check-start" type="button">
