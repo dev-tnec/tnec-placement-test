@@ -915,7 +915,7 @@ function enterSpeaking() {
   resetCheckUi();
   showScreen("speaking");
   if (!recordingSupported()) {
-    speakUnavailable("Browser ini tidak bisa merekam suara, jadi bagian speaking dilewati. Tes kamu tetap bisa dilanjutkan.");
+    speakUnavailable("Browser atau perangkat ini tidak mendukung perekaman suara, jadi bagian speaking tidak bisa dikerjakan. Silakan lanjut tanpa rekaman: hasil tes kamu tetap kami proses, hanya tanpa nilai speaking.");
   }
 }
 
@@ -930,10 +930,23 @@ function resetCheckUi() {
   els.speakCheckReview.hidden = true;
 }
 
-function speakUnavailable(message) {
+/* The recording feedback and the problem notices appear inside the visible card, right above the
+   buttons the student pressed, never as a box floating on top of the page. */
+function placeSpeakFeedback(...nodes) {
+  const actions = els.speakAnswerCard.hidden
+    ? els.speakCheckCard.querySelector(".speak-actions")
+    : els.speakAnswerCard.querySelector(".speak-actions");
+  actions.before(...nodes);
+}
+
+function speakUnavailable(message, { retry = false } = {}) {
+  placeSpeakFeedback(els.speakError, els.speakSkip);
   els.speakError.textContent = message;
   els.speakError.hidden = false;
-  els.speakCheckStart.hidden = true;
+  // With a permission problem the student can fix it in the address bar and record again,
+  // so the record button stays available. Only a browser that cannot record at all hides it.
+  els.speakCheckStart.hidden = !retry;
+  els.speakCheckStart.disabled = false;
   els.speakCheckStop.hidden = true;
   els.speakMeter.hidden = true;
   els.speakTimer.hidden = true;
@@ -962,7 +975,10 @@ async function startRecording(mode) {
   } catch {
     state.speakBusy = false;
     startBtn.disabled = false;
-    speakUnavailable("Mikrofon tidak bisa dipakai. Periksa izin mikrofon di browser kamu, atau lanjutkan tanpa rekaman.");
+    speakUnavailable(
+      "Rekaman tidak bisa dimulai karena browser kamu belum mengizinkan mikrofonnya. Ketuk ikon gembok atau ikon mikrofon di address bar, pilih Izinkan untuk situs ini, lalu tekan tombol rekam sekali lagi. Kalau kamu memilih lanjut tanpa rekaman, hasil tes kamu tetap kami proses, hanya tanpa nilai speaking.",
+      { retry: true },
+    );
     return;
   }
   state.speakBusy = false;
@@ -980,6 +996,8 @@ async function startRecording(mode) {
   state.recStart = Date.now();
   startBtn.hidden = true;
   els.speakError.hidden = true;
+  els.speakSkip.hidden = true;
+  placeSpeakFeedback(els.speakMeter);
   els.speakMeter.hidden = false;
   els.speakTimer.hidden = false;
   stopBtn.hidden = false;
