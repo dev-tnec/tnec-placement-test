@@ -1601,26 +1601,23 @@ kbd {
 
 #speak-error { margin-top: 0; }
 
-/* The recording feedback sits inside the card, right above the buttons the student pressed. */
+/* The recording feedback sits inside the card, right above the buttons the student pressed.
+   One aligned row: dot, label, live wave, timer, all on the same center line. */
 .rec-card {
-  display: grid;
-  gap: var(--space-2);
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  margin-top: var(--space-5);
   margin-bottom: var(--space-4);
 }
 
 /* The display above wins over the hidden attribute's default rule, so hidden needs this guard. */
 .rec-card[hidden] { display: none; }
 
-.rec-card__head {
-  display: flex;
-  align-items: center;
-  gap: var(--space-3);
-}
-
 .rec-dot {
   flex: none;
-  width: 12px;
-  height: 12px;
+  width: 10px;
+  height: 10px;
   border-radius: 50%;
   background: var(--red-500);
   animation: rec-pulse 1s ease-in-out infinite;
@@ -1632,38 +1629,44 @@ kbd {
 }
 
 .rec-label {
+  flex: none;
   font-size: var(--text-sm);
   font-weight: 700;
+  line-height: 1;
   color: var(--red-600);
+  white-space: nowrap;
 }
 
+.rec-wave {
+  display: flex;
+  flex: 1 1 auto;
+  align-items: center;
+  justify-content: space-between;
+  gap: 3px;
+  height: 24px;
+  min-width: 48px;
+}
+
+.rec-wave span {
+  flex: 1 1 0;
+  max-width: 4px;
+  height: 100%;
+  border-radius: var(--radius-pill);
+  background: var(--red-500);
+  transform: scaleY(0.15);
+  transition: transform 90ms linear;
+}
+
+.rec-card.is-loud .rec-wave span { background: var(--red-600); }
+
 .rec-timer {
-  margin-left: auto;
-  font-size: 26px;
+  flex: none;
+  font-size: 22px;
   font-weight: 800;
   line-height: 1;
   letter-spacing: -.02em;
   font-variant-numeric: tabular-nums;
 }
-
-.rec-wave {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 4px;
-  height: 40px;
-}
-
-.rec-wave span {
-  width: 4px;
-  height: 100%;
-  border-radius: var(--radius-pill);
-  background: var(--red-500);
-  transform: scaleY(0.12);
-  transition: transform 90ms linear;
-}
-
-.rec-card.is-loud .rec-wave span { background: var(--red-600); }
 
 .speak-actions {
   display: flex;

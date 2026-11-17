@@ -7,7 +7,7 @@
 <meta name="theme-color" content="#0A1B38">
 <title>Tes Penempatan Online - Titik Nol English Course</title>
 <link rel="icon" href="/favicon.svg" type="image/svg+xml">
-<link rel="stylesheet" href="/assets/app.css?v=14">
+<link rel="stylesheet" href="/assets/app.css?v=15">
 <script type="module" src="/assets/app.js?v=17"></script>
 </head>
 <body data-screen="intro">
@@ -336,12 +336,10 @@
 
         <!-- The recording indicator, shared by the voice check and the answer -->
         <div class="rec-card" id="speak-meter" hidden>
-          <div class="rec-card__head">
-            <span class="rec-dot" aria-hidden="true"></span>
-            <p class="rec-label">Merekam suara kamu</p>
-            <p class="rec-timer" id="speak-timer" role="timer" aria-live="off">00:00</p>
-          </div>
+          <span class="rec-dot" aria-hidden="true"></span>
+          <p class="rec-label">Merekam suara kamu</p>
           <div class="rec-wave" id="rec-wave" aria-hidden="true"></div>
+          <p class="rec-timer" id="speak-timer" role="timer" aria-live="off">00:00</p>
         </div>
 
         <!-- The speaking problem notice, shared by both cards -->
