@@ -41,7 +41,7 @@ The full flow passes in a headless browser against the `dev` branch: first admin
 | Runtime | Node.js 21.7 or newer. Plain `node:http`, no framework |
 | Database | Neon PostgreSQL through `pg`, the only runtime dependency |
 | Email | Cloudflare Email Sending REST API, `packages/core/src/mailer.js` |
-| AI writing scoring | Google AI Studio (Gemini) REST API through `packages/core/src/writing.js`, `GEMINI_API_KEY`, default model `gemini-2.5-flash`; `GEMINI_MOCK=1` for local tests |
+| AI writing scoring | Google AI Studio (Gemini) native `generateContent` REST API through `packages/core/src/writing.js`, `GEMINI_API_KEY`; production model `gemini-3.8-flash`, code fallback `gemini-2.5-flash`; `GEMINI_MOCK=1` for local tests |
 | Speaking scoring | Speechace REST API through `packages/core/src/speaking.js` and `speaking-mockup-worker.js`, `SPEECHACE_KEY`; `SPEECHACE_MOCK=1` for local tests |
 | Speaking videos | 18 examiner clips in `apps/web/public/video/speaking`, taken from the IELTS Online Tests material. Confirm the rights before charging for the mockup |
 | WhatsApp | AttCos (CSQ API), `POST {ATTCOS_API_BASE}/messages`, on a WhatsApp account linked through Baileys |
@@ -335,7 +335,7 @@ The REST calls behind the helper use `Authorization: Bearer <key>` against `http
 | PUT | `/services/{id}/env-vars/{key}` | Add or update one, body `{"value":"..."}` |
 | DELETE | `/services/{id}/env-vars/{key}` | Delete one |
 
-On 17 November 2026 both placement services have `SPEECHACE_KEY`, `DATABASE_URL`, the Cloudflare email keys, and the AttCos keys. Neither has `GEMINI_API_KEY` or `GEMINI_MODEL`, so Writing scoring fails in production until the owner provides the key. The local `.env` does not have it either.
+On 17 November 2026 both placement services have `SPEECHACE_KEY`, `GEMINI_API_KEY`, `GEMINI_MODEL=gemini-3.8-flash`, `DATABASE_URL`, the Cloudflare email keys, and the AttCos keys. The local `.env` does not have the Gemini key; local tests use `GEMINI_MOCK=1` in `.env.dev`.
 
 ## Known limits and next steps
 
@@ -349,6 +349,6 @@ On 17 November 2026 both placement services have `SPEECHACE_KEY`, `DATABASE_URL`
 8. Both dashboard roles see everything.
 9. The apps run on their onrender.com addresses. A custom domain on `titiknolenglish.com` is not set up yet; adding one means changing `PUBLIC_WEB_URL` and `ADMIN_URL` on Render too.
 10. Certificates have no signature image, no QR code or public page to verify them, and no server-side PDF. The IELTS template still prints the title IELTS SIMULATION while the type is called IELTS Prediction; confirm which one is right. The completion template keeps an empty 3 x 4 photo box.
-11. Writing is AI only, by the owner's decision, with no human review. A wrong AI band is corrected only by pressing Nilai ulang writing after fixing the key or the prompt. The Task 1 chart image is not sent to Gemini, so the model grades that task from the prompt text and the essay. The overall band uses the four skills when the speaking is graded; a skipped or failed speaking leaves it at three. The AI call runs inside the submit request, so a slow Gemini response delays the result screen; a failure stores `writing_status` failed and the team can re-score. The production services need `GEMINI_API_KEY`; without it every writing score fails with a clear message.
+11. Writing is AI only, by the owner's decision, with no human review. A wrong AI band is corrected only by pressing Nilai ulang writing after fixing the key or the prompt. The Task 1 chart image is not sent to Gemini, so the model grades that task from the prompt text and the essay. The overall band uses the four skills when the speaking is graded; a skipped or failed speaking leaves it at three. The AI call runs inside the submit request, so a slow Gemini response delays the result screen; a failure stores `writing_status` failed and the team can re-score. The production services have `GEMINI_API_KEY` and `GEMINI_MODEL=gemini-3.8-flash`; a missing key still fails with a clear message.
 12. The mockup speaking is Speechace only, with no manual band entry yet. A failed answer can be re-queued from the submission page; if Speechace keeps failing, the result stays without Speaking. Each attempt sends up to 18 Speechace calls, so watch the quota. The 18 examiner videos come from IELTS Online Tests and their rights must be confirmed before charging. The headless test browser denies the microphone, so the recording path is covered by the placement speaking tests and the server tests, not by a full mockup recording run.
 13. The student runner and the result report are two Vite builds. A change under `apps/web/student` or `apps/web/result` needs `npm run build:web` before it is served or pushed, because Render serves the committed build and does not run a build command. `npm test` checks that both build outputs and their entry bundles exist.
