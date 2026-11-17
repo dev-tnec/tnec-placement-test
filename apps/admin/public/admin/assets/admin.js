@@ -312,7 +312,7 @@ function withDetail(a) {
 /* ===================== UI state ===================== */
 const attemptFilter = (days) => ({ q: "", status: "all", speaking: "all", level: "", days, period: "", program: "", result: "", page: 1, selected: new Set() });
 const ui = {
-  period: 7,
+  ringkasanPeriode: "",
   test: "placement",
   pendaftaran: { q: "", studentId: null },
   students: { q: "", stage: "all", level: "", program: "", period: "", tutor: "", sort: "activity", dir: "desc", page: 1, selected: new Set() },
@@ -389,29 +389,19 @@ function applyWidths(root = document) { $$("[data-w]", root).forEach((el) => { e
 
 /* ===================== View: Ringkasan ===================== */
 function viewOverview() {
-  const P = ui.period;
-  const since = NOW - P * DAY, prevSince = since - P * DAY;
-  const placement = testOf("placement");
-  const own = db.attempts.filter((a) => a.test === "placement");
-  const cur = own.filter((a) => a.startedAt >= since);
-  const prev = own.filter((a) => a.startedAt >= prevSince && a.startedAt < since);
-  const submitted = cur.filter(isSubmitted).length, submittedPrev = prev.filter(isSubmitted).length;
-  const graded = cur.filter(isGraded);
-  const timeouts = cur.filter((a) => a.status === "timeout").length;
-  const stopped = cur.filter((a) => a.status === "violation").length;
-  const avg = graded.length ? graded.reduce((sum, a) => sum + a.score, 0) / graded.length : 0;
-  const levelCounts = db.levels.map((l) => ({ level: l, n: graded.filter((a) => a.levelKey === l.key).length }));
-  const peak = levelCounts.reduce((b, c) => (c.n > b.n ? c : b), levelCounts[0]);
-  const maxLevel = Math.max(1, peak.n);
-  const enrolled = db.enrolledAt.filter((at) => at >= since).length;
-  const newLeads = db.students.filter((s) => s.createdAt >= since).length;
-  const diff = submitted - submittedPrev;
-  const deltaText = diff === 0 ? `sama dengan ${P} hari sebelumnya` : `${diff > 0 ? "naik" : "turun"} ${Math.abs(diff)} dibanding ${P} hari sebelumnya`;
-  const stopText = timeouts + stopped === 0 ? "tidak ada tes yang berhenti di tengah jalan" : `${timeouts} berhenti karena waktu habis dan ${stopped} karena pelanggaran`;
+  const pid = ui.ringkasanPeriode;
+  const period = pid ? periodById(pid) : null;
+  const scopeLabel = period ? `periode ${fmtDate(period.start)}` : "semua periode";
+
+  // The whole page is scoped by the selected intake period: registrations, active students, classes.
+  const regs = db.pendaftaran.filter((p) => (!pid || p.periodId === pid) && p.status !== "batal")
+    .sort((a, b) => b.registeredAt - a.registeredAt);
+  const activeStudents = new Set(regs.filter((p) => p.status === "aktif").map((p) => p.studentId)).size;
+  const scopeClasses = db.classes.filter((c) => !pid || c.periodId === pid)
+    .sort((a, b) => (periodById(b.periodId)?.start || 0) - (periodById(a.periodId)?.start || 0) || a.code.localeCompare(b.code));
+  const seats = scopeClasses.reduce((sum, c) => sum + studentsInClass(c).length, 0);
+  const capacity = scopeClasses.reduce((sum, c) => sum + c.capacity, 0);
   const queue = leads().filter((s) => s.stage === "baru" && !isColdLead(s)).sort((a, b) => a.createdAt - b.createdAt);
-  const stats = accuracyMap("placement", since);
-  const hardest = activeQuestions(placement).map((q) => ({ q, st: stats.get(q.id) })).filter((x) => x.st && x.st.n >= 5)
-    .sort((a, b) => a.st.correct / a.st.n - b.st.correct / b.st.n).slice(0, 5);
   const stat = (label, value, note) => `<div class="stat"><p class="stat__label">${esc(label)}</p><p class="stat__value">${value}</p><p class="stat__note">${esc(note)}</p></div>`;
 
   const queueRows = queue.slice(0, 6).map((s) => {
@@ -430,13 +420,29 @@ function viewOverview() {
     </tr>`;
   }).join("");
 
+  const regRows = regs.slice(0, 8).map((p) => {
+    const s = studentById(p.studentId);
+    const c = classById(p.classId);
+    return `<tr data-href="#/siswa/${p.studentId}">
+      <td><a class="cell-main" href="#/siswa/${p.studentId}">${esc(s ? s.name : "Terhapus")}</a></td>
+      <td>${esc(programById(p.programId)?.name || "-")}</td>
+      <td class="hide-sm">${c ? personHtml(c.tutor, classLabel(c)) : `<span class="muted">Belum ada</span>`}</td>
+      <td>${pendaftaranStatusHtml(p)}</td>
+      <td class="hide-md cell-sub">${esc(fmtDate(p.registeredAt))}<span>oleh ${esc(p.registeredBy || "-")}</span></td>
+    </tr>`;
+  }).join("");
+
+  const classRows = scopeClasses.slice(0, 8).map((c) => `<tr data-href="#/program/kelas">
+    <td><span class="cell-main">${esc(c.code)}</span><span class="cell-sub">${esc(programById(c.programId)?.name || "")}</span></td>
+    <td>${personHtml(c.tutor, c.tutor)}</td>
+    <td class="hide-sm">${esc(periodLabel(c.periodId))}</td>
+    <td class="tnum">${studentsInClass(c).length}<small> / ${c.capacity}</small></td>
+  </tr>`).join("");
+
   main.innerHTML = `
     ${pageHead({
       title: "Ringkasan",
-      actions: `<div class="seg seg--sm" role="group" aria-label="Periode data">
-        <button class="seg__item" type="button" data-action="period" data-value="7" aria-pressed="${P === 7}">7 hari</button>
-        <button class="seg__item" type="button" data-action="period" data-value="30" aria-pressed="${P === 30}">30 hari</button>
-      </div>`,
+      actions: `<select class="select select--auto" data-change="ringkasan-periode" aria-label="Pilih periode">${options(periodOptions("Semua periode"), pid)}</select>`,
     })}
     <div class="stack">
       ${db.speaking.review || db.speaking.failedLastHour >= 5 ? `<section class="panel" aria-label="Speaking">
@@ -449,10 +455,10 @@ function viewOverview() {
 
       <section class="panel" aria-label="Angka utama">
         <div class="stats">
-          ${stat("Submission placement test", fmtNum(submitted), deltaText)}
-          ${stat("Tingkat selesai", `${pct(submitted, cur.length)}%`, stopText)}
-          ${stat("Skor rata-rata", `${fmtNum(avg, 1)}<small> / ${activeQuestions(placement).length}</small>`, graded.length ? `level terbanyak ${peak.level.label}` : "belum ada tes yang dinilai")}
-          ${stat("Siswa terdaftar", fmtNum(enrolled), `dari ${newLeads} calon siswa baru`)}
+          ${stat("Pendaftaran", fmtNum(regs.length), scopeLabel)}
+          ${stat("Siswa aktif", fmtNum(activeStudents), "mengikuti program berjalan")}
+          ${stat("Kursi kelas", `${fmtNum(seats)}<small> / ${fmtNum(capacity)}</small>`, `${scopeClasses.length} kelas dibuka`)}
+          ${stat("Lead menunggu", fmtNum(queue.length), "belum dihubungi, lead dingin tidak dihitung")}
         </div>
       </section>
 
@@ -474,33 +480,29 @@ function viewOverview() {
       <div class="grid-2">
         <section class="panel">
           <header class="panel__head"><div>
-            <h2 class="panel__title">Sebaran level placement</h2>
-            <p class="panel__desc">Dari ${graded.length} submission placement test yang dinilai dalam ${P} hari terakhir.</p>
+            <h2 class="panel__title">Pendaftaran ${scopeLabel}</h2>
+            <p class="panel__desc">Siswa yang masuk ke program, dari yang paling baru.</p>
           </div></header>
-          ${graded.length ? `<ul class="dist">${levelCounts.map((c) => `<li class="dist__row">
-            <span class="dist__name">${esc(c.level.label)}<span class="cell-sub">skor ${c.level.min} sampai ${c.level.max}</span></span>
-            <span class="bar" aria-hidden="true"><span class="bar__fill${c === peak ? " is-peak" : ""}" data-w="${(c.n / maxLevel) * 100}"></span></span>
-            <span class="dist__val">${c.n}<span class="cell-sub">${pct(c.n, graded.length)}%</span></span>
-          </li>`).join("")}</ul>` : emptyHtml("Belum ada submission dalam periode ini.", "Coba lihat periode 30 hari.")}
+          ${regs.length ? `<div class="table-wrap"><table class="table">
+            <thead><tr><th scope="col">Siswa</th><th scope="col">Program</th><th scope="col" class="hide-sm">Kelas</th><th scope="col">Status</th><th scope="col" class="hide-md">Didaftarkan</th></tr></thead>
+            <tbody>${regRows}</tbody></table></div>
+            ${regs.length > 8 ? `<div class="panel__foot"><span>${regs.length - 8} pendaftaran lain.</span><a class="link-btn" href="#/siswa">Buka Database Siswa</a></div>` : ""}`
+            : emptyHtml(`Belum ada pendaftaran di ${scopeLabel}.`, "Daftarkan siswa dari tombol Daftarkan siswa di halaman Database Siswa.")}
         </section>
 
         <section class="panel">
           <header class="panel__head">
             <div>
-              <h2 class="panel__title">Soal placement yang paling sering salah</h2>
-              <p class="panel__desc">Persentase jawaban benar dalam ${P} hari terakhir. Soal dengan angka di bawah 35% sebaiknya ditinjau ulang oleh tim pendidikan.</p>
+              <h2 class="panel__title">Kelas ${scopeLabel}</h2>
+              <p class="panel__desc">Isi kelas dibanding kapasitasnya, supaya kekurangan siswa terlihat sebelum kelas mulai.</p>
             </div>
-            <a class="btn btn--quiet btn--sm" href="#/tes/placement/soal">Buka bank soal</a>
+            <a class="btn btn--quiet btn--sm" href="#/program/kelas">Atur kelas</a>
           </header>
-          ${hardest.length ? `<ul class="dist">${hardest.map(({ q, st }) => {
-            const p = pct(st.correct, st.n);
-            return `<li class="dist__row dist__row--q">
-              <span class="dist__name">Soal ${questionNumber(placement, q)}<span class="cell-sub clamp-1">${esc(q.prompt)}</span></span>
-              <span class="bar" aria-hidden="true"><span class="bar__fill${p < 35 ? " is-low" : ""}" data-w="${p}"></span></span>
-              <span class="dist__val">${p}%<span class="cell-sub">${st.correct} dari ${st.n}</span></span>
-              <button class="link-btn" type="button" data-action="edit-question" data-test="placement" data-id="${q.id}">Tinjau</button>
-            </li>`;
-          }).join("")}</ul>` : emptyHtml("Datanya belum cukup.", "Persentase muncul setelah satu soal dijawab minimal 5 peserta dalam periode ini.")}
+          ${scopeClasses.length ? `<div class="table-wrap"><table class="table">
+            <thead><tr><th scope="col">Kelas</th><th scope="col">Tutor</th><th scope="col" class="hide-sm">Periode</th><th scope="col">Terisi</th></tr></thead>
+            <tbody>${classRows}</tbody></table></div>
+            ${scopeClasses.length > 8 ? `<div class="panel__foot"><span>${scopeClasses.length - 8} kelas lain.</span><a class="link-btn" href="#/program/kelas">Lihat semuanya</a></div>` : ""}`
+            : emptyHtml(`Belum ada kelas di ${scopeLabel}.`, "Kelas dibuat di menu Program & Kelas untuk program dan periode yang dipilih.")}
         </section>
       </div>
     </div>`;
@@ -3113,7 +3115,7 @@ const ACTIONS = {
     try { await fetch("/api/admin/logout", { method: "POST", credentials: "same-origin" }); } catch (e) { /* the login page still opens */ }
     window.location.assign("/admin/login");
   },
-  period: (el) => { ui.period = Number(el.dataset.value); render(); },
+  period: (el) => { ui.ringkasanPeriode = el.value; render(); },
   page: (el) => {
     const scope = el.dataset.scope, n = Number(el.dataset.value);
     if (scope === "students") { ui.students.page = n; renderStudentsResults(); }
@@ -3298,6 +3300,7 @@ const CHANGES = {
   "students-period": (el) => { ui.students.period = el.value; ui.students.page = 1; renderStudentsResults(); },
   "students-tutor": (el) => { ui.students.tutor = el.value; ui.students.page = 1; renderStudentsResults(); },
   "attempts-level": (el) => { const f = ui.attempts[ui.test]; f.level = el.value; f.page = 1; renderAttemptsResults(); },
+  "ringkasan-periode": () => render(),
   "df-program": () => fillDaftarOptions(),
   "df-period": () => fillDaftarOptions(),
   "attempts-days": (el) => { const f = ui.attempts[ui.test]; f.days = el.value; f.page = 1; renderAttemptsResults(); },
