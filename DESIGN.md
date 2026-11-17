@@ -324,7 +324,7 @@ The speaking wave lives in `apps/web/student/src/live-waveform.js`, the ElevenLa
 
 Both apps declare the same globals once: `[hidden] { display: none !important; }`, `box-sizing: border-box` on everything, the `.sr-only` helper, and the `.tnum` tabular numerals helper. Without the hidden rule, a component class that sets `display` beats the hidden attribute and leaves widgets that should be hidden on screen.
 
-The CSS lives in `apps/web/public/assets/app.css`. Tokens are declared once at the top. Component classes are prefixed by block name (`option`, `nav-btn`, `dialog`, `stepper`, `ladder`) rather than utility names. State classes use `is-` (`is-selected`, `is-current`, `is-answered`, `is-flagged`, `is-warning`, `is-active`, `is-done`).
+The CSS lives in `apps/web/student/src/app.css` and is imported by the React entry, so Vite hashes it. Tokens are declared once at the top. Component classes are prefixed by block name (`option`, `nav-btn`, `dialog`, `stepper`, `ladder`) rather than utility names. State classes use `is-` (`is-selected`, `is-current`, `is-answered`, `is-flagged`, `is-warning`, `is-active`, `is-done`).
 
 The brand logo is `apps/web/public/assets/logo-titik-nol.png` (black lockup, 502 by 85 pixels) and `apps/web/public/assets/logo-titik-nol-white.png` (white lockup, 501 by 84 pixels), copied from the TNEC asset folder. The white lockup renders at 140px in the hero, the black lockup at 110px in the footer and at 150px in the result header. Do not redraw or recolor either file.
 

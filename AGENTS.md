@@ -54,8 +54,8 @@ The full flow passes in a headless browser against the `dev` branch: first admin
 |---|---|
 | `apps/web/server.js` | Test site server: static pages and the public API |
 | `apps/web/src/api.js` | Public API: config, invites, attempts, violations, submit, contact. Reads test settings and levels on every request, so dashboard changes apply to the next test right away |
-| `apps/web/public/` | The committed Vite build of the student test runner: `index.html`, `assets/index-*.js`, `assets/app.css`, logos, and `favicon.png` |
-| `apps/web/student/` | The React test runner source: `src/App.jsx`, `src/screens.jsx`, `src/lib.js`, `src/live-waveform.js`, the Vite config, and `build.mjs` |
+| `apps/web/public/` | The committed Vite build of the student test runner: `index.html`, `assets/index-*.js`, `assets/index-*.css`, logos, and `favicon.png` |
+| `apps/web/student/` | The React test runner source: `src/main.jsx`, `src/App.jsx`, `src/screens.jsx`, `src/lib.js`, `src/live-waveform.js`, `src/app.css`, the Vite config, and `build.mjs` |
 | `apps/web/result/` | The React result report source: `src/App.jsx`, `src/report.js`, `src/hasil.css`, the Vite config, and `build.mjs` |
 | `apps/web/public/hasil/` | The committed Vite build output of the result report, served at `/hasil` |
 | `apps/admin/server.js` | Dashboard server and the first admin setup notice |
@@ -298,7 +298,7 @@ A new type that reuses an existing design needs no code, because the team adds i
 
 Read `DESIGN.md` before touching CSS. Navy structure, navy buttons, white reading surface, red only for errors and urgent state, one yellow emphasis. A warning or notice is one even card, filled with the pale yellow over its whole area and a uniform border, never a colored stripe down one side. Feedback appears next to the control that triggered it, inside the card, never as a widget floating above the page. Never hand-build a component or animation when an established open-source one exists; see the Rules section. No gradients, no third-party fonts, and no inline scripts or styles, because both apps send a strict CSP. The CSP allows images from `https://titiknolenglish.com` only, for the program cards on the result page, and `blob:` media for the recording playback.
 
-The runner stylesheet is `apps/web/public/assets/app.css`, linked as `/assets/app.css?v=29` from `apps/web/student/index.html`. Bump that number with every CSS change, otherwise browsers keep the old stylesheet and the fix never reaches the screen.
+The runner stylesheet is `apps/web/student/src/app.css`, imported by `src/main.jsx`. Vite bundles and hashes it and writes the link into the built `index.html`, so the browser cache follows the hash and no stylesheet link is ever added to the HTML by hand.
 
 ## Git and push rules
 

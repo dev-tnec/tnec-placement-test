@@ -11,7 +11,7 @@ const publicDir = resolve(here, "../public");
 const assetsDir = resolve(publicDir, "assets");
 if (existsSync(assetsDir)) {
   for (const name of readdirSync(assetsDir)) {
-    if (/^index-.*\.js$/.test(name)) rmSync(resolve(assetsDir, name), { force: true });
+    if (/^index-.*\.js$/.test(name) || /^index-.*\.css$/.test(name)) rmSync(resolve(assetsDir, name), { force: true });
   }
 }
 rmSync(resolve(publicDir, "index.html"), { force: true });
