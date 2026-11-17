@@ -78,7 +78,7 @@ let questionTimer = null;
 function SpeakingBank({ plan }) {
   let n = 0;
   return <>
-    <div className="panel__body">
+    <div className="panel__body panel__body--gap">
       <Notice icon="mic" neutral>18 pertanyaan speaking memakai video examiner tetap dan dipakai semua paket, jadi tidak diedit dari bank soal. Rekaman, transkrip, dan nilainya ada di tab Submission.</Notice>
     </div>
     <div className="table-wrap"><table className="table">

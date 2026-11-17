@@ -298,6 +298,8 @@ A new type that reuses an existing design needs no code, because the team adds i
 
 Read `DESIGN.md` before touching CSS. Navy structure, navy buttons, white reading surface, red only for errors and urgent state, one yellow emphasis. A warning or notice is one even card, filled with the pale yellow over its whole area and a uniform border, never a colored stripe down one side. Feedback appears next to the control that triggered it, inside the card, never as a widget floating above the page. Never hand-build a component or animation when an established open-source one exists; see the Rules section. No gradients, no third-party fonts, and no inline scripts or styles, because both apps send a strict CSP. The CSP allows images from `https://titiknolenglish.com` only, for the program cards on the result page, and `blob:` media for the recording playback.
 
+The runner stylesheet is `apps/web/public/assets/app.css`, linked as `/assets/app.css?v=29` from `apps/web/student/index.html`. Bump that number with every CSS change, otherwise browsers keep the old stylesheet and the fix never reaches the screen.
+
 ## Git and push rules
 
 1. This folder is its own repository. Never commit the parent `tnec` folder, `credentials/`, `cpanel-titiknolenglishcom/`, or `tnec-cpanel/`.

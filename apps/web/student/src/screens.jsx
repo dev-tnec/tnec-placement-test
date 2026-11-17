@@ -520,7 +520,7 @@ export function SpeakingScreen({ stage, mockup, speaking, recording, speakError,
         <div className="rec-wave" id="rec-wave" ref={waveContainerRef} aria-hidden="true" />
         <p className="rec-timer" id="speak-timer" role="timer" aria-live="off">{formatTime(recording?.elapsed || 0)}</p>
       </div>
-      {speakError ? <p className="banner banner--warning" id="speak-error" role="alert">{speakError}</p> : null}
+      {speakError ? <p className="banner banner--warning speak-error" id="speak-error" role="alert">{speakError}</p> : null}
       {showSkip ? <button className="btn btn--secondary" id="speak-skip" type="button" onClick={onSkip} disabled={speakBusy}>Lanjut tanpa rekaman</button> : null}
     </>
   );

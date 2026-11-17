@@ -128,6 +128,7 @@ button { cursor: pointer; }
 .panel__title { display: flex; align-items: center; gap: 8px; font-size: 16px; font-weight: 700; line-height: 1.35; letter-spacing: -.01em; }
 .panel__desc { margin-top: 4px; max-width: 680px; font-size: 13px; color: var(--text-secondary); }
 .panel__body { padding: 0 20px 20px; }
+.panel__body--gap { padding-top: 16px; }
 .panel__foot {
   display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap;
   padding: 12px 20px; box-shadow: inset 0 1px 0 var(--gray-200); font-size: 13px; color: var(--text-secondary);

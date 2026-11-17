@@ -167,6 +167,10 @@ When a test uses time per section, the navigator shows only the questions of the
 
 A keyboard hint sits below the grid on desktop only. It is removed on mobile because there is no keyboard.
 
+### Audio card
+
+The Listening audio sits in a white card above the question: 24px padding, a 1px gray border, a 16px radius, and the card shadow. A 12px gap separates the uppercase label, the note at 14px with 1.6 line height, and the navy play button, which is left aligned. The card disappears outside Listening.
+
 ### Details
 
 A 1000px column with the stepper at the top, step 2 active. Below it a two-column layout: the left column carries the step eyebrow, a large headline, a short lead, and three benefit rows with small yellow check circles. The right column carries the white form panel with three fields and the navy primary button.
