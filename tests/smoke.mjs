@@ -303,7 +303,7 @@ assert.equal(refused.status, "failed", "an error waiting cannot fix goes straigh
 
 /* ---------- Speaking: what the result email and WhatsApp say ---------- */
 const facts = speakingFacts({ status: "graded", cefr_overall: "B2", ielts_overall: 6, transcript: "I like visiting Bali.", scores: JSON.stringify(graded.scores) });
-assert.equal(facts.source, "speechace");
+assert.equal(facts.source, "auto", "the student-facing payload never names the vendor");
 assert.equal(facts.aspects.length, 5);
 assert.equal(aspectLine(facts.aspects[0]), "Pronunciation 78 (B2)");
 assert.equal(speakingFacts({ status: "skipped", scores: "{}" }), null, "a skipped recording adds no speaking block");
@@ -321,12 +321,14 @@ const emailSpeaking = buildResultEmail({ name: "Rani", email: "rani@example.com"
 assert.ok(emailSpeaking.subject.includes("Speaking B2"));
 assert.ok(emailSpeaking.html.includes("Pronunciation"));
 assert.ok(emailSpeaking.text.includes("Speaking: CEFR B2, IELTS 6.0"));
+assert.equal(emailSpeaking.html.includes("Speechace"), false, "the email never names the vendor");
+assert.equal(emailSpeaking.text.includes("Speechace"), false, "the plain text email never names the vendor either");
 assert.equal(emailSpeaking.html.includes("<b>Bali</b>"), false, "the transcript is escaped in the email");
 const emailManual = buildResultEmail({ name: "Rani", email: "rani@example.com", score: 13, total: 25, level: levelForScore(13), speaking: manualFacts });
 assert.ok(emailManual.text.includes("dinilai oleh tim Titik Nol"));
 
 const waSpeaking = buildResultWhatsApp({ name: "Rani Putri Lestari", score: 13, total: 25, level: levelForScore(13), speaking: facts, resultUrl: "https://tes.example.test/?hasil=token123" });
-assert.ok(waSpeaking.includes("Speaking (Speechace):"));
+assert.ok(waSpeaking.includes("\nSpeaking:\n"), "the WhatsApp header carries no vendor name");
 assert.ok(waSpeaking.includes("CEFR B2, IELTS 6.0"));
 assert.ok(waSpeaking.includes("Pronunciation 78 (B2)"));
 assert.ok(waSpeaking.includes("Hasil lengkap: https://tes.example.test/?hasil=token123"));

@@ -169,7 +169,8 @@ export function speakingFacts(row) {
   const issues = Array.isArray(scores.issues) ? scores.issues : [];
   const manual = row.status === "manual";
   return {
-    source: manual ? "manual" : "speechace",
+    // "auto", never the vendor name: this object reaches the student's browser through the result link.
+    source: manual ? "manual" : "auto",
     cefr,
     ielts,
     aspects,

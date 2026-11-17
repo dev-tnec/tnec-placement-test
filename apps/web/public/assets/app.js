@@ -1296,7 +1296,7 @@ function renderSpeakingResult(sp) {
   els.resultSpeaking.hidden = false;
   els.resultSpeakingCefr.textContent = sp.cefr;
   els.resultSpeakingIelts.textContent = sp.ielts === null || sp.ielts === undefined ? "-" : Number(sp.ielts).toFixed(1);
-  els.resultSpeakingSource.textContent = sp.source === "manual" ? "dinilai oleh tim Titik Nol" : "dinilai otomatis oleh Speechace";
+  els.resultSpeakingSource.textContent = sp.source === "manual" ? "dinilai oleh tim Titik Nol" : "dinilai otomatis";
 
   els.resultSpeakingAspects.replaceChildren();
   for (const aspect of sp.aspects) {

@@ -52,7 +52,7 @@ function speakingHtml(sp) {
           <tr>
             <td style="vertical-align:bottom;">
               <div style="font-size:30px;line-height:1.2;font-weight:800;color:${NAVY};">CEFR ${escapeHtml(sp.cefr)}</div>
-              <div style="font-size:13px;color:${GRAY};margin-top:2px;">${sp.source === "manual" ? "Dinilai oleh tim Titik Nol" : "Dinilai otomatis oleh Speechace"}</div>
+              <div style="font-size:13px;color:${GRAY};margin-top:2px;">${sp.source === "manual" ? "Dinilai oleh tim Titik Nol" : "Dinilai otomatis"}</div>
             </td>
             ${sp.ielts === null ? "" : `<td style="vertical-align:bottom;text-align:right;">
               <div style="font-size:24px;line-height:1.2;font-weight:800;color:${NAVY};">${formatBand(sp.ielts)}</div>
@@ -76,7 +76,7 @@ function speakingHtml(sp) {
         <div style="margin-top:8px;background:${SURFACE};border-radius:12px;padding:16px 18px;font-size:14px;line-height:1.65;color:${NAVY};">${escapeHtml(transcript)}</div>
       </div>` : ""}
       ${sp.notes.length ? `<div style="margin:0 0 24px;">
-        ${eyebrow(sp.source === "manual" ? "Catatan dari tim Titik Nol" : "Catatan dari Speechace")}
+        ${eyebrow(sp.source === "manual" ? "Catatan dari tim Titik Nol" : "Catatan penilaian speaking")}
         ${sp.notes.map((n) => `<p style="margin:8px 0 0;font-size:14px;line-height:1.6;color:${NAVY};">${escapeHtml(n)}</p>`).join("")}
       </div>` : ""}`;
 }
@@ -85,13 +85,13 @@ function speakingText(sp) {
   if (!sp) return [];
   const lines = [
     "",
-    `Speaking: CEFR ${sp.cefr}${sp.ielts === null ? "" : `, IELTS ${formatBand(sp.ielts)}`} (${sp.source === "manual" ? "dinilai oleh tim Titik Nol" : "dinilai otomatis oleh Speechace"})`,
+    `Speaking: CEFR ${sp.cefr}${sp.ielts === null ? "" : `, IELTS ${formatBand(sp.ielts)}`} (${sp.source === "manual" ? "dinilai oleh tim Titik Nol" : "dinilai otomatis"})`,
     ...sp.aspects.map(aspectLine),
   ];
   const note = speakingNote(sp);
   if (note) lines.push(note);
   if (sp.transcript) lines.push("", `Transkrip jawaban kamu: ${shorten(sp.transcript, TRANSCRIPT_MAX)}`);
-  if (sp.notes.length) lines.push("", sp.source === "manual" ? "Catatan dari tim Titik Nol:" : "Catatan dari Speechace:", ...sp.notes);
+  if (sp.notes.length) lines.push("", sp.source === "manual" ? "Catatan dari tim Titik Nol:" : "Catatan penilaian speaking:", ...sp.notes);
   return lines;
 }
 

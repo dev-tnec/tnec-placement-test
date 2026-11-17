@@ -105,7 +105,7 @@ To run against the `dev` branch, point `ENV_FILE` at a second env file with the 
 | POST | `/api/attempts/:id/contact` | `{ delivery: { email, whatsapp }, resultToken, programs, result }`. With a recording waiting it returns `result: null` and `speaking: { status }` instead. Placement only |
 | GET | `/api/results/:token` | `{ ready, name, result: { score, total, level, speaking }, programs }` behind the private link. `ready: false` while the recording is still being scored |
 
-Every response is `no-store`. JSON bodies are capped at 16 KB and the speaking upload at 3 MB. The consent version in the request must match `CONSENT_VERSION` in `packages/core/src/legal.js`; the current version is `2026-11-17a`.
+Every response is `no-store`. JSON bodies are capped at 16 KB and the speaking upload at 3 MB. The consent version in the request must match `CONSENT_VERSION` in `packages/core/src/legal.js`; the current version is `2026-11-17b`.
 
 ## Dashboard (admin app)
 
@@ -207,7 +207,7 @@ What it cannot do, and must not claim: stop a second device, a camera, or a help
 
 ## Privacy and consent
 
-The legal copy follows `.opencode/skills/data-privacy-compliance/SKILL.md`. The privacy policy names Neon (database, Singapore), Cloudflare (result email), Speechace (speaking scoring, Singapore), and AttCos (WhatsApp, delivered through Meta's WhatsApp service) as processors, and says the result goes to the student's email and WhatsApp. It also states that recordings are deleted after 30 days while the transcript and scores keep the 24 month retention, and that Speechace receives only the recording, the question, and a random id, never the student's name or contact. Consent is recorded per attempt with the text version and timestamp; bump `CONSENT_VERSION` when the wording or the data use changes. Retention is stated as 24 months and there is no deletion job yet. The public test sets no cookies; the dashboard sets one session cookie for staff.
+The legal copy follows `.opencode/skills/data-privacy-compliance/SKILL.md`. The privacy policy names Neon (database, Singapore), Cloudflare (result email), and AttCos (WhatsApp, delivered through Meta's WhatsApp service) as processors, and describes the speaking scorer generically as a third-party language assessment partner processing in Singapore, on the owner's instruction that students and competitors must not learn which vendor is used. The speaking vendor is Speechace; that name lives in this file, in the dashboard, and in code, and never in student-facing copy: screens, email, WhatsApp, legal text, or public API payloads (`speakingFacts` emits `source: "auto"`). The policy also states that recordings are deleted after 30 days while the transcript and scores keep the 24 month retention, and that the scorer receives only the recording, the question, and a random id, never the student's name or contact. Consent is recorded per attempt with the text version and timestamp; bump `CONSENT_VERSION` when the wording or the data use changes. Retention is stated as 24 months and there is no deletion job yet. The public test sets no cookies; the dashboard sets one session cookie for staff.
 
 ## Email
 

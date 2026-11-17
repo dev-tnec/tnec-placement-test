@@ -1,7 +1,7 @@
 // Legal copy and public config. Bump CONSENT_VERSION whenever the text changes,
 // so every stored consent record points to the exact version the user saw.
 
-export const CONSENT_VERSION = "2026-11-17a";
+export const CONSENT_VERSION = "2026-11-17b";
 export const WHATSAPP = "6282333143544";
 // Fills the {{total}}, {{duration}}, {{strikes}}, and {{speakingSeconds}} tokens with the live test
 // settings, so the legal text always matches what the dashboard has configured.
@@ -21,7 +21,7 @@ export const TERMS = {
       heading: "1. Tentang tes ini",
       paragraphs: [
         "Tes ini dibuat oleh Titik Nol English Course untuk mengukur kemampuan bahasa Inggris kamu. Tes ini terdiri dari {{total}} soal pilihan ganda dengan satu jawaban benar per soal, dan durasinya {{duration}}.",
-        "Kalau tes penempatan memuat bagian speaking, setelah soal pilihan ganda kamu menjawab satu pertanyaan dengan berbicara dalam bahasa Inggris selama paling lama {{speakingSeconds}} detik. Rekaman itu dinilai otomatis oleh Speechace, atau oleh tim kami kalau penilaian otomatis gagal. Nilai speaking ditampilkan terpisah dan tidak mengubah level dari soal pilihan ganda.",
+        "Kalau tes penempatan memuat bagian speaking, setelah soal pilihan ganda kamu menjawab satu pertanyaan dengan berbicara dalam bahasa Inggris selama paling lama {{speakingSeconds}} detik. Rekaman itu dinilai otomatis oleh sistem kami, atau oleh tim kami kalau penilaian otomatis gagal. Nilai speaking ditampilkan terpisah dan tidak mengubah level dari soal pilihan ganda.",
         "Hasil tes ini dipakai untuk menentukan kelas atau memantau perkembangan belajar, dan bukan sertifikat resmi. Jangan memakai hasil ini sebagai bukti kemampuan bahasa Inggris untuk keperluan formal.",
       ],
     },
@@ -104,7 +104,7 @@ export const PRIVACY = {
         "Data hanya diakses oleh tim Titik Nol yang membutuhkan, yaitu tim akademik dan admin penerimaan siswa.",
         "Neon bertindak sebagai prosesor untuk basis data, dan Cloudflare untuk pengiriman email hasil tes. Kami tidak membagikan data kamu kepada pihak lain untuk tujuan pemasaran.",
         "Pesan WhatsApp dari kami, termasuk hasil tes, dikirim melalui AttCos, layanan pesan yang kami pakai sebagai prosesor, dari nomor WhatsApp Titik Nol, lalu sampai ke kamu lewat layanan WhatsApp milik Meta. Keduanya hanya menerima nomor WhatsApp dan isi pesan yang diperlukan untuk mengirimkannya.",
-        "Rekaman suara dan teks pertanyaan speaking dikirim ke Speechace, layanan penilaian bahasa yang kami pakai sebagai prosesor, dan diproses di server Speechace di Singapura. Speechace hanya menerima rekaman, pertanyaan, dan kode acak pengganti identitas, bukan nama, email, atau nomor WhatsApp kamu, lalu menghapus data itu paling lama 90 hari setelah penilaian.",
+        "Rekaman suara dan teks pertanyaan speaking dikirim ke mitra penilaian kami, layanan penilaian bahasa pihak ketiga yang kami pakai sebagai prosesor, dan diproses di server di Singapura. Mitra tersebut hanya menerima rekaman, pertanyaan, dan kode acak pengganti identitas, bukan nama, email, atau nomor WhatsApp kamu, lalu menghapus data itu paling lama 90 hari setelah penilaian.",
       ],
     },
     {

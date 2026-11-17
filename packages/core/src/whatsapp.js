@@ -85,7 +85,7 @@ function buildSpeakingWhatsApp(first, { score, total, level, speaking: sp, resul
     `Level: ${level.label}`,
     `Skor tes: ${score} dari ${total}`,
     "",
-    sp.source === "manual" ? "Speaking (dinilai tim Titik Nol):" : "Speaking (Speechace):",
+    sp.source === "manual" ? "Speaking (dinilai tim Titik Nol):" : "Speaking:",
     `CEFR ${sp.cefr}${sp.ielts === null ? "" : `, IELTS ${formatBand(sp.ielts)}`}`,
     ...sp.aspects.map(aspectLine),
   ];
