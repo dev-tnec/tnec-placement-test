@@ -366,7 +366,7 @@ function SectionDialog({ id }) {
           <div className="field">
             <label className="label" htmlFor="se-audio">Alamat audio</label>
             <input className="input" id="se-audio" type="text" defaultValue={s ? s.audio : ""} placeholder="/audio/ielts-dec-1.mp3" />
-            <p className="hint">Diputar satu kali per percobaan, hanya untuk soal di bagian ini. Berkasnya di bawah apps/web/public/audio.</p>
+            <p className="hint">Audio Listening adalah satu berkas untuk Part 1 sampai Part 4. Simpan di bagian Listening pertama dan kosongkan bagian Listening lainnya. Diputar satu kali per percobaan dan tetap berbunyi saat peserta pindah soal. Berkasnya di bawah apps/web/public/audio.</p>
             <p className="error" id="se-audio-err" hidden></p>
           </div>
           <div className="field">

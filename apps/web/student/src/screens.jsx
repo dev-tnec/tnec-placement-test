@@ -333,9 +333,7 @@ export function TestScreen({ attempt, index, answers, flagged, perMode, timeLeft
             <div className="audio-card" id="audio-card">
               <p className="audio-card__label">Audio Listening</p>
               <p className="audio-card__note" id="audio-note">{audioNote}</p>
-              {!audioPlayedNow ? (
-                <button className="btn btn--primary btn--lg" id="audio-play" type="button" onClick={onPlayAudio}><Play /> Putar audio sekali ini</button>
-              ) : null}
+              <button className="btn btn--primary btn--lg" id="audio-play" type="button" onClick={onPlayAudio} hidden={audioPlayedNow}><Play /> Putar audio sekali ini</button>
               <audio ref={audioRef} id="listening-audio" preload="none" src={audioSection.audio} onEnded={onAudioEnded} />
             </div>
           ) : null}

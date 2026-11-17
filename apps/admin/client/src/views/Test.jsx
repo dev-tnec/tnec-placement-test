@@ -175,7 +175,7 @@ function SectionsTab() {
           onChange={(e) => { ui.package[ui.test] = e.target.value; notify(); }}>
           <OptList list={t.packages.map((p) => [p.id, p.name])} />
         </select>
-        <p className="toolbar__meta">Setiap bagian memegang satu rentang soal beserta bacaan dan audionya. Saat soal diacak nanti, bagian ini tetap bersama soalnya.</p>
+        <p className="toolbar__meta">Setiap bagian memegang satu rentang soal beserta bacaan dan audionya. Saat soal diacak nanti, bagian ini tetap bersama soalnya. Audio Listening adalah satu berkas untuk Part 1 sampai Part 4, disimpan di bagian Listening pertama.</p>
       </div>
       {rows.length ? <div className="table-wrap"><table className="table">
         <caption className="sr-only">Bagian {TEST_META[ui.test].name}</caption>

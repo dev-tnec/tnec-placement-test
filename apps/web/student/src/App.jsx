@@ -144,19 +144,20 @@ export default function App() {
   currentSpeakingRef.current = currentSpeaking;
 
   const question = attempt?.questions[index];
+  // The listening audio is one file for Part 1 to Part 4. It lives on the first Listening section,
+  // and it stays mounted while the student moves between all listening questions.
   const audioSection = useMemo(() => {
-    if (!attempt || !question?.sectionId) return null;
-    const section = attempt.sections.find((item) => item.id === question.sectionId);
-    return section?.audio ? section : null;
+    if (!attempt || !question || question.skill !== "Listening") return null;
+    return attempt.sections.find((item) => item.skill === "Listening" && item.audio) || null;
   }, [attempt, question]);
 
   useEffect(() => {
     if (!audioSection) return;
     const played = audioPlayed.has(audioSection.id);
     setAudioNote(played
-      ? `Audio ${audioSection.title} sudah diputar. Lanjutkan menjawab soalnya.`
-      : `Putar audio ${audioSection.title} saat kamu siap. Audio hanya bisa diputar satu kali, jadi pastikan tempatmu tenang dan speaker atau headsetmu menyala.`);
-    // The note follows the section, not every play state change; play and end set it directly.
+      ? "Audio Listening sudah diputar. Lanjutkan menjawab soal Part 1 sampai Part 4."
+      : "Putar audio Listening untuk Part 1 sampai Part 4 saat kamu siap. Audio hanya bisa diputar satu kali, jadi pastikan tempatmu tenang dan speaker atau headsetmu menyala.");
+    // The note follows the listening block, not every play state change; play and end set it directly.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [audioSection?.id]);
 
@@ -625,7 +626,7 @@ export default function App() {
     } catch {
       setAudioNote("Browser kamu memblokir suara. Periksa izin suara di address bar, lalu muat ulang halaman.");
     }
-    setAudioNote(`Audio ${audioSection.title} sedang diputar. Dengarkan sampai selesai; audionya tidak bisa diputar lagi.`);
+    setAudioNote("Audio Listening sedang diputar. Dengarkan sampai selesai; audionya tidak bisa diputar lagi.");
   }
 
   function onAudioEnded() {
