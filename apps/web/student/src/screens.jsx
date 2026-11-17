@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { CHECK_SECONDS, formatTime, spanText } from "./lib.js";
 
 const Arrow = () => (
@@ -330,6 +330,9 @@ export function TestScreen({ attempt, index, answers, flagged, perMode, timeLeft
   const minWords = question.minWords || 150;
   const words = String(answer || "").trim().split(/\s+/).filter(Boolean).length;
   const audioPlayedNow = audioSection ? audioPlayed.has(audioSection.id) : false;
+  const [audioTime, setAudioTime] = useState(0);
+  const [audioLength, setAudioLength] = useState(0);
+  const [audioRunning, setAudioRunning] = useState(false);
 
   return (
     <section className="screen" id="screen-test" aria-labelledby="question-prompt">
@@ -358,12 +361,27 @@ export function TestScreen({ attempt, index, answers, flagged, perMode, timeLeft
         ) : null}
 
         <div className="test-grid">
-          {audioSection ? (
+          <div className="test-main">
+            {audioSection ? (
             <div className="audio-card" id="audio-card">
               <p className="audio-card__label">Audio Listening</p>
               <p className="audio-card__note" id="audio-note">{audioNote}</p>
+              {audioPlayedNow ? (
+                <div className="audio-playback" id="audio-playback">
+                  <progress className="audio-playback__bar" max={audioLength || 1} value={audioTime} aria-label="Kemajuan audio Listening" />
+                  <p className="audio-playback__time" id="audio-time">
+                    {formatTime(Math.round(audioTime))} / {audioLength ? formatTime(Math.round(audioLength)) : "--:--"}
+                    {audioRunning ? " · sedang diputar" : audioLength && audioTime >= audioLength - 1 ? " · selesai" : ""}
+                  </p>
+                </div>
+              ) : null}
               <button className="btn btn--primary btn--lg" id="audio-play" type="button" onClick={onPlayAudio} hidden={audioPlayedNow}><Play /> Putar audio sekali ini</button>
-              <audio ref={audioRef} id="listening-audio" preload="none" src={audioSection.audio} onEnded={onAudioEnded} />
+              <audio ref={audioRef} id="listening-audio" preload="none" src={audioSection.audio}
+                onLoadedMetadata={(event) => setAudioLength(Number(event.currentTarget.duration) || 0)}
+                onTimeUpdate={(event) => setAudioTime(event.currentTarget.currentTime)}
+                onPlay={() => setAudioRunning(true)}
+                onPause={() => setAudioRunning(false)}
+                onEnded={() => { setAudioRunning(false); onAudioEnded(); }} />
             </div>
           ) : null}
 
@@ -432,12 +450,13 @@ export function TestScreen({ attempt, index, answers, flagged, perMode, timeLeft
               </button>
             </div>
           </div>
+          </div>
 
           <aside className="side" aria-labelledby="nav-title">
             <div className="navigator">
               <div className="navigator__head">
                 <h2 className="navigator__title" id="nav-title">Navigasi soal</h2>
-                <span className="navigator__count" id="nav-count">{displayTotal} soal</span>
+                <span className="navigator__count" id="nav-count">{displayTotal} soal{sectionMode && navGroups.length > 1 ? ` · ${navGroups.length} bagian` : ""}</span>
               </div>
               <div className="legend">
                 <span className="legend__item"><span className="dot dot--answered" aria-hidden="true" />Terjawab <strong id="nav-answered">{answered}</strong></span>

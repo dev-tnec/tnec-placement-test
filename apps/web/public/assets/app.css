@@ -972,6 +972,21 @@ progress::-moz-progress-bar { background: var(--navy-900); border-radius: var(--
 
 .audio-card audio { display: none; }
 
+/* The played-once audio stays visible as a progress bar, so the student can see that it is
+   running and how far it has gone. The native player stays hidden: no scrubber, no download. */
+.audio-playback {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.audio-playback__time {
+  margin: 0;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-secondary);
+}
+
 .nav-btn:disabled { cursor: default; }
 
 .test-grid {
@@ -979,6 +994,16 @@ progress::-moz-progress-bar { background: var(--navy-900); border-radius: var(--
   grid-template-columns: minmax(0, 1fr) 340px;
   gap: var(--space-6);
   align-items: start;
+}
+
+/* The audio card and the question card share the main column, so the navigator stays in the
+   right sidebar. Without this wrapper the audio card becomes a grid child and pushes the
+   question card into the sidebar. */
+.test-main {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  min-width: 0;
 }
 
 .question-card {

@@ -157,7 +157,7 @@ Then the consent panel. Its header stacks an eyebrow, a title, and a lead. Two n
 
 ### Test
 
-A slim sticky status bar with progress on the left and the timer on the right. There is no site header. The body is the question card plus the navigator. The question card has four bands: a meta bar with the question badge and flag button, the passage (only for reading questions), the prompt inside a bordered canvas, and the navigation row.
+A slim sticky status bar with progress on the left and the timer on the right. There is no site header. The body is a two-column grid: the main column holds the audio card and the question card, and a 340px right sidebar holds the navigator. At 1024px and below the grid becomes one column and the navigator sits below the question card. The question card has four bands: a meta bar with the question badge and flag button, the passage (only for reading questions), the prompt inside a bordered canvas, and the navigation row.
 
 The prompt canvas is a white rounded rectangle with a 1px border, a small uppercase instruction label in the top left, and the prompt at 23px. It gives the question a stage and keeps short questions from looking empty.
 
@@ -169,7 +169,7 @@ A keyboard hint sits below the grid on desktop only. It is removed on mobile bec
 
 ### Audio card
 
-The Listening audio sits in a white card above the question: 24px padding, a 1px gray border, a 16px radius, and the card shadow. A 12px gap separates the uppercase label, the note at 14px with 1.6 line height, and the navy play button, which is left aligned. The card disappears outside Listening.
+The Listening audio sits in a white card above the question: 24px padding, a 1px gray border, a 16px radius, and the card shadow. A 12px gap separates the uppercase label, the note at 14px with 1.6 line height, and the navy play button, which is left aligned. After the student starts it, the play button is replaced by a 6px progress bar and an elapsed over total time that reads sedang diputar, then selesai. The native player stays hidden, with no scrubber and no download. The card disappears outside Listening.
 
 ### Details
 
