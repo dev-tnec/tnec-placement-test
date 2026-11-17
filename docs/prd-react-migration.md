@@ -2,6 +2,8 @@
 
 The owner decided on 17 November 2026 to rebuild the admin dashboard front end in React, before PRD 2 (IELTS Mockup) is built. The reason is maintainability and the owner's confidence in the code, not a user-facing need: the screens, copy, and behavior must stay exactly as they are. This project ships nothing else.
 
+**Shipped on 17 November 2026.** The React client is the dashboard at `/admin/`, the old static files are deleted, and every screen was verified against the dev branch. Two bugs found during verification and fixed here: a slow save closing a dialog opened right after it, and confirm resolution depending on the dialog close event, which some browser builds do not deliver.
+
 ## Scope
 
 | Part | Decision |

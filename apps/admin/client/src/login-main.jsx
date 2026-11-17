@@ -5,7 +5,7 @@ import { useEffect, useState } from "react";
 import "./admin.css";
 import { createRoot } from "react-dom/client";
 
-const HOME = location.pathname.startsWith("/admin-ui") ? "/admin-ui/" : "/admin/";
+const HOME = "/admin/";
 
 async function post(path, body) {
   const response = await fetch(path, {

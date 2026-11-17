@@ -452,8 +452,8 @@ for (const [format, reset] of formatCases) {
 
 // The React dashboard build output is committed, so Render needs no build command. The smoke check
 // guards against pushing a source change without rebuilding, and keeps the strict CSP possible.
-const builtIndex = readFileSync(new URL("../apps/admin/public/admin-ui/index.html", import.meta.url), "utf8");
-const entry = builtIndex.match(/src="(\/admin-ui\/assets\/[^"]+\.js)"/);
+const builtIndex = readFileSync(new URL("../apps/admin/public/admin/index.html", import.meta.url), "utf8");
+const entry = builtIndex.match(/src="(\/admin\/assets\/[^"]+\.js)"/);
 assert.ok(entry, "the dashboard build output exists");
 assert.ok(existsSync(new URL(`../apps/admin/public${entry[1]}`, import.meta.url)), "the dashboard entry bundle exists on disk");
 assert.equal(/<script(?![^>]*\bsrc=)/i.test(builtIndex), false, "the built dashboard uses no inline script");

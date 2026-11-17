@@ -4,6 +4,7 @@
 // built from the current client source.
 
 import { spawnSync } from "node:child_process";
+import { fileURLToPath } from "node:url";
 import { loadEnvFile, buildEnv } from "@tnec/core/env";
 import { migrate } from "@tnec/core/migrate";
 import { startServer, closeServers } from "@tnec/core/node-server";
@@ -12,7 +13,7 @@ import { startSpeakingWorker, stopSpeakingWorker } from "@tnec/core/speaking";
 import { createWebHandler } from "../apps/web/server.js";
 import { createAdminHandler, announceSetup } from "../apps/admin/server.js";
 
-const clientBuild = new URL("../apps/admin/client/build.mjs", import.meta.url);
+const clientBuild = fileURLToPath(new URL("../apps/admin/client/build.mjs", import.meta.url));
 const built = spawnSync(process.execPath, [clientBuild], { stdio: "inherit" });
 if (built.status) process.exit(built.status);
 

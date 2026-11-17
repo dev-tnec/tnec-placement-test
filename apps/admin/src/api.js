@@ -52,11 +52,6 @@ export async function serveAdminPage(request, env, url) {
     const file = await staticResponse(PUBLIC_DIR, path, { cacheControl: path === "/favicon.svg" ? "public, max-age=86400" : "private, max-age=300" });
     return withHeaders(file || textResponse(404, "File tidak ditemukan."), null);
   }
-  // The React client during its migration. The final switch moves this app onto /admin/ itself.
-  if (path.startsWith("/admin-ui/assets/")) {
-    const file = await staticResponse(PUBLIC_DIR, path, { cacheControl: "private, max-age=300" });
-    return withHeaders(file || textResponse(404, "File tidak ditemukan."), null);
-  }
   // The stylesheets and drawings of the certificate templates. The HTML templates are never served raw.
   const certAsset = path.match(/^\/admin\/certificates\/([\w.-]+\.(?:css|svg))$/);
   if (certAsset) {
@@ -76,15 +71,6 @@ export async function serveAdminPage(request, env, url) {
   if (path === "/admin/login" || path === "/admin/login/") {
     if (user) return Response.redirect(new URL("/admin/", url), 302);
     return withHeaders(await staticResponse(PUBLIC_DIR, "/admin/login.html"));
-  }
-  const reactHome = path.startsWith("/admin-ui") ? "/admin-ui/" : "/admin/";
-  if (path === "/admin-ui/" || path === "/admin-ui/index.html") {
-    if (!user) return Response.redirect(new URL("/admin-ui/login", url), 302);
-    return withHeaders(await staticResponse(PUBLIC_DIR, "/admin-ui/index.html"));
-  }
-  if (path === "/admin-ui/login" || path === "/admin-ui/login/") {
-    if (user) return Response.redirect(new URL(reactHome, url), 302);
-    return withHeaders(await staticResponse(PUBLIC_DIR, "/admin-ui/login.html"));
   }
   if (path === "/admin/" || path === "/admin/index.html") {
     if (!user) return Response.redirect(new URL("/admin/login", url), 302);

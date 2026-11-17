@@ -12,7 +12,7 @@ import { SiswaList, SiswaDetail } from "./views/Siswa.jsx";
 import { Sertifikat } from "./views/Sertifikat.jsx";
 import { TestPage, AttemptDetail } from "./views/Test.jsx";
 import { ProgramKelas } from "./views/Program.jsx";
-import { DialogHost } from "./dialogs.jsx";
+import { DialogHost, ConfirmHost } from "./dialogs.jsx";
 
 const TEST_META = {
   placement: { name: "Placement Test", nav: "tes-placement" },
@@ -208,5 +208,6 @@ export default function App() {
     </div>
     <BulkBar />
     <DialogHost />
+    <ConfirmHost />
   </>;
 }

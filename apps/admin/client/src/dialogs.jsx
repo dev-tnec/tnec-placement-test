@@ -17,8 +17,14 @@ import { Icon, OptList } from "./ui.jsx";
 
 /* ===================== Dialog store ===================== */
 let dlg = null;
-export function openDialog(next) { dlg = next; notify(); }
-export function closeDialog() { dlg = null; notify(); }
+let dlgSeq = 0;
+// Each open gets its own sequence number, so reopening a dialog always remounts it: the effect that
+// calls showModal runs again, and the form fields reset per open like the old app.
+export function openDialog(next) { dlg = { ...next, seq: ++dlgSeq }; notify(); }
+// A save handler closes its own dialog after its awaits, so it must name its kind: a slow save
+// finishing while someone already opened another dialog must not close that other dialog. The sync
+// buttons (Batal, the close icon) get the click event as their argument, which closes as before.
+export function closeDialog(kind) { if (typeof kind === "string" && (!dlg || dlg.kind !== kind)) return; dlg = null; notify(); }
 export function useDialog() { useVersion(); return dlg; }
 
 /* The base dialog: opens as a modal on mount, focuses a selector, and reports every close. */
@@ -49,16 +55,15 @@ export function DialogHost() {
   const d = useDialog();
   if (!d) return null;
   switch (d.kind) {
-    case "question": return <QuestionDialog key="q" id={d.id} />;
-    case "student": return <StudentDialog key="s" id={d.id} />;
-    case "daftar": return <DaftarDialog key="d" studentId={d.studentId} />;
-    case "pendaftaran": return <PendaftaranDialog key="p" id={d.id} />;
-    case "program": return <ProgramDialog key="pg" id={d.id} />;
-    case "certtype": return <CertTypeDialog key="ct" id={d.id} />;
-    case "cert": return <CertDialog key="cr" studentId={d.studentId} certId={d.certId} />;
-    case "wa": return <WaDialog key="wa" studentId={d.studentId} opts={d.opts} />;
-    case "form": return <FormDialog key="gf" spec={d.spec} />;
-    case "confirm": return <ConfirmDialog key="cf" spec={d.spec} resolve={d.resolve} />;
+    case "question": return <QuestionDialog key={d.seq} id={d.id} />;
+    case "student": return <StudentDialog key={d.seq} id={d.id} />;
+    case "daftar": return <DaftarDialog key={d.seq} studentId={d.studentId} />;
+    case "pendaftaran": return <PendaftaranDialog key={d.seq} id={d.id} />;
+    case "program": return <ProgramDialog key={d.seq} id={d.id} />;
+    case "certtype": return <CertTypeDialog key={d.seq} id={d.id} />;
+    case "cert": return <CertDialog key={d.seq} studentId={d.studentId} certId={d.certId} />;
+    case "wa": return <WaDialog key={d.seq} studentId={d.studentId} opts={d.opts} />;
+    case "form": return <FormDialog key={d.seq} spec={d.spec} />;
     default: return null;
   }
 }
@@ -78,7 +83,7 @@ export async function deleteQuestion(q) {
     confirmLabel: "Hapus soal",
   });
   if (!r.ok) return;
-  if (dlg?.kind === "question") closeDialog();
+  if (dlg?.kind === "question") closeDialog("question");
   await mutate(() => api(`/api/admin/tests/${ui.test}/questions/${q.id}`, { method: "DELETE" }), "Soal dihapus.");
 }
 
@@ -124,7 +129,7 @@ function QuestionDialog({ id }) {
       (r) => (editing ? `Soal tersimpan.${r.keyChanged ? " Kunci baru berlaku untuk submission berikutnya." : ""}` : body.status === "aktif" ? "Soal baru tersimpan di urutan terakhir." : "Soal baru tersimpan sebagai draf."),
     );
     done();
-    if (result) closeDialog();
+    if (result) closeDialog("question");
   }
 
   return (
@@ -228,7 +233,7 @@ function StudentDialog({ id }) {
     const done = busy($("#sf-save"), "Menyimpan...");
     try {
       const r = await api(s ? `/api/admin/students/${s.id}` : "/api/admin/students", { method: s ? "PATCH" : "POST", body });
-      closeDialog();
+      closeDialog("student");
       await reload();
       if (!s) location.hash = `#/siswa/${r.id}`;
       toast(s ? `Data ${firstName(name)} tersimpan.` : `${name} ditambahkan ke database.`);
@@ -406,7 +411,7 @@ function DaftarDialog({ studentId }) {
     const done = busy($("#df-save"), "Menyimpan...");
     try {
       const r = await api("/api/admin/pendaftaran", { method: "POST", body });
-      closeDialog();
+      closeDialog("daftar");
       await reload();
       toast(`Pendaftaran tersimpan${r.studentId ? ` untuk ${firstName(studentById(r.studentId)?.name || "")}` : ""}.`, { label: "Buka profil", run: () => { location.hash = `#/siswa/${r.studentId}`; } });
     } catch (error) {
@@ -430,7 +435,7 @@ function DaftarDialog({ studentId }) {
               <label className="label" htmlFor="df-q">Cari orang yang sudah ada</label>
               <input className="input" id="df-q" type="search" placeholder="Nama, email, atau nomor WhatsApp" value={q} onChange={(e) => setQ(e.target.value)} autoComplete="off" />
             </div>
-            <div className="span-all pf-hits" hidden={Boolean(picked)}>
+            <div className="span-all pf-hits" id="df-hits" hidden={Boolean(picked)}>
               {hits.length ? <>
                 {hits.map((s) => (
                   <button key={s.id} className="btn btn--quiet btn--sm" type="button" onClick={() => pick(s.id)}>
@@ -440,7 +445,7 @@ function DaftarDialog({ studentId }) {
                 <p className="hint">Atau isi data orang baru di bawah.</p>
               </> : <p className="hint">{query ? "Tidak ada yang cocok. Isi data orang baru di bawah." : "Atau langsung isi data orang baru di bawah."}</p>}
             </div>
-            {picked ? <div className="field span-all">
+            {picked ? <div className="field span-all" id="df-person-chip">
               <p className="hint">{picked.daftarCount > 0 ? "Sudah pernah daftar" : "Belum pernah daftar"}: <strong>{picked.name}</strong>{picked.email ? `, ${picked.email}` : ""}, {fmtWa(picked.wa)}. Data lamanya tidak berubah.</p>
               <button className="btn btn--quiet btn--sm" type="button" onClick={() => { setPickedId(null); setQ(""); setTimeout(() => $("#df-q")?.focus(), 0); }}>Ganti orang</button>
             </div> : null}
@@ -576,7 +581,7 @@ function PendaftaranDialog({ id }) {
     const done = busy($("#pdf-save"), "Menyimpan...");
     try {
       await api(`/api/admin/pendaftaran/${p.id}`, { method: "PUT", body });
-      closeDialog();
+      closeDialog("pendaftaran");
       await reload();
       toast("Pendaftaran diperbarui.");
     } catch (error) {
@@ -683,7 +688,7 @@ function ProgramDialog({ id }) {
     const done = busy($("#pg-save"), "Menyimpan...");
     try {
       await api(p ? `/api/admin/programs/${p.id}` : "/api/admin/programs", { method: p ? "PUT" : "POST", body });
-      closeDialog();
+      closeDialog("program");
       await reload();
       toast(p ? `${name} tersimpan.` : `${name} ditambahkan dan bisa dipilih di formulir siswa.`);
     } catch (error) {
@@ -738,7 +743,7 @@ function ProgramDialog({ id }) {
           <fieldset className="field">
             <legend className="label">Tutor yang mengajar</legend>
             <p className="hint">Hanya tutor yang dicentang yang bisa dipilih saat membuat kelas untuk program ini.</p>
-            <div className="check-grid">
+            <div className="check-grid" id="pg-tutors">
               {db.tutors.length
                 ? db.tutors.map((t) => <label key={t} className="check"><input type="checkbox" value={t} defaultChecked={Boolean(p && p.tutors.includes(t))} /><span>{t}</span></label>)
                 : <p className="hint">Belum ada tutor. Tambahkan tutor di tab Kelas &amp; Tutor, lalu centang namanya di sini.</p>}
@@ -825,7 +830,7 @@ function CertTypeDialog({ id }) {
     const done = busy($("#ct-save"), "Menyimpan...");
     try {
       await api(id ? `/api/admin/certificate-types/${id}` : "/api/admin/certificate-types", { method: id ? "PUT" : "POST", body });
-      closeDialog();
+      closeDialog("certtype");
       await reload();
       toast(id ? `${body.name} tersimpan.` : `${body.name} ditambahkan dan bisa dipilih saat menerbitkan sertifikat.`);
     } catch (error) {
@@ -1010,7 +1015,7 @@ function CertDialog({ studentId, certId }) {
       const r = c
         ? await api(`/api/admin/certificates/${c.id}`, { method: "PUT", body: { recipient: nameOnCert, details } })
         : await api("/api/admin/certificates", { method: "POST", body: { typeId: type.id, studentId: studentId2, recipient: nameOnCert, issuedOn: dateIso, details } });
-      closeDialog();
+      closeDialog("cert");
       await reload();
       const id = c ? c.id : r.id;
       toast(c ? `Data sertifikat ${r.number} tersimpan.` : `Sertifikat ${r.number} terbit.`, { label: "Cetak", run: () => openCertPage(id) });
@@ -1123,7 +1128,7 @@ function WaDialog({ studentId, opts }) {
     try {
       await api(`/api/admin/students/${s.id}/whatsapp`, { method: "POST", body: { text: trimmed, label: opts.label } });
       sent = true;
-      closeDialog();
+      closeDialog("wa");
       toast(`Pesan WhatsApp terkirim ke ${firstName(s.name)}.`);
     } catch (error) {
       if (sessionEnded(error)) return;
@@ -1191,7 +1196,7 @@ function FormDialog({ spec }) {
     let ok = false;
     try { ok = await spec.onSubmit(values, fail); } finally { done(); }
     if (bad) { bad.focus(); return; }
-    if (ok !== false) closeDialog();
+    if (ok !== false) closeDialog("form");
   }
 
   return (
@@ -1224,26 +1229,55 @@ function FormDialog({ spec }) {
 }
 
 /* ===================== Confirm dialog (promise based) ===================== */
+/* The confirm is an overlay with its own state, not the one open dialog: it must be able to sit on
+   top of another dialog (deleting a question from its editor) without unmounting it, and a pending
+   save must never eat its close event. The buttons resolve directly, because some browser builds
+   do not deliver the dialog close event reliably; the close event stays as the Esc fallback. */
+let confirmState = null;
+let confirmSeq = 0;
 export function confirmDialog({ title, message, confirmLabel, danger = true, reasonLabel = "", reasonPlaceholder = "" }) {
   return new Promise((resolve) => {
-    openDialog({ kind: "confirm", resolve, spec: { title, message, confirmLabel, danger, reasonLabel, reasonPlaceholder } });
+    confirmState = { seq: ++confirmSeq, resolve, spec: { title, message, confirmLabel, danger, reasonLabel, reasonPlaceholder } };
+    notify();
   });
+}
+function closeConfirm() { confirmState = null; notify(); }
+export function ConfirmHost() {
+  useVersion();
+  if (!confirmState) return null;
+  return <ConfirmDialog key={confirmState.seq} spec={confirmState.spec} resolve={confirmState.resolve} />;
 }
 
 function ConfirmDialog({ spec, resolve }) {
   const ref = useRef(null);
+  const settled = useRef(false);
   useEffect(() => {
     const d = ref.current;
     d.showModal();
     (spec.reasonLabel ? $("#cf-reason") : $("#cf-cancel"))?.focus();
-    const handler = () => resolve({ ok: d.returnValue === "ok", reason: $("#cf-reason").value.trim() });
-    d.addEventListener("close", handler, { once: true });
-    return () => { d.removeEventListener("close", handler); if (d.open) d.close(); };
+    // Esc and the backdrop close the dialog natively; without this fallback those paths would
+    // leave the awaiting code hanging on engines where the close event does not arrive.
+    const onClosed = () => { if (!settled.current) { settled.current = true; resolve({ ok: false, reason: "" }); closeConfirm(); } };
+    d.addEventListener("close", onClosed);
+    return () => {
+      d.removeEventListener("close", onClosed);
+      if (d.open) d.close();
+      if (!settled.current) { settled.current = true; resolve({ ok: false, reason: "" }); }
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+  const finish = (ok) => () => {
+    if (settled.current) return;
+    settled.current = true;
+    const reason = $("#cf-reason")?.value.trim() || "";
+    const d = ref.current;
+    if (d.open) d.close(ok ? "ok" : "cancel");
+    resolve({ ok, reason });
+    closeConfirm();
+  };
   return (
     <dialog ref={ref} id="dlg-confirm" className="dialog dialog--sm" aria-labelledby="cf-title" aria-describedby="cf-message">
-      <form className="dialog__form" method="dialog">
+      <form className="dialog__form" onSubmit={(e) => { e.preventDefault(); finish(false)(); }}>
         <header className="dialog__head"><h2 className="dialog__title" id="cf-title">{spec.title}</h2></header>
         <div className="dialog__body">
           <p className="dialog__text" id="cf-message">{spec.message}</p>
@@ -1254,8 +1288,8 @@ function ConfirmDialog({ spec, resolve }) {
         </div>
         <footer className="dialog__foot">
           <div className="dialog__foot-end">
-            <button className="btn btn--quiet" value="cancel" id="cf-cancel">Batal</button>
-            <button className={`btn ${spec.danger ? "btn--danger" : "btn--primary"}`} value="ok" id="cf-ok">{spec.confirmLabel}</button>
+            <button className="btn btn--quiet" type="button" id="cf-cancel" onClick={finish(false)}>Batal</button>
+            <button className={`btn ${spec.danger ? "btn--danger" : "btn--primary"}`} type="button" id="cf-ok" onClick={finish(true)}>{spec.confirmLabel}</button>
           </div>
         </footer>
       </form>

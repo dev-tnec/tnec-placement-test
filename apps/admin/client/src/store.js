@@ -5,9 +5,8 @@
 import { useSyncExternalStore } from "react";
 import { toast } from "./dom.js";
 
-export const BASE = location.pathname.startsWith("/admin-ui") ? "/admin-ui" : "";
-export const HOME = `${BASE}/`;
-export const LOGIN = `${BASE}/login`;
+export const HOME = "/admin/";
+export const LOGIN = "/admin/login";
 
 export const PAGE_SIZE = 15;
 export const KEYS = ["A", "B", "C", "D"];
