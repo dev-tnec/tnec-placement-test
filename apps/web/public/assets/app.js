@@ -158,7 +158,9 @@ const state = {
   attempt: null,
   perMode: false,
   autoSubmit: false,
-  audio: null,
+  sections: [],
+  audioPlayed: new Set(),
+  audioSection: null,
   maxStrikes: 3,
   index: 0,
   answers: {},
@@ -324,22 +326,25 @@ async function init() {
 
 /* ---------- Settings from the server ---------- */
 
-/* One play per attempt, enforced by the server: the first press marks the attempt, a reload or a
+/* One play per section per attempt, enforced by the server: the first press marks the section, a
    second press gets a refusal. After the audio ends the button disappears. */
 async function playListeningAudio() {
-  if (!state.audio || !state.attempt) return;
+  const section = state.audioSection;
+  if (!section || !state.attempt) return;
   els.audioPlay.disabled = true;
   try {
-    await api(`/api/attempts/${state.attempt.id}/audio-played`, { method: "POST" });
+    await api(`/api/attempts/${state.attempt.id}/audio-played`, { method: "POST", body: { sectionId: section.id } });
   } catch (error) {
-    els.audioNote.textContent = error.message || "Audio sudah pernah diputar untuk tes ini.";
+    els.audioNote.textContent = error.message || "Audio bagian ini sudah pernah diputar.";
     els.audioPlay.hidden = true;
+    state.audioPlayed.add(section.id);
     return;
   }
+  state.audioPlayed.add(section.id);
   els.listeningAudio.play().catch(() => {
     els.audioNote.textContent = "Browser kamu memblokir suara. Periksa izin suara di address bar, lalu muat ulang halaman.";
   });
-  els.audioNote.textContent = "Audio sedang diputar. Dengarkan sampai selesai; audionya tidak bisa diputar lagi.";
+  els.audioNote.textContent = `Audio ${section.title} sedang diputar. Dengarkan sampai selesai; audionya tidak bisa diputar lagi.`;
   els.listeningAudio.addEventListener("ended", () => {
     els.audioPlay.hidden = true;
     els.audioNote.textContent = "Audio selesai. Lanjutkan menjawab soal listening, lalu bagian reading.";
@@ -549,7 +554,9 @@ function beginAttempt(data) {
   };
   state.perMode = data.timeMode === "per";
   state.autoSubmit = Boolean(data.autoSubmit);
-  state.audio = data.audio || null;
+  state.sections = data.sections || [];
+  state.audioPlayed = new Set();
+  state.audioSection = null;
   state.maxStrikes = data.maxViolations || state.maxStrikes;
   state.index = 0;
   state.answers = {};
@@ -581,15 +588,6 @@ function beginAttempt(data) {
   els.finishNote.textContent = state.perMode
     ? "Setiap soal punya waktunya sendiri. Soal berikutnya muncul otomatis saat waktu habis, dan jawaban terkirim setelah soal terakhir. Tombol kirim baru bisa dipakai setelah semua soal dijawab."
     : "Periksa kembali jawaban kamu sebelum mengirim, karena jawaban tidak bisa diubah setelah terkirim. Semua soal juga harus sudah dijawab sebelum jawaban bisa dikirim.";
-
-  // The listening audio of the IELTS mockup: one play per attempt, marked on the server.
-  els.audioCard.hidden = !state.audio;
-  if (state.audio) {
-    els.listeningAudio.src = state.audio.url;
-    els.audioPlay.hidden = false;
-    els.audioPlay.disabled = false;
-    els.audioNote.textContent = "Putar audionya saat kamu siap. Audio hanya bisa diputar satu kali, jadi pastikan tempatmu tenang dan speaker atau headsetmu menyala.";
-  }
 
   showScreen("test");
   buildNavigator();
@@ -635,16 +633,33 @@ function buildNavigator() {
 
 function renderQuestion() {
   const question = state.attempt.questions[state.index];
+  const section = question.sectionId ? state.sections.find((s) => s.id === question.sectionId) : null;
   const partLabel = question.part ? ` \u00b7 Bagian ${question.part}` : "";
   els.questionBadge.textContent = `Soal ${state.index + 1} \u00b7 ${question.skill || "Grammar"}${partLabel}`;
   els.prompt.textContent = question.prompt;
 
-  if (question.passage) {
+  // The section owns the reading passage or listening instructions, so every question of the
+  // section shows the same text and a later shuffle cannot separate them.
+  const passage = section?.passage || question.passage;
+  if (passage) {
     els.passage.hidden = false;
-    els.passageText.textContent = question.passage;
+    els.passageText.textContent = passage;
   } else {
     els.passage.hidden = true;
     els.passageText.textContent = "";
+  }
+
+  // The audio belongs to the section too. One play per section, tracked on the server.
+  state.audioSection = section && section.audio ? section : null;
+  els.audioCard.hidden = !state.audioSection;
+  if (state.audioSection) {
+    if (els.listeningAudio.getAttribute("src") !== state.audioSection.audio) els.listeningAudio.src = state.audioSection.audio;
+    const played = state.audioPlayed.has(state.audioSection.id);
+    els.audioPlay.hidden = played;
+    els.audioPlay.disabled = played;
+    els.audioNote.textContent = played
+      ? `Audio ${state.audioSection.title} sudah diputar. Lanjutkan menjawab soalnya.`
+      : `Putar audio ${state.audioSection.title} saat kamu siap. Audio hanya bisa diputar satu kali, jadi pastikan tempatmu tenang dan speaker atau headsetmu menyala.`;
   }
 
   els.optionsList.replaceChildren();

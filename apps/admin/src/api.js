@@ -5,7 +5,7 @@ import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { HttpError, json, readJson, nowSeconds, normalizeWhatsapp, isEmail, text, multiline, int } from "@tnec/core/http";
 import { randomToken, sha256Hex, verifyPassword, hashPassword } from "@tnec/core/crypto";
-import { TEST_KEYS, TEST_NAMES, mapTest, mapQuestion, loadQuestions, loadLevels, publicLevel, attemptStatus, focusStrikes, addActivity, newId } from "@tnec/core/store";
+import { TEST_KEYS, TEST_NAMES, mapTest, mapQuestion, mapSection, loadQuestions, loadLevels, publicLevel, attemptStatus, focusStrikes, addActivity, newId } from "@tnec/core/store";
 import {
   latestPendaftaran, daftarCount, normalizeBirthDate, normalizeOption,
   JENJANG_PENDIDIKAN, TAHU_DARI, PENDAFTARAN_STATUS,
@@ -237,6 +237,9 @@ const ROUTES = [
   ["DELETE", /^\/api\/admin\/tests\/(placement|pre|post|ielts-mockup)\/questions\/(\d+)$/, deleteQuestion],
   ["POST", /^\/api\/admin\/tests\/(placement|pre|post|ielts-mockup)\/questions\/(\d+)\/(up|down|duplicate|toggle)$/, questionAction],
   ["POST", /^\/api\/admin\/tests\/(placement|pre|post|ielts-mockup)\/apply-seconds$/, applySeconds],
+  ["POST", /^\/api\/admin\/tests\/(placement|pre|post|ielts-mockup)\/sections$/, createSection],
+  ["PUT", /^\/api\/admin\/tests\/(placement|pre|post|ielts-mockup)\/sections\/([\w-]+)$/, updateSection],
+  ["DELETE", /^\/api\/admin\/tests\/(placement|pre|post|ielts-mockup)\/sections\/([\w-]+)$/, deleteSection],
   ["PUT", /^\/api\/admin\/levels$/, updateLevels],
   ["GET", /^\/api\/admin\/attempts\/([0-9a-f-]{36})$/, getAttemptDetail],
   ["POST", /^\/api\/admin\/attempts\/([0-9a-f-]{36})\/(void|restore|resend-email)$/, attemptAction],
@@ -300,6 +303,7 @@ async function bootstrap(request, env, user, url) {
   const [res, certificates] = await Promise.all([db.batch([
     stmt("SELECT * FROM tests"),
     stmt("SELECT * FROM questions ORDER BY test_key, position, id"),
+    stmt("SELECT * FROM question_sections ORDER BY test_key, position, id"),
     stmt("SELECT * FROM levels ORDER BY position"),
     stmt("SELECT * FROM students ORDER BY created_at DESC"),
     stmt(`SELECT id, test_key, student_id, started_at, expires_at, submitted_at, status, score, total, level_key, name,
@@ -319,7 +323,7 @@ async function bootstrap(request, env, user, url) {
             FROM speaking_submissions ORDER BY created_at DESC LIMIT 5000`),
     stmt("SELECT * FROM pendaftaran ORDER BY registered_at, id"),
   ]), certificateData(env)]);
-  const [tests, questions, levels, students, attempts, lastActs, enrolled, programs, durations, programTutors, tutors, periods, classes, s7, s30, speaking, pendaftaran] = res.map((r) => r.results);
+  const [tests, questions, sections, levels, students, attempts, lastActs, enrolled, programs, durations, programTutors, tutors, periods, classes, s7, s30, speaking, pendaftaran] = res.map((r) => r.results);
   const speakingByAttempt = new Map(speaking.map((s) => [s.attempt_id, s]));
   const last = new Map(lastActs.map((r) => [r.student_id, r.last_at]));
   // Registrations per student, oldest to newest: they drive the registered filter and the count.
@@ -354,6 +358,7 @@ async function bootstrap(request, env, user, url) {
       key,
       settings: mapTest(tests.find((t) => t.key === key)),
       questions: questions.filter((q) => q.test_key === key).map(mapQuestion),
+      sections: sections.filter((s) => s.test_key === key).map(mapSection),
       stats: stats[key] || { d7: {}, d30: {} },
     }])),
     levels: levels.map((l) => ({ key: l.key, label: l.label, min: l.min_score, max: l.max_score, program: l.program })),
@@ -885,8 +890,13 @@ function readSpeakingSettings(body, key, next) {
 }
 
 function readQuestionInput(body) {
-  const prompt = multiline(body.prompt, 1000);
-  const passage = multiline(body.passage, 4000);
+  const rawPrompt = String(body.prompt ?? "").replace(/\r\n/g, "\n").trim();
+  const rawPassage = String(body.passage ?? "").replace(/\r\n/g, "\n").trim();
+  // Long text is refused, never silently cut: the reading passages are longer than the old cap.
+  if (rawPrompt.length > 1000) throw new HttpError(400, "Teks soal terlalu panjang, maksimal 1.000 karakter.");
+  if (rawPassage.length > 20000) throw new HttpError(400, "Bacaan terlalu panjang, maksimal 20.000 karakter.");
+  const prompt = rawPrompt;
+  const passage = rawPassage;
   if (!prompt) throw new HttpError(400, "Teks soal wajib diisi.");
   const part = body.part === undefined || body.part === null || body.part === "" ? null : int(body.part, { min: 1, max: 9 });
   if (body.part !== undefined && body.part !== null && body.part !== "" && part === null) throw new HttpError(400, "Nomor bagian harus angka 1 sampai 9.");
@@ -914,14 +924,24 @@ function readQuestionInput(body) {
   return { ...base, type: "choice", accepted: null, options, answer: body.answer };
 }
 
+async function readSectionId(env, key, body) {
+  const raw = String(body.sectionId || "").trim();
+  if (!raw) return null;
+  const row = await env.DB.prepare("SELECT id FROM question_sections WHERE id = ? AND test_key = ?").bind(raw, key).first();
+  if (!row) throw new HttpError(400, "Bagian tidak ditemukan di tes ini.", { field: "sectionId" });
+  return row.id;
+}
+
 async function createQuestion(request, env, user, url, key) {
-  const q = readQuestionInput(await readJson(request));
+  const body = await readJson(request);
+  const q = readQuestionInput(body);
+  const sectionId = await readSectionId(env, key, body);
   const test = await env.DB.prepare("SELECT per_default FROM tests WHERE key = ?").bind(key).first();
   const max = await env.DB.prepare("SELECT COALESCE(MAX(position), 0) AS p FROM questions WHERE test_key = ?").bind(key).first();
   const now = nowSeconds();
-  const r = await env.DB.prepare(`INSERT INTO questions (test_key, position, skill, part, prompt, passage, option_a, option_b, option_c, option_d, option_e, option_f, answer, seconds, status, type, accepted, created_at, updated_at)
-                                  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id`)
-    .bind(key, max.p + 1, q.skill, q.part, q.prompt, q.passage,
+  const r = await env.DB.prepare(`INSERT INTO questions (test_key, position, skill, part, section_id, prompt, passage, option_a, option_b, option_c, option_d, option_e, option_f, answer, seconds, status, type, accepted, created_at, updated_at)
+                                  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id`)
+    .bind(key, max.p + 1, q.skill, q.part, sectionId, q.prompt, q.passage,
       q.options.A ?? null, q.options.B ?? null, q.options.C ?? null, q.options.D ?? null, q.options.E ?? null, q.options.F ?? null,
       q.answer, q.seconds ?? test.per_default, q.status, q.type, q.accepted ? JSON.stringify(q.accepted) : null, now, now).first();
   return json({ ok: true, id: r ? r.id : null });
@@ -935,10 +955,12 @@ async function getQuestionRow(env, key, id) {
 
 async function updateQuestion(request, env, user, url, key, id) {
   const row = await getQuestionRow(env, key, Number(id));
-  const q = readQuestionInput(await readJson(request));
-  await env.DB.prepare(`UPDATE questions SET skill = ?, part = ?, prompt = ?, passage = ?, option_a = ?, option_b = ?, option_c = ?, option_d = ?, option_e = ?, option_f = ?,
+  const body = await readJson(request);
+  const q = readQuestionInput(body);
+  const sectionId = await readSectionId(env, key, body);
+  await env.DB.prepare(`UPDATE questions SET skill = ?, part = ?, section_id = ?, prompt = ?, passage = ?, option_a = ?, option_b = ?, option_c = ?, option_d = ?, option_e = ?, option_f = ?,
                          answer = ?, seconds = ?, status = ?, type = ?, accepted = ?, updated_at = ? WHERE id = ?`)
-    .bind(q.skill, q.part, q.prompt, q.passage,
+    .bind(q.skill, q.part, sectionId, q.prompt, q.passage,
       q.options.A ?? null, q.options.B ?? null, q.options.C ?? null, q.options.D ?? null, q.options.E ?? null, q.options.F ?? null,
       q.answer, q.seconds ?? row.seconds, q.status, q.type, q.accepted ? JSON.stringify(q.accepted) : null, nowSeconds(), row.id).run();
   return json({ ok: true, keyChanged: row.answer !== q.answer });
@@ -956,6 +978,65 @@ async function deleteQuestion(request, env, user, url, key, id) {
   return json({ ok: true });
 }
 
+/* ---------- Question sections: a question range with its passage and audio ---------- */
+
+function readSectionInput(body) {
+  const title = text(body.title, 80);
+  if (!title) throw new HttpError(400, "Nama bagian wajib diisi.", { field: "title" });
+  const skill = ["Listening", "Reading"].includes(body.skill) ? body.skill : "Reading";
+  const part = body.part === undefined || body.part === null || body.part === "" ? null : int(body.part, { min: 1, max: 9 });
+  if (body.part !== undefined && body.part !== null && body.part !== "" && part === null) throw new HttpError(400, "Nomor bagian harus angka 1 sampai 9.", { field: "part" });
+  const from = int(body.from, { min: 1, max: 500 });
+  const to = int(body.to, { min: 1, max: 500 });
+  if (from === null || to === null || from > to) throw new HttpError(400, "Rentang soal tidak valid.", { field: "from" });
+  const rawPassage = String(body.passage ?? "").replace(/\r\n/g, "\n").trim();
+  if (rawPassage.length > 20000) throw new HttpError(400, "Bacaan terlalu panjang, maksimal 20.000 karakter.", { field: "passage" });
+  const audioUrl = String(body.audioUrl || "").trim();
+  if (audioUrl && !audioUrl.startsWith("/")) throw new HttpError(400, "Alamat audio harus dimulai dengan / dan dihosting di situs tes ini.", { field: "audioUrl" });
+  return { title, skill, part, from, to, passage: rawPassage || null, audioUrl: audioUrl || null };
+}
+
+async function assignSectionRange(env, key, sectionId, from, to, part) {
+  await env.DB.prepare("UPDATE questions SET section_id = ?, part = COALESCE(?, part) WHERE test_key = ? AND position BETWEEN ? AND ?")
+    .bind(sectionId, part, key, from, to).run();
+}
+
+async function createSection(request, env, user, url, key) {
+  const s = readSectionInput(await readJson(request));
+  const max = await env.DB.prepare("SELECT COALESCE(MAX(position), 0) AS p FROM question_sections WHERE test_key = ?").bind(key).first();
+  const now = nowSeconds();
+  const id = newId("sec");
+  await env.DB.prepare(`INSERT INTO question_sections (id, test_key, position, title, skill, part, passage, audio_url, created_at, updated_at)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+    .bind(id, key, max.p + 1, s.title, s.skill, s.part, s.passage, s.audioUrl, now, now).run();
+  await assignSectionRange(env, key, id, s.from, s.to, s.part);
+  return json({ ok: true, id });
+}
+
+async function getSectionRow(env, key, id) {
+  const row = await env.DB.prepare("SELECT * FROM question_sections WHERE id = ? AND test_key = ?").bind(id, key).first();
+  if (!row) throw new HttpError(404, "Bagian tidak ditemukan.");
+  return row;
+}
+
+async function updateSection(request, env, user, url, key, id) {
+  const row = await getSectionRow(env, key, id);
+  const s = readSectionInput(await readJson(request));
+  await env.DB.prepare(`UPDATE question_sections SET title = ?, skill = ?, part = ?, passage = ?, audio_url = ?, updated_at = ? WHERE id = ?`)
+    .bind(s.title, s.skill, s.part, s.passage, s.audioUrl, nowSeconds(), row.id).run();
+  // Questions outside the new range leave the section; questions inside it join, even when they
+  // belonged to another section before.
+  await env.DB.prepare("UPDATE questions SET section_id = NULL WHERE section_id = ? AND (position < ? OR position > ?)").bind(row.id, s.from, s.to).run();
+  await assignSectionRange(env, key, row.id, s.from, s.to, s.part);
+  return json({ ok: true });
+}
+
+async function deleteSection(request, env, user, url, key, id) {
+  const row = await getSectionRow(env, key, id);
+  await env.DB.prepare("DELETE FROM question_sections WHERE id = ?").bind(row.id).run();
+  return json({ ok: true });
+}
+
 async function questionAction(request, env, user, url, key, id, action) {
   const row = await getQuestionRow(env, key, Number(id));
   const now = nowSeconds();
@@ -966,8 +1047,8 @@ async function questionAction(request, env, user, url, key, id, action) {
   } else if (action === "duplicate") {
     await env.DB.batch([
       env.DB.prepare("UPDATE questions SET position = position + 1 WHERE test_key = ? AND position > ?").bind(key, fresh.position),
-      env.DB.prepare(`INSERT INTO questions (test_key, position, skill, part, prompt, passage, option_a, option_b, option_c, option_d, option_e, option_f, answer, seconds, status, type, accepted, created_at, updated_at)
-                      SELECT test_key, position + 1, skill, part, prompt, passage, option_a, option_b, option_c, option_d, option_e, option_f, answer, seconds, 'draf', type, accepted, ?::bigint, ?::bigint FROM questions WHERE id = ?`).bind(now, now, fresh.id),
+      env.DB.prepare(`INSERT INTO questions (test_key, position, skill, part, section_id, prompt, passage, option_a, option_b, option_c, option_d, option_e, option_f, answer, seconds, status, type, accepted, created_at, updated_at)
+                      SELECT test_key, position + 1, skill, part, section_id, prompt, passage, option_a, option_b, option_c, option_d, option_e, option_f, answer, seconds, 'draf', type, accepted, ?::bigint, ?::bigint FROM questions WHERE id = ?`).bind(now, now, fresh.id),
     ]);
   } else {
     const other = await env.DB.prepare(`SELECT id, position FROM questions WHERE test_key = ? AND position ${action === "up" ? "< ? ORDER BY position DESC" : "> ? ORDER BY position ASC"} LIMIT 1`)

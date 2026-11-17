@@ -56,6 +56,7 @@ export function DialogHost() {
   if (!d) return null;
   switch (d.kind) {
     case "question": return <QuestionDialog key={d.seq} id={d.id} />;
+  case "section": return <SectionDialog key={d.seq} id={d.id} />;
     case "student": return <StudentDialog key={d.seq} id={d.id} />;
     case "daftar": return <DaftarDialog key={d.seq} studentId={d.studentId} />;
     case "pendaftaran": return <PendaftaranDialog key={d.seq} id={d.id} />;
@@ -110,7 +111,10 @@ function QuestionDialog({ id }) {
     if (hasPassage && !passage) fail($("#qe-passage"), "qe-passage-err", "Bacaan wajib diisi kalau opsi bacaan dicentang.");
 
     const body = { prompt, passage, type, skill: $("#qe-skill").value, status: $("#qe-status").value, ...(per ? { seconds: Number($("#qe-seconds")?.value) } : {}) };
-    if (isIelts) body.part = $("#qe-part").value || null;
+    if (isIelts) {
+      body.part = $("#qe-part").value || null;
+      body.sectionId = $("#qe-section")?.value || null;
+    }
 
     if (type === "text") {
       const accepted = $("#qe-accepted").value.split(/\n/).map((a) => a.trim()).filter(Boolean);
@@ -160,15 +164,21 @@ function QuestionDialog({ id }) {
             <textarea className="textarea" id="qe-prompt" rows="3" defaultValue={q ? q.prompt : ""} placeholder="Contoh: Yesterday she ___ to the market."></textarea>
             <p className="error" id="qe-prompt-err" hidden></p>
           </div>
-          <label className="check"><input type="checkbox" checked={hasPassage} onChange={(e) => { setHasPassage(e.target.checked); if (e.target.checked) setTimeout(() => $("#qe-passage")?.focus(), 0); }} /><span>{isIelts ? "Soal ini memakai bacaan atau instruksi" : "Soal ini memakai bacaan"}</span></label>
-          <div className="field" hidden={!hasPassage}>
-            <label className="label" htmlFor="qe-passage">{isIelts ? "Bacaan atau instruksi" : "Bacaan"}</label>
-            <textarea className="textarea" id="qe-passage" rows="5" defaultValue={q ? q.passage : ""}></textarea>
-            <p className="hint">{isIelts
-              ? "Teks ini tampil di atas soal: petunjuk pengerjaan untuk soal listening, atau bacaan untuk soal reading."
-              : "Bacaan tampil di atas soal, seperti pada soal tentang kata presence."}</p>
-            <p className="error" id="qe-passage-err" hidden></p>
-          </div>
+          {isIelts ? <div className="field">
+            <label className="label" htmlFor="qe-section">Bagian</label>
+            <select className="select" id="qe-section" defaultValue={q && q.sectionId ? q.sectionId : ""}>
+              <OptList list={[["", "Tanpa bagian"], ...t.sections.map((s) => [s.id, s.title])]} />
+            </select>
+            <p className="hint">Bacaan dan audio mengikuti bagian ini, jadi keduanya tetap bersama soal saat urutannya diacak. Atur bagiannya di tab Bagian.</p>
+          </div> : <>
+            <label className="check"><input type="checkbox" checked={hasPassage} onChange={(e) => { setHasPassage(e.target.checked); if (e.target.checked) setTimeout(() => $("#qe-passage")?.focus(), 0); }} /><span>Soal ini memakai bacaan</span></label>
+            <div className="field" hidden={!hasPassage}>
+              <label className="label" htmlFor="qe-passage">Bacaan</label>
+              <textarea className="textarea" id="qe-passage" rows="5" defaultValue={q ? q.passage : ""}></textarea>
+              <p className="hint">Bacaan tampil di atas soal, seperti pada soal tentang kata presence.</p>
+              <p className="error" id="qe-passage-err" hidden></p>
+            </div>
+          </>}
           {isIelts ? <fieldset className="field">
             <legend className="label">Bentuk jawaban</legend>
             <div className="modes" role="radiogroup" aria-label="Bentuk jawaban">
@@ -234,6 +244,117 @@ function QuestionDialog({ id }) {
           <FootEnd>
             <button className="btn btn--quiet" type="button" onClick={closeDialog}>Batal</button>
             <button className="btn btn--primary" type="submit">Simpan soal</button>
+          </FootEnd>
+        </footer>
+      </form>
+    </Modal>
+  );
+}
+
+/* ===================== Bagian (question section: range, passage, audio) ===================== */
+export function openSectionEditor(id) { openDialog({ kind: "section", id: id || null }); }
+
+function SectionDialog({ id }) {
+  const t = T();
+  const name = TEST_META[ui.test].name;
+  const s = id ? t.sections.find((x) => x.id === id) : null;
+  const max = t.questions.length ? Math.max(...t.questions.map((q) => q.position)) : 0;
+  const own = s ? t.questions.filter((q) => q.sectionId === s.id).map((q) => q.position) : [];
+  const from = own.length ? Math.min(...own) : "";
+  const to = own.length ? Math.max(...own) : "";
+
+  async function save(e) {
+    e.preventDefault();
+    const form = e.currentTarget;
+    clearErrors(form);
+    let first = null;
+    const fail = (input, errId, msg) => { fieldError(input, errId, msg); if (!first) first = input; };
+    const title = $("#se-title").value.trim();
+    const start = Number($("#se-from").value);
+    const end = Number($("#se-to").value);
+    const audioUrl = $("#se-audio").value.trim();
+    if (!title) fail($("#se-title"), "se-title-err", "Nama bagian wajib diisi.");
+    if (!Number.isInteger(start) || !Number.isInteger(end) || start < 1 || end > max || start > end) {
+      fail($("#se-from"), "se-range-err", `Rentang soal harus angka 1 sampai ${max}, dan soal awal tidak boleh lebih besar dari soal akhir.`);
+    }
+    if (audioUrl && !audioUrl.startsWith("/")) fail($("#se-audio"), "se-audio-err", "Alamat audio harus dimulai dengan / dan dihosting di situs tes ini.");
+    if (first) { first.focus(); return; }
+
+    const body = {
+      title, skill: $("#se-skill").value, part: $("#se-part").value || null, from: start, to: end,
+      passage: $("#se-passage").value.trim(), audioUrl,
+    };
+    const done = busy(form.querySelector('[type="submit"]'), "Menyimpan...");
+    const result = await mutate(
+      () => api(s ? `/api/admin/tests/${ui.test}/sections/${s.id}` : `/api/admin/tests/${ui.test}/sections`, { method: s ? "PUT" : "POST", body }),
+      s ? "Bagian tersimpan." : "Bagian baru tersimpan. Soal di rentang itu masuk ke bagian ini.",
+    );
+    done();
+    if (result) closeDialog("section");
+  }
+
+  async function remove() {
+    const r = await confirmDialog({
+      title: `Hapus ${s.title}?`,
+      message: "Soal di bagian ini tetap ada, tetapi kehilangan bacaan dan audionya. Pindahkan soalnya ke bagian lain dulu kalau masih dipakai.",
+      confirmLabel: "Hapus bagian",
+    });
+    if (!r.ok) return;
+    if (dlg?.kind === "section") closeDialog("section");
+    await mutate(() => api(`/api/admin/tests/${ui.test}/sections/${s.id}`, { method: "DELETE" }), "Bagian dihapus.");
+  }
+
+  return (
+    <Modal id="dlg-section" focus="#se-title" onClose={closeDialog}>
+      <form className="dialog__form" onSubmit={save} noValidate>
+        <Head title={s ? `Ubah ${s.title}` : "Tambah bagian"}
+          sub={`${name}. Satu bagian memegang satu rentang soal beserta bacaan dan audionya, jadi keduanya tetap bersama soal saat urutannya diacak.`} />
+        <div className="dialog__body">
+          <div className="field">
+            <label className="label" htmlFor="se-title">Nama bagian</label>
+            <input className="input" id="se-title" type="text" maxLength="80" defaultValue={s ? s.title : ""} placeholder="Contoh: Listening Part 1" />
+            <p className="error" id="se-title-err" hidden></p>
+          </div>
+          <div className="form-grid">
+            <div className="field">
+              <label className="label" htmlFor="se-skill">Skill</label>
+              <select className="select" id="se-skill" defaultValue={s ? s.skill : "Listening"}><OptList list={[["Listening", "Listening"], ["Reading", "Reading"]]} /></select>
+            </div>
+            <div className="field">
+              <label className="label" htmlFor="se-part">Bagian ke</label>
+              <select className="select" id="se-part" defaultValue={s && s.part ? String(s.part) : ""}><OptList list={[["", "Tanpa nomor"], ["1", "1"], ["2", "2"], ["3", "3"], ["4", "4"]]} /></select>
+            </div>
+          </div>
+          <div className="form-grid">
+            <div className="field">
+              <label className="label" htmlFor="se-from">Dari soal</label>
+              <input className="input tnum" id="se-from" type="number" min="1" max={max} defaultValue={from} />
+            </div>
+            <div className="field">
+              <label className="label" htmlFor="se-to">Sampai soal</label>
+              <input className="input tnum" id="se-to" type="number" min="1" max={max} defaultValue={to} />
+              <p className="hint">Dari {max} soal di tes ini. Soal di rentang ini pindah ke bagian ini.</p>
+              <p className="error" id="se-range-err" hidden></p>
+            </div>
+          </div>
+          <div className="field">
+            <label className="label" htmlFor="se-passage">Bacaan atau instruksi</label>
+            <textarea className="textarea" id="se-passage" rows="6" defaultValue={s ? s.passage : ""}></textarea>
+            <p className="hint">Tampil di atas setiap soal bagian ini. Kosongkan kalau bagian ini hanya berisi audio.</p>
+            <p className="error" id="se-passage-err" hidden></p>
+          </div>
+          <div className="field">
+            <label className="label" htmlFor="se-audio">Alamat audio</label>
+            <input className="input" id="se-audio" type="text" defaultValue={s ? s.audio : ""} placeholder="/audio/ielts-dec-1.mp3" />
+            <p className="hint">Diputar satu kali per percobaan, hanya untuk soal di bagian ini. Berkasnya di bawah apps/web/public/audio.</p>
+            <p className="error" id="se-audio-err" hidden></p>
+          </div>
+        </div>
+        <footer className="dialog__foot">
+          {s ? <button className="link-btn link-btn--danger" type="button" onClick={remove}>Hapus bagian</button> : null}
+          <FootEnd>
+            <button className="btn btn--quiet" type="button" onClick={closeDialog}>Batal</button>
+            <button className="btn btn--primary" type="submit">Simpan bagian</button>
           </FootEnd>
         </footer>
       </form>

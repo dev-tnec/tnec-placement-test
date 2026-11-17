@@ -19,7 +19,7 @@ import {
 } from "../ui.jsx";
 import { MenuBtn } from "../menus.jsx";
 import { resendEmail, speakingRetry, speakingReviewed, speakingSkip } from "../actions.js";
-import { openQuestionEditor, openDaftar } from "../dialogs.jsx";
+import { openQuestionEditor, openDaftar, openSectionEditor } from "../dialogs.jsx";
 import { $, busy, clearErrors, fieldError, toast } from "../dom.js";
 
 /* Jumlah soal aktif versus the top level threshold. */
@@ -44,12 +44,14 @@ export function TestPage({ testKey, tab }) {
   const own = db.attempts.filter((a) => a.test === testKey);
   const tabs = [["soal", "Soal & Jawaban", t.questions.length], ["submission", "Submission", own.length]];
   if (testKey === "placement") tabs.push(["lead", "Lead", leads().length]);
+  if (testKey === "ielts-mockup") tabs.push(["bagian", "Bagian", t.sections.length]);
   tabs.push(["pengaturan", "Pengaturan", null]);
   if (!tabs.some((x) => x[0] === tab)) tab = "soal";
   const actions = tab === "soal"
     ? <button className="btn btn--primary" type="button" onClick={() => openQuestionEditor(null)}><Icon name="plus" />Tambah soal</button>
     : tab === "submission" ? <button className="btn btn--quiet" type="button" onClick={() => exportAttempts(db.attempts.filter((a) => attemptMatches(a, ui.attempts[testKey], false)))}><Icon name="download" />Ekspor CSV</button>
-      : tab === "lead" ? <button className="btn btn--quiet" type="button" onClick={() => exportLeads()}><Icon name="download" />Ekspor CSV</button> : null;
+      : tab === "bagian" ? <button className="btn btn--primary" type="button" onClick={() => openSectionEditor(null)}><Icon name="plus" />Tambah bagian</button>
+        : tab === "lead" ? <button className="btn btn--quiet" type="button" onClick={() => exportLeads()}><Icon name="download" />Ekspor CSV</button> : null;
   return <>
     <PageHead title={meta.name}
       desc={t.settings.open ? null : <p className="page-desc"><Status label="Ditutup" kind="ring" muted /></p>}
@@ -59,7 +61,7 @@ export function TestPage({ testKey, tab }) {
         <a key={k} className="seg__item" href={`#/tes/${testKey}/${k}`} {...(k === tab ? { "aria-current": "page" } : {})}>{label}{n === null ? null : <> <span className="seg__n">{n}</span></>}</a>
       ))}
     </nav>
-    {tab === "soal" ? <QuestionsTab /> : tab === "submission" ? <SubmissionsTab /> : tab === "lead" ? <LeadTab /> : <SettingsTab testKey={testKey} />}
+    {tab === "soal" ? <QuestionsTab /> : tab === "submission" ? <SubmissionsTab /> : tab === "bagian" ? <SectionsTab /> : tab === "lead" ? <LeadTab /> : <SettingsTab testKey={testKey} />}
   </>;
 }
 
@@ -104,13 +106,15 @@ function QuestionsTab() {
           const num = activeQuestions(t).indexOf(x) + 1;
           const st = stats.get(x.id);
           const p = st ? pct(st.correct, st.n) : 0;
+          const section = x.sectionId ? t.sections.find((s) => s.id === x.sectionId) : null;
           return (
             <tr key={x.id} className={x.status === "draf" ? "is-draft" : ""} onClick={rowRun(() => openQuestionEditor(x.id))}>
               <td className="is-no is-top">{num ? pad(num) : <span className="muted">Draf</span>}</td>
               <td>
-                {(x.part || x.passage) ? <div className="q-tags">
-                  {x.part ? <span className="q-tag">Bagian {x.part}</span> : null}
-                  {x.passage ? <span className="q-tag"><Icon name="book" cls="icon--sm" />{x.skill === "Listening" ? "Dengan instruksi" : "Dengan bacaan"}</span> : null}
+                {(section || x.part || x.passage) ? <div className="q-tags">
+                  {section ? <span className="q-tag">{section.title}</span> : x.part ? <span className="q-tag">Bagian {x.part}</span> : null}
+                  {section?.audio ? <span className="q-tag"><Icon name="volume" cls="icon--sm" />Dengan audio</span> : null}
+                  {(section?.passage || (!section && x.passage)) ? <span className="q-tag"><Icon name="book" cls="icon--sm" />{x.skill === "Listening" ? "Dengan instruksi" : "Dengan bacaan"}</span> : null}
                 </div> : null}
                 <p className="q-prompt">{x.prompt}</p>
                 {x.type === "text"
@@ -138,6 +142,44 @@ function QuestionsTab() {
         })}</tbody>
       </table></div>
         : <Empty title="Tidak ada soal yang cocok dengan pencarian ini." desc="Coba kata kunci lain atau pilih skill yang berbeda." />}
+    </section>
+  </div>;
+}
+
+/* ===================== Bagian ===================== */
+
+function SectionsTab() {
+  useVersion();
+  const t = db.tests[ui.test];
+  const rows = t.sections.map((s) => {
+    const own = t.questions.filter((q) => q.sectionId === s.id).map((q) => q.position).sort((a, b) => a - b);
+    return { ...s, from: own[0] || null, to: own[own.length - 1] || null, n: own.length };
+  });
+
+  return <div className="stack">
+    <section className="panel">
+      <div className="toolbar toolbar--last">
+        <p className="toolbar__meta">Setiap bagian memegang satu rentang soal beserta bacaan dan audionya. Saat soal diacak nanti, bagian ini tetap bersama soalnya.</p>
+      </div>
+      {rows.length ? <div className="table-wrap"><table className="table">
+        <caption className="sr-only">Bagian {TEST_META[ui.test].name}</caption>
+        <thead><tr>
+          <th scope="col">Bagian</th><th scope="col">Rentang soal</th><th scope="col">Skill</th>
+          <th scope="col" className="hide-sm">Audio</th><th scope="col" className="hide-md">Bacaan</th>
+          <th scope="col" className="is-action"><span className="sr-only">Aksi</span></th>
+        </tr></thead>
+        <tbody>{rows.map((s) => (
+          <tr key={s.id} onClick={rowRun(() => openSectionEditor(s.id))}>
+            <td><p className="q-prompt">{s.title}</p></td>
+            <td className="nowrap tnum">{s.n ? `Soal ${s.from} sampai ${s.to}` : <span className="muted">Belum ada soal</span>}</td>
+            <td>{s.skill}</td>
+            <td className="hide-sm">{s.audio ? <span className="q-tag"><Icon name="volume" cls="icon--sm" />{s.audio.split("/").pop()}</span> : <span className="muted">Tidak ada</span>}</td>
+            <td className="hide-md">{s.passage ? `${s.passage.length} karakter` : <span className="muted">Tidak ada</span>}</td>
+            <td className="is-action"><button className="btn btn--quiet" type="button" onClick={(e) => { e.stopPropagation(); openSectionEditor(s.id); }}>Ubah</button></td>
+          </tr>
+        ))}</tbody>
+      </table></div>
+        : <Empty title="Belum ada bagian." desc="Tambahkan bagian untuk mengikat bacaan dan audio ke satu rentang soal." />}
     </section>
   </div>;
 }
@@ -425,15 +467,11 @@ function SettingsTab({ testKey }) {
     ? "Kalau ditutup, halaman tes menampilkan pesan bahwa tes sedang tidak tersedia. Pakai ini saat tim sedang merombak soal."
     : "Siswa terdaftar membuka tes lewat tautan pribadi dari admin. Kalau ditutup, tautan itu menampilkan pesan bahwa tes belum dibuka.";
   const sum = db.speaking;
-  const [mockupAudio, setMockupAudio] = useState(st.audioUrl || "");
   const [mockupAuto, setMockupAuto] = useState(st.autoSubmit);
 
-  async function saveMockupDelivery(e) {
-    clearErrors($("#panel-mockup"));
-    const url = mockupAudio.trim();
-    if (url && !url.startsWith("/")) { fieldError($("#set-audio"), "mockup-err", "Alamat audio harus dimulai dengan / dan dihosting di situs tes ini."); $("#set-audio").focus(); return; }
+  async function saveMockupAuto(e) {
     const done = busy(e.currentTarget, "Menyimpan...");
-    await mutate(() => api(`/api/admin/tests/ielts-mockup`, { method: "PUT", body: { audioUrl: url, autoSubmit: mockupAuto } }),
+    await mutate(() => api(`/api/admin/tests/ielts-mockup`, { method: "PUT", body: { autoSubmit: mockupAuto } }),
       mockupAuto ? "Tersimpan. Saat waktu habis, jawaban terkirim otomatis." : "Tersimpan. Saat waktu habis, percobaan dianggap gagal.");
     done();
   }
@@ -513,24 +551,18 @@ function SettingsTab({ testKey }) {
 
     {testKey === "ielts-mockup" ? <section className="panel" id="panel-mockup">
       <header className="panel__head"><div>
-        <h2 className="panel__title">Audio dan pengiriman</h2>
-        <p className="panel__desc">Audio listening diputar satu kali per percobaan. Alamatnya dihosting di situs tes ini dan dimulai dengan garis miring.</p>
+        <h2 className="panel__title">Pengiriman jawaban</h2>
+        <p className="panel__desc">Aturan mock IELTS: waktu habis mengirim jawaban apa adanya dan tetap menghasilkan band.</p>
       </div></header>
       <div className="panel__body rules">
         <div className="field">
-          <label className="label" htmlFor="set-audio">Alamat audio listening</label>
-          <input className="input" id="set-audio" type="text" value={mockupAudio} onChange={(e) => setMockupAudio(e.target.value)} placeholder="/audio/ielts-dec-1.mp3" />
-          <p className="hint">Berkasnya disimpan tim teknis di bawah apps/web/public/audio.</p>
-          <p className="error" id="mockup-err" hidden></p>
-        </div>
-        <div className="field">
           <label className="switch"><input type="checkbox" checked={mockupAuto} onChange={(e) => setMockupAuto(e.target.checked)} /><span className="switch__track" aria-hidden="true"></span>Kirim jawaban otomatis saat waktu habis</label>
-          <p className="hint">Aturan mock IELTS: waktu habis mengirim jawaban apa adanya dan tetap menghasilkan band. Matikan untuk menggagalkan percobaan seperti placement test.</p>
+          <p className="hint">Matikan untuk menggagalkan percobaan seperti placement test. Audio dan bacaan sekarang diatur per bagian di tab Bagian, bukan di sini.</p>
         </div>
       </div>
       <div className="panel__foot panel__foot--end">
-        <span className="hint">{st.audioUrl ? `Audio sekarang: ${st.audioUrl}` : "Belum ada alamat audio."}</span>
-        <button className="btn btn--primary" type="button" onClick={saveMockupDelivery}>Simpan audio dan pengiriman</button>
+        <a className="link-btn" href="#/tes/ielts-mockup/bagian">Buka tab Bagian</a>
+        <button className="btn btn--primary" type="button" onClick={saveMockupAuto}>Simpan pengiriman</button>
       </div>
     </section> : null}
 

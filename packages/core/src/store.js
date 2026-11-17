@@ -53,11 +53,31 @@ export function mapQuestion(row) {
     accepted: row.accepted ? JSON.parse(row.accepted) : null,
     prompt: row.prompt,
     passage: row.passage || "",
+    sectionId: row.section_id || null,
     options,
     answer: row.answer,
     seconds: row.seconds,
     status: row.status,
   };
+}
+
+export function mapSection(row) {
+  if (!row) return null;
+  return {
+    id: row.id,
+    test: row.test_key,
+    position: row.position,
+    title: row.title,
+    skill: row.skill,
+    part: row.part ?? null,
+    passage: row.passage || "",
+    audio: row.audio_url || "",
+  };
+}
+
+export async function loadSections(env, key) {
+  const { results } = await env.DB.prepare("SELECT * FROM question_sections WHERE test_key = ? ORDER BY position, id").bind(key).all();
+  return results.map(mapSection);
 }
 
 export async function loadQuestions(env, key, { activeOnly = false } = {}) {

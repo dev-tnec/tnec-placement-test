@@ -3,7 +3,7 @@
 
 import { HttpError, json, readJson, nowSeconds, normalizeWhatsapp, isEmail } from "@tnec/core/http";
 import {
-  TEST_NAMES, PER_MODE_GRACE_SECONDS, loadTest, loadQuestions, loadLevels, levelFor, publicLevel, programCards,
+  TEST_NAMES, PER_MODE_GRACE_SECONDS, loadTest, loadQuestions, loadSections, loadLevels, levelFor, publicLevel, programCards,
   focusStrikes, addActivity, upsertStudentFromContact, newId,
 } from "@tnec/core/store";
 import { normalizeTextAnswer, bandForRaw, overallBand } from "@tnec/core/bands";
@@ -58,7 +58,7 @@ async function handleApi(request, env, url) {
     if (!ATTEMPT_ID_RE.test(attemptId)) throw new HttpError(400, "ID percobaan tidak valid.");
     if (action === "violation") return logViolation(request, env, attemptId);
     if (action === "submit") return submitAttempt(request, env, attemptId);
-    if (action === "audio-played") return markAudioPlayed(env, attemptId);
+    if (action === "audio-played") return markAudioPlayed(request, env, attemptId);
     if (action === "speaking") return uploadSpeaking(request, env, attemptId);
     if (action === "speaking-skip") return skipSpeaking(request, env, attemptId);
     return saveContact(request, env, attemptId);
@@ -76,9 +76,9 @@ function spanText(seconds) {
 
 // Read fresh on every request, so a change in the dashboard applies to the next test right away.
 async function liveTest(env, key) {
-  const [test, questions] = await Promise.all([loadTest(env, key), loadQuestions(env, key, { activeOnly: true })]);
+  const [test, questions, sections] = await Promise.all([loadTest(env, key), loadQuestions(env, key, { activeOnly: true }), loadSections(env, key)]);
   const durationSeconds = test.timeMode === "per" ? questions.reduce((sum, q) => sum + q.seconds, 0) : test.totalSeconds;
-  return { test, questions, durationSeconds };
+  return { test, questions, sections, durationSeconds };
 }
 
 // Speaking runs on the placement test only, and only with a question to answer.
@@ -156,7 +156,7 @@ async function createAttempt(request, env) {
       throw new HttpError(403, `Kode belum benar. Sisa ${left} percobaan lagi sebelum undangan terkunci.`, { field: "inviteCode" });
     }
   }
-  const { test, questions, durationSeconds } = await liveTest(env, testKey);
+  const { test, questions, sections, durationSeconds } = await liveTest(env, testKey);
   if (!test.open) throw new HttpError(423, "Tes ini sedang ditutup sementara. Silakan coba lagi nanti atau hubungi admin Titik Nol.");
   if (!questions.length) throw new HttpError(423, "Tes ini belum punya soal aktif. Hubungi admin Titik Nol.");
 
@@ -187,13 +187,14 @@ async function createAttempt(request, env) {
     timeMode: test.timeMode,
     maxViolations: test.maxViolations,
     autoSubmit: test.autoSubmit,
-    ...(test.audioUrl ? { audio: { url: test.audioUrl, played: false } } : {}),
+    sections: sections.map((s) => ({ id: s.id, title: s.title, skill: s.skill, part: s.part, passage: s.passage, audio: s.audio })),
     questions: questions.map((q) => ({
       id: q.id,
       skill: q.skill,
       prompt: q.prompt,
       type: q.type,
       ...(q.part ? { part: q.part } : {}),
+      ...(q.sectionId ? { sectionId: q.sectionId } : {}),
       ...(q.passage ? { passage: q.passage } : {}),
       ...(q.type === "choice" ? { options: q.options } : {}),
       ...(perMode ? { seconds: q.seconds } : {}),
@@ -201,12 +202,21 @@ async function createAttempt(request, env) {
   });
 }
 
-/* The listening audio plays once per attempt. A second request is refused, so a reload never
-   grants another play. */
-async function markAudioPlayed(env, attemptId) {
+/* The listening audio of a section plays once per attempt. A second request is refused, so a
+   reload never grants another play. */
+async function markAudioPlayed(request, env, attemptId) {
+  const body = await readJson(request, PUBLIC_BODY_LIMIT);
+  const sectionId = String(body?.sectionId || "");
   const attempt = await getAttempt(env, attemptId);
-  if (attempt.audio_played_at) throw new HttpError(409, "Audio sudah pernah diputar untuk tes ini, dan aturan mock IELTS hanya mengizinkan satu kali.");
-  await env.DB.prepare("UPDATE attempts SET audio_played_at = ? WHERE id = ?").bind(nowSeconds(), attemptId).run();
+  const section = await env.DB.prepare("SELECT id, audio_url FROM question_sections WHERE id = ? AND test_key = ?")
+    .bind(sectionId, attempt.test_key || "placement").first();
+  if (!section || !section.audio_url) throw new HttpError(404, "Bagian audio tidak ditemukan.");
+  const now = nowSeconds();
+  const inserted = await env.DB.prepare(
+    "INSERT INTO attempt_audio_plays (attempt_id, section_id, played_at) VALUES (?, ?, ?) ON CONFLICT (attempt_id, section_id) DO NOTHING RETURNING played_at",
+  ).bind(attemptId, sectionId, now).first();
+  if (!inserted) throw new HttpError(409, "Audio bagian ini sudah pernah diputar, dan aturan mock IELTS hanya mengizinkan satu kali.");
+  await env.DB.prepare("UPDATE attempts SET audio_played_at = COALESCE(audio_played_at, ?) WHERE id = ?").bind(now, attemptId).run();
   return json({ ok: true });
 }
 
