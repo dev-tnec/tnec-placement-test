@@ -10,7 +10,13 @@ The visual direction is editorial and Swiss: a strong grid, oversized type, thin
 
 The intro is the one screen where the brand can be loud. The test, details, and result screens stay quiet and functional.
 
-## 2. Color
+## 2. Component sourcing
+
+Never build a component, animation, or visualizer from scratch when a proven open-source one exists. The rule covers waves, carousels, date pickers, charts, command palettes, toasts, and every other common block. The approved sources are shadcn/ui patterns for the React dashboard and the ElevenLabs UI components for audio and voice interfaces; other established libraries are allowed the same way when they are the standard for the job.
+
+Because the CSP blocks third-party scripts, an open-source component arrives in one of two ways. The React dashboard may copy a shadcn-style component into `apps/admin/client/src`. The plain test site vendors the built file into `apps/web/public/assets` and imports it as an ES module. A component that cannot be consumed directly is ported one to one, keeping its drawing code, its defaults, its license, and a source link in the file header. The speaking wave is the ElevenLabs UI LiveWaveform, ported into `apps/web/public/assets/live-waveform.js` with its MIT notice. Never replace a sourced component with a hand-made approximation.
+
+## 3. Color
 
 All values come from `../design.md`.
 
@@ -43,7 +49,7 @@ Rules:
 4. Pale tints (`--yellow-50`, `--surface-50`, `--red-50`) are for notes, passages, and icon backgrounds. Never use them as a card fill.
 5. Navy tints are expressed as `rgba(10, 27, 56, .02)` to `.08`. They are the same token with alpha, not a new color.
 
-## 3. Typography
+## 4. Typography
 
 Font stack: `"Inter", "Segoe UI", Roboto, Helvetica, Arial, sans-serif`.
 
@@ -65,7 +71,7 @@ Inter is not loaded from a CDN. The app uses the locally installed Inter when pr
 
 The hero title caps at 58px rather than the 64px root display token. The narrower cap keeps the two-column hero and the preview card on one screen at 1440.
 
-## 4. Spacing
+## 5. Spacing
 
 Base unit 4px. Use the token scale.
 
@@ -82,7 +88,7 @@ Base unit 4px. Use the token scale.
 
 Half steps (6px, 10px, 14px, 20px, 26px) are allowed inside a component when the token scale is too loose, for example the option row gap and the prompt canvas padding.
 
-## 5. Radius and elevation
+## 6. Radius and elevation
 
 | Token | Value | Use |
 |---|---|---|
@@ -102,7 +108,7 @@ Half steps (6px, 10px, 14px, 20px, 26px) are allowed inside a component when the
 
 No other shadow. Never use black for a card shadow.
 
-## 6. Layout
+## 7. Layout
 
 | Property | Value |
 |---|---|
@@ -121,7 +127,21 @@ The intro uses the narrow wrap for the stepper and panels, while the hero uses t
 
 At 1024px the hero becomes one column and the preview moves below the copy, left aligned. The test grid, details grid, and result grid all become one column. At 767px the test status bar stays on one row, the stepper becomes three compact columns without meta text, and the how cards stack.
 
-## 7. Screen compositions
+### Vertical rhythm
+
+| Block | Padding |
+|---|---|
+| Test screen wrapper | `24px` top, `48px` bottom |
+| Speaking screen wrapper | `clamp(48px, 9vh, 96px)` top, `48px` bottom |
+| Question card body | `24px`, `16px` under 767px |
+| Stepper | `18px 22px` |
+| Dialog body | `20px 24px` |
+| Notice | `12px 16px` |
+| Recording indicator row | `32px` above, `16px` below |
+
+A screen that starts with a bare card must never touch the viewport top. The speaking screen uses the clamp above so the card has air on short and tall viewports alike.
+
+## 8. Screen compositions
 
 ### Intro
 
@@ -157,7 +177,7 @@ The result card carries the result eyebrow, a large ghost level index in the top
 
 The recommendation panel carries the program name, the level description, the WhatsApp CTA, the retry button, the delivery note for the email and the WhatsApp message, and the indikatif disclaimer. The result opens before the email and WhatsApp go out, so the delivery note says where the copy is going ("Salinan hasil ini sedang kami kirim ke ... dan ke WhatsApp kamu") and never claims it has arrived.
 
-## 8. Components
+## 9. Components
 
 ### Buttons
 
@@ -216,9 +236,15 @@ A 48px input with a 1px gray border, 8px radius, 14px text, and a `--navy-700` f
 
 ### Notices
 
-A pale yellow block with a 3px yellow left edge, a navy icon, and 13px text. It is used once, for the fullscreen warning on the intro page. Do not reuse it as a general info box.
+A notice is one even card: the pale yellow `--yellow-50` fill covers the whole block, the border is a uniform 1px `--gray-200`, the radius is 8px, and the text is navy at 13px. It is never a colored stripe down one side. The same pattern serves the closed-test or unusable-link notice in the hero, the fullscreen warning above the question card, and the speaking problem notice inside the card. A speaking notice sits in the same in-card position as the recording indicator, directly above the buttons, and the "Lanjut tanpa rekaman" action appears under it. Do not reuse the notice as a general info box.
 
-## 9. States
+### Recording indicator and wave
+
+The speaking feedback is one aligned row inside the active card, directly above the buttons: a 10px pulsing `--red-500` dot, the label "Merekam suara kamu" at 13px/700 in `--red-600`, the live waveform filling the middle, and the timer at 22px/800 with tabular numerals. The row is 24px tall, sits 32px below the content above it and 16px above the button row, and all four pieces share one center line. The dot pulses once per second. Under 480px the label is hidden so the dot, wave, and timer keep one full row. The mic-failure notice and the skip action use the same position, and the record button stays available so the student can retry after allowing the microphone.
+
+The wave is the ElevenLabs UI LiveWaveform component, ported one to one into `apps/web/public/assets/live-waveform.js` with its MIT notice. Its settings are fixed: canvas, static mode with the mirrored spectrum, barWidth 3, barGap 1, barRadius 1.5, minimum bar height 4, the 5% to 40% frequency slice, sensitivity 1, smoothing 0.8, fftSize 256, 30ms updates, a 24px edge fade, and `--red-500` bars. Do not replace it with a hand-made equalizer or a row of dots.
+
+## 10. States
 
 | State | Treatment |
 |---|---|
@@ -230,7 +256,7 @@ A pale yellow block with a 3px yellow left edge, a navy icon, and 13px text. It 
 | Error | Red border and 12px red message below the field. |
 | Loading | Button label changes to a verb in progress ("Menyiapkan tes...", "Menyimpan...") and the button disables. No spinner. |
 
-## 10. Anti-cheat UI
+## 11. Anti-cheat UI
 
 The test runs in fullscreen. In Chrome, Edge, and Opera the Esc key is locked while it runs, so a quick press does nothing and leaving fullscreen takes holding Esc for 2 seconds; the browser shows its own hint for that, so the page adds no copy. Three focus events are treated as violations: leaving fullscreen, hiding the tab, and blurring the window while the tab is visible. A fourth category (blocked copy, cut, paste, context menu, and developer shortcuts) is logged to the server but does not count toward the three strikes.
 
@@ -240,7 +266,7 @@ When the timer reaches zero, the test also stops without submitting. The same fa
 
 The copy must stay factual. Do not claim the test cannot be cheated. The honest claim is that focus loss is recorded and repeated violations end the test. A second device is outside what a browser can detect.
 
-## 11. Motion
+## 12. Motion
 
 | Token | Value | Use |
 |---|---|---|
@@ -248,15 +274,15 @@ The copy must stay factual. Do not claim the test cannot be cheated. The honest 
 | `--duration-base` | 300ms | Reserved for larger state changes |
 | `--ease-standard` | `cubic-bezier(.2,.6,.2,1)` | All transitions |
 
-Only color, border, background, shadow, and transform on button press animate. The how-cards lift 3px on hover. No entrance animations, no parallax, no auto-advancing carousels. The timer pulse is the only looping animation. Under `prefers-reduced-motion: reduce`, all durations collapse to 0.01ms, the pulse stops, and the card hover transform is removed.
+Only color, border, background, shadow, and transform on button press animate. The how-cards lift 3px on hover. No entrance animations, no parallax, no auto-advancing carousels. The timer pulse, the recording dot pulse, and the live waveform are the only looping animations. Under `prefers-reduced-motion: reduce`, all durations collapse to 0.01ms, the pulse stops, and the card hover transform is removed.
 
-## 12. Accessibility
+## 13. Accessibility
 
 Every screen has one `h1` or an equivalent labelled heading. The test section is labelled by the question prompt. Option rows are real radio inputs inside a fieldset with a screen reader legend. The timer is `role="timer"` with `aria-live="off"`, and a separate polite live region announces the question number and the one minute warning. Dialogs are native and trap focus. The progress bar is a native `<progress>` element. The skip link is the first focusable element. Color is never the only signal: answered cells also differ by fill and the current cell by an outline, flagged cells also carry an `aria-label`, and the ladder marks the current level with a text pill.
 
 The decorative preview card is hidden from assistive technology. The hero logo carries the brand alt text. The footer logo has an empty alt because the footer text already names the brand.
 
-## 13. Content rules
+## 14. Content rules
 
 The interface language is Indonesian. Test questions stay in English because they measure English. Write complete sentences with the connectors a native speaker would use, so the copy reads as Indonesian rather than a word by word translation of English. Do not clip a sentence into fragments separated by periods, and do not drop the subject or the verb to make a line shorter.
 
@@ -268,15 +294,19 @@ The result copy must never promise a certification. Every result surface carries
 
 The details screen must not reveal the score or level. Its job is to collect the three contact fields. The result is returned only after the contact call succeeds.
 
-## 14. Email template
+## 15. Email template
 
 The result email is a 600px single column with inline styles only, because email clients drop external CSS. The header is navy with the brand eyebrow in yellow, the body is white with a 16px radius, the level sits in a pale surface block with a red score pill, the recommendation uses a yellow left edge, and the CTA is a navy pill to WhatsApp. The footer carries the campus address and the domain.
 
 The email uses the same hex values as this file. It cannot use CSS variables, so the values are repeated in `src/email.js`. That is the only allowed duplication.
 
-## 15. Implementation
+## 16. Implementation
 
-The test site is plain HTML, one CSS file, and one ES module, served by a small Node.js server. There is no framework and no build step. Tailwind is not used, even though the reference mock uses it, because the production page needs a strict content security policy and a small payload.
+The test site is plain HTML, one CSS file, one ES module, and one vendored component module, served by a small Node.js server. There is no framework and no build step. Tailwind is not used, even though the reference mock uses it, because the production page needs a strict content security policy and a small payload.
+
+Open-source components are vendored under `apps/web/public/assets` and imported as ES modules, because the CSP blocks third-party scripts. `live-waveform.js` is the ElevenLabs UI LiveWaveform port with its MIT notice and source link at the top; keep both when touching it.
+
+Both apps declare the same globals once: `[hidden] { display: none !important; }`, `box-sizing: border-box` on everything, the `.sr-only` helper, and the `.tnum` tabular numerals helper. Without the hidden rule, a component class that sets `display` beats the hidden attribute and leaves widgets that should be hidden on screen.
 
 The CSS lives in `apps/web/public/assets/app.css`. Tokens are declared once at the top. Component classes are prefixed by block name (`option`, `nav-btn`, `dialog`, `stepper`, `ladder`) rather than utility names. State classes use `is-` (`is-selected`, `is-current`, `is-answered`, `is-flagged`, `is-warning`, `is-active`, `is-done`).
 
@@ -286,19 +316,19 @@ The content security policy is set by the server in `packages/core/src/node-serv
 
 Counts, durations, and the violation limit in the copy are not hardcoded. Elements with `data-fill` (`total`, `duration`, `strikes`, `time-num`, `time-unit`) are filled from `/api/config`, so the page always matches the dashboard settings.
 
-## 16. Pre-test and post-test screens
+## 17. Pre-test and post-test screens
 
 A pre-test or post-test opens from a personal link, `/?undangan=<token>`, that the team sends from the dashboard. The intro keeps the same layout, greets the student by first name, hides the contact step and the six level fact, and rewrites the data rules for an enrolled student. There is no details screen. After submit, the score screen reuses the result card and panel: the card shows "Nilai kamu" with the number out of 100 and the correct answers, and the panel says what happens next. A used, expired, or closed link shows a yellow notice in the hero, with a 1px border and no colored edge, and the start button stays disabled.
 
-## 17. Dashboard
+## 18. Dashboard
 
-The internal dashboard at `/admin` follows the approved `dashboard-prototype.html`. Its CSS is `apps/admin/public/admin/assets/admin.css`, and the dashboard copies of the logos live in `apps/admin/public/assets/`. It uses the same tokens with the same color rule: primary and destructive buttons are navy, red is only for status dots, error text, and low accuracy bars, and focus rings are navy. Status is a dot plus a text label. There are no colored edge stripes.
+The internal dashboard at `/admin` is React, built by Vite from `apps/admin/client`, and its CSS is `apps/admin/client/src/admin.css`; the build output is committed to `apps/admin/public/admin` so the server only serves files. It uses the same tokens with the same color rule: primary and destructive buttons are navy, red is only for status dots, error text, and low accuracy bars, and focus rings are navy. Status is a dot plus a text label. There are no colored edge stripes.
 
 A page header is the title and its actions, with no description under the title. The owner rejected explanatory lines there on 16 November 2026. The only extra item allowed is a test page's Ditutup status when that test is closed. Record pages keep their single line of facts, such as a student's email and WhatsApp number or a submission's start time and device.
 
 The Sertifikat menu is one sidebar item with two tabs, Sertifikat terbit and Pengaturan, in the same segmented tabs as the tests. Certificate numbers wrap only after a slash, never inside a token such as `{bulan_romawi}`, and a number in a table row stays on one line. The printable certificate keeps the design of its own template in `apps/admin/certificates`, including its fonts, frame, and gold accents, because it is a printed document rather than a dashboard screen. The dashboard only adds a navy bar above it with the back link and the print button, and that bar is not printed. A cancelled certificate carries a translucent red DIBATALKAN mark, which does print.
 
-## 18. Do not
+## 19. Do not
 
 1. Do not add a gradient, glassmorphism, or a shadow outside the listed set.
 2. Do not use red for buttons, decoration, headings, or backgrounds behind long text.
@@ -308,3 +338,7 @@ The Sertifikat menu is one sidebar item with two tabs, Sertifikat terbit and Pen
 6. Do not add a cookie banner. The app sets no analytics or advertising cookies, so a banner would be noise. If analytics is added later, this rule changes.
 7. Do not use an em dash in UI copy.
 8. Do not show the score or level on the details screen.
+9. Do not hand-build a component or animation when an established open-source implementation exists.
+10. Do not put a colored stripe on one side of any element. Notices are even cards.
+11. Do not float a status or feedback widget away from the control that triggered it. Feedback appears inside the card, next to the action.
+12. Do not let a screen that starts with a bare card touch the viewport top, and do not leave a control row without the documented vertical rhythm.

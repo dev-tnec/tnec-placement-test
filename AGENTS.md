@@ -2,6 +2,17 @@
 
 This file is the working memory for this folder. Read it before changing the app. The design rules live in `DESIGN.md`, and the brand tokens come from `../design.md`.
 
+## Rules
+
+These come from the owner and outrank convenience.
+
+1. Read `DESIGN.md` before any interface change, and use its tokens, sizes, spacing, radii, shadows, and component patterns. Do not invent a hex, size, radius, shadow, or animation that is not there. When something is missing from the design system, add it to `DESIGN.md` first, then use it.
+2. Do not build a component, animation, or visualizer from scratch when a proven open-source one exists. Use the real thing: shadcn/ui patterns for the React dashboard, ElevenLabs UI components, and similar established libraries. When the stack cannot consume it directly (plain HTML and JS, strict CSP, no CDN), vendor the files or port the component faithfully, keep its license and source link in the file header, and never approximate it by hand. The speaking wave is the ElevenLabs UI LiveWaveform ported into `apps/web/public/assets/live-waveform.js` with its MIT notice. Do not replace it with a home-made equalizer or dots.
+3. Be proactive. When the owner reports one instance of a problem, find and fix the whole class of the problem across every screen, state, and viewport before replying, and say what was audited. One cramped row means checking every row with the same content; one side stripe means scanning every notice; one unaligned control means measuring every similar row.
+4. Verify what the user sees, not what the DOM claims. Measure rendered geometry (bounding rects, computed styles, canvas pixels) instead of trusting attributes, hidden flags, or booleans.
+5. Treat design defects as defects, not taste. A feedback widget floating away from the control that triggered it, an unaligned row, cramped spacing, a card inside a card, or a colored stripe on one side of an element are bugs. When the intended look is unclear, copy the established reference component instead of inventing a new one.
+6. Both apps declare the global `[hidden] { display: none !important; }` rule. A component class that sets `display` otherwise beats the hidden attribute and leaves widgets that should be hidden on screen.
+
 ## What this folder is
 
 The online placement test, pre-test, and post-test for Titik Nol English Course, plus the internal dashboard for the admin and education team. It is not an Elementor page and it is not part of the WordPress install. It is a Node.js monorepo with two apps that share one PostgreSQL database on Neon.
@@ -258,7 +269,7 @@ A new type that reuses an existing design needs no code, because the team adds i
 
 ## Design
 
-Read `DESIGN.md` before touching CSS. Navy structure, navy buttons, white reading surface, red only for errors and urgent state, one yellow emphasis. A warning or notice is one even card, filled with the pale yellow over its whole area and a uniform border, never a colored stripe down one side. No gradients, no third-party fonts, and no inline scripts or styles, because both apps send a strict CSP. The CSP allows images from `https://titiknolenglish.com` only, for the program cards on the result page, and `blob:` media for the recording playback.
+Read `DESIGN.md` before touching CSS. Navy structure, navy buttons, white reading surface, red only for errors and urgent state, one yellow emphasis. A warning or notice is one even card, filled with the pale yellow over its whole area and a uniform border, never a colored stripe down one side. Feedback appears next to the control that triggered it, inside the card, never as a widget floating above the page. Never hand-build a component or animation when an established open-source one exists; see the Rules section. No gradients, no third-party fonts, and no inline scripts or styles, because both apps send a strict CSP. The CSP allows images from `https://titiknolenglish.com` only, for the program cards on the result page, and `blob:` media for the recording playback.
 
 ## Git and push rules
 
