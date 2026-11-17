@@ -329,6 +329,71 @@
     </div>
   </section>
 
+  <!-- 2b. SPEAKING (placement only, when the team switches it on) -->
+  <section class="screen" id="screen-speaking" aria-labelledby="speaking-title" hidden>
+    <div class="wrap wrap--details">
+      <div class="speaking-grid">
+        <div class="question-card">
+          <div class="question-card__top">
+            <span class="badge">Bagian speaking</span>
+            <span class="question-card__meta" id="speaking-step">Bagian terakhir sebelum hasil</span>
+          </div>
+
+          <div class="question-card__body">
+            <h1 class="speaking-title" id="speaking-title" tabindex="-1">Jawab pertanyaan ini dengan berbicara.</h1>
+            <div class="prompt-canvas">
+              <span class="prompt-canvas__corner" aria-hidden="true">Pertanyaan speaking</span>
+              <p class="question__prompt" id="speaking-prompt"></p>
+            </div>
+
+            <p class="speak-note" id="speak-note"></p>
+            <p class="banner banner--warning" id="speak-error" hidden></p>
+
+            <div class="speak-meter" id="speak-meter" hidden>
+              <span class="speak-meter__fill" id="speak-meter-fill"></span>
+            </div>
+            <p class="speak-timer" id="speak-timer" role="timer" aria-live="off" hidden>00:00</p>
+
+            <div class="speak-actions">
+              <button class="btn btn--primary btn--lg" id="speak-start" type="button" hidden>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                  <circle cx="12" cy="12" r="5"></circle>
+                  <path d="M12 1v3M12 20v3M4.2 4.2l2.1 2.1M17.7 17.7l2.1 2.1M1 12h3M20 12h3M4.2 19.8l2.1-2.1M17.7 6.3l2.1-2.1"></path>
+                </svg>
+                Mulai rekam
+              </button>
+              <button class="btn btn--navy btn--lg" id="speak-stop" type="button" hidden>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                  <rect x="6" y="6" width="12" height="12" rx="2"></rect>
+                </svg>
+                Selesai merekam
+              </button>
+              <button class="btn btn--secondary" id="speak-skip" type="button" hidden>Lanjut tanpa rekaman</button>
+            </div>
+
+            <div class="speak-review" id="speak-review" hidden>
+              <audio id="speak-audio" controls preload="metadata"></audio>
+              <div class="speak-review__actions">
+                <button class="btn btn--secondary" id="speak-retake" type="button">Rekam ulang</button>
+                <button class="btn btn--primary" id="speak-send" type="button">
+                  <span id="speak-send-label">Kirim rekaman</span>
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                    <path d="M5 12h14M13 6l6 6-6 6"></path>
+                  </svg>
+                </button>
+              </div>
+            </div>
+
+            <p class="micro speak-privacy">
+              Rekaman dinilai otomatis oleh Speechace dan dihapus 30 hari setelah tes. Detailnya ada di
+              <button class="link-inline" type="button" data-legal="privacy">Kebijakan Privasi</button>.
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
   <!-- 3. DETAILS -->
   <section class="screen" id="screen-details" aria-labelledby="details-title" hidden>
     <div class="wrap wrap--details">
@@ -357,7 +422,7 @@
         <div class="details__copy">
           <p class="eyebrow">Langkah 2 dari 3</p>
           <h1 class="details__title" id="details-title" tabindex="-1">Tinggal satu langkah lagi sebelum hasilnya muncul.</h1>
-          <p class="details__lead">
+          <p class="details__lead" id="details-lead">
             Jawaban kamu sudah tersimpan dengan aman. Lengkapi data di bawah ini, lalu kami
             akan menampilkan level kamu dan mengirimkan hasilnya ke email dan WhatsApp kamu.
           </p>
@@ -369,7 +434,7 @@
                   <path d="M20 6 9 17l-5-5"></path>
                 </svg>
               </span>
-              <span><strong>Level dan skor</strong> dari <span data-fill="total">25</span> soal yang sudah kamu kerjakan</span>
+              <span id="details-benefit-score"><strong>Level dan skor</strong> dari <span data-fill="total">25</span> soal yang sudah kamu kerjakan</span>
             </li>
             <li class="benefit">
               <span class="benefit__icon" aria-hidden="true">
@@ -482,6 +547,70 @@
           <button class="btn btn--secondary btn--block" id="retry-btn" type="button">Ulangi tes</button>
 
           <p class="email-note" id="result-email-note"></p>
+          <p class="micro">
+            Hasil ini dipakai untuk penempatan kelas dan bukan sertifikat resmi.
+          </p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 4b. PENDING (the speaking recording is still being scored) -->
+  <section class="screen" id="screen-pending" aria-labelledby="pending-title" hidden>
+    <div class="wrap wrap--details result-wrap">
+      <ol class="stepper stepper--light" aria-label="Tahapan tes penempatan">
+        <li class="stepper__step is-done">
+          <span class="stepper__bar"></span>
+          <span class="stepper__index">01</span>
+          <span class="stepper__title">Mengerjakan tes</span>
+          <span class="stepper__meta">Selesai</span>
+        </li>
+        <li class="stepper__step is-done">
+          <span class="stepper__bar"></span>
+          <span class="stepper__index">02</span>
+          <span class="stepper__title">Melengkapi data</span>
+          <span class="stepper__meta">Selesai</span>
+        </li>
+        <li class="stepper__step is-active">
+          <span class="stepper__bar"></span>
+          <span class="stepper__index">03</span>
+          <span class="stepper__title">Menyiapkan hasil</span>
+          <span class="stepper__meta">Sedang berjalan</span>
+        </li>
+      </ol>
+
+      <div class="result-grid">
+        <div class="result-card">
+          <div class="result-card__head">
+            <p class="eyebrow eyebrow--on-dark">Hasil Tes Penempatan</p>
+          </div>
+          <h1 class="result-card__level" id="pending-title" tabindex="-1">Hasil kamu sedang disiapkan</h1>
+          <p class="result-card__summary">
+            Rekaman speaking kamu sedang kami nilai, lalu hasil lengkap tes ini kami kirim ke
+            email dan WhatsApp yang kamu isi.
+          </p>
+          <p class="pending-note">
+            Halaman ini boleh ditutup. Hasilnya tetap terkirim tanpa perlu halaman ini terbuka.
+          </p>
+        </div>
+
+        <div class="result-body panel">
+          <div class="result-block">
+            <p class="eyebrow">Yang kamu terima</p>
+            <p class="result-program">Level, skor <span data-fill="total">25</span> soal, dan lima nilai speaking</p>
+          </div>
+          <p class="result-description">
+            Penilaian biasanya selesai dalam beberapa menit. Kalau hasil belum sampai dalam satu hari,
+            hubungi admin Titik Nol lewat tombol di bawah, dan kami periksa penilaiannya.
+          </p>
+
+          <a class="btn btn--primary btn--lg btn--block" id="pending-wa" href="#" target="_blank" rel="noopener">
+            Tanya admin lewat WhatsApp
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+              <path d="M7 17 17 7M7 7h10v10"></path>
+            </svg>
+          </a>
+          <p class="email-note" id="pending-email-note"></p>
           <p class="micro">
             Hasil ini dipakai untuk penempatan kelas dan bukan sertifikat resmi.
           </p>

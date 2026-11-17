@@ -29,6 +29,10 @@ export function buildEnv(source = process.env) {
     TRUST_PROXY: source.TRUST_PROXY === "1" || source.TRUST_PROXY === "true",
     // Optional fixed code for the first admin account, for hosts that restart the app often.
     ADMIN_SETUP_CODE: String(source.ADMIN_SETUP_CODE || "").trim().toUpperCase(),
+    // Speechace scores the speaking answer. A key works in one region only; TNEC's is Singapore.
+    SPEECHACE_KEY: String(source.SPEECHACE_KEY || "").trim(),
+    SPEECHACE_API_BASE: trim(source.SPEECHACE_API_BASE) || "https://api2.speechace.com",
+    SPEAKING_RETRY_SECONDS: String(source.SPEAKING_RETRY_SECONDS || ""),
     WEB_PORT: webPort,
     ADMIN_PORT: adminPort,
   };

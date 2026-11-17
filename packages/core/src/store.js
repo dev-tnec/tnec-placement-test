@@ -22,6 +22,11 @@ export function mapTest(row) {
     open: Boolean(row.is_open),
     maxViolations: row.max_violations,
     passScore: row.pass_score,
+    speakingEnabled: Boolean(row.speaking_enabled),
+    speakingSeconds: row.speaking_seconds ?? 45,
+    speakingMinSeconds: row.speaking_min_seconds ?? 15,
+    speakingPrompt: row.speaking_prompt || "",
+    speakingDialect: row.speaking_dialect || "en-us",
     updatedAt: row.updated_at,
     updatedBy: row.updated_by,
   };

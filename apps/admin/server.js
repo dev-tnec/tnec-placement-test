@@ -5,8 +5,10 @@ import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { loadEnvFile, buildEnv } from "@tnec/core/env";
 import { migrate } from "@tnec/core/migrate";
-import { startServer } from "@tnec/core/node-server";
+import { startServer, closeServers } from "@tnec/core/node-server";
 import { randomToken } from "@tnec/core/crypto";
+import { runInBackground, deliverPending, drainDeliveries } from "@tnec/core/delivery";
+import { startSpeakingWorker, stopSpeakingWorker } from "@tnec/core/speaking";
 import { handleAdmin, serveAdminPage, adminCount, setSetupCode } from "./src/api.js";
 
 export function createAdminHandler() {
@@ -36,6 +38,22 @@ if (isMain) {
   const env = buildEnv();
   await migrate(env.DB);
   // A host such as Render tells a single app its port through PORT.
-  startServer({ name: "Dasbor (admin)", port: Number(process.env.PORT) || env.ADMIN_PORT, handler: createAdminHandler(), env });
+  const server = startServer({ name: "Dasbor (admin)", port: Number(process.env.PORT) || env.ADMIN_PORT, handler: createAdminHandler(), env });
   await announceSetup(env);
+  // The dashboard sends results too (after a speaking grade by hand) and can score a recording
+  // again, so it finishes what an earlier run left and lets running work end before it stops.
+  runInBackground(() => deliverPending(env));
+  startSpeakingWorker(env);
+  let stopping = false;
+  const stop = async () => {
+    if (stopping) return;
+    stopping = true;
+    stopSpeakingWorker();
+    await closeServers([server]);
+    await drainDeliveries();
+    await env.DB.close().catch(() => {});
+    process.exit(0);
+  };
+  process.on("SIGTERM", stop);
+  process.on("SIGINT", stop);
 }

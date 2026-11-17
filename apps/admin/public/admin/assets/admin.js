@@ -114,7 +114,35 @@ const LOG_TEXT = {
   email_resent: "Email hasil dikirim ulang",
   voided: "Hasil dibatalkan",
   restored: "Hasil dipulihkan",
+  speaking_uploaded: "Rekaman speaking dikirim peserta",
+  speaking_student_skip: "Peserta melewati bagian speaking karena mikrofon tidak bisa dipakai",
+  speaking_graded: "Speaking selesai dinilai Speechace",
+  speaking_failed: "Penilaian speaking gagal, rekaman masuk antrean manual",
+  speaking_manual: "Speaking dinilai manual",
+  speaking_skipped: "Speaking tidak dinilai, hasil dikirim tanpa nilai speaking",
 };
+/* The speaking recording of a placement attempt. 'failed' and 'graded' with needsReview wait for the team. */
+const SPEAKING_STATUS = {
+  pending: { label: "Menunggu penilaian", dot: "blue" },
+  grading: { label: "Sedang dinilai", dot: "blue" },
+  graded: { label: "Selesai dinilai", dot: "navy" },
+  failed: { label: "Perlu dinilai", dot: "red" },
+  manual: { label: "Nilai manual", dot: "yellow" },
+  skipped: { label: "Tidak dinilai", dot: "ring", muted: true },
+};
+const speakingStatusHtml = (sp) => { const s = SPEAKING_STATUS[sp.status] || SPEAKING_STATUS.pending; return statusHtml(s.label, s.dot, s.muted || (sp.status === "graded" && sp.needsReview)); };
+const speakingNeedsAttention = (a) => Boolean(a.speaking && (a.speaking.status === "failed" || a.speaking.needsReview));
+/* One line for the submission list. Plain words, so it stays readable next to the email status. */
+function speakingRowLabel(a) {
+  const sp = a.speaking;
+  if (sp.status === "failed") return `<span class="is-wrong">Speaking perlu dinilai</span>`;
+  if (sp.status === "pending" || sp.status === "grading") return `<span class="muted">Speaking menunggu dinilai</span>`;
+  if (sp.status === "skipped") return `<span class="muted">Speaking dilewati</span>`;
+  const cefr = sp.cefr ? `Speaking ${esc(sp.cefr)}` : "Speaking selesai";
+  if (sp.needsReview) return `${cefr} <span class="is-wrong">perlu dicek</span>`;
+  if (sp.status === "manual") return `${cefr} (dinilai manual)`;
+  return cefr;
+}
 const TEST_META = {
   placement: { name: "Placement Test", nav: "tes-placement", who: "calon siswa" },
   pre: { name: "Pre-test", nav: "tes-pre", who: "siswa terdaftar" },
@@ -167,7 +195,7 @@ function certFormatProblem(format, reset) {
 }
 
 /* ===================== Database (loaded from the server) ===================== */
-const db = { tests: {}, levels: [], programs: [], tutors: [], tutorIds: new Map(), periods: [], classes: [], students: [], attempts: [], enrolledAt: [], publicUrl: location.origin, whatsapp: { configured: false }, certs: { templates: [], types: [], issued: [] } };
+const db = { tests: {}, levels: [], programs: [], tutors: [], tutorIds: new Map(), periods: [], classes: [], students: [], attempts: [], enrolledAt: [], publicUrl: location.origin, whatsapp: { configured: false }, certs: { templates: [], types: [], issued: [] }, speaking: { configured: false, waiting: 0, review: 0, failed: 0, manual: 0, graded30: 0, avgSeconds: null, failedLastHour: 0 }, speakingCefr: [] };
 let dataReady = false;
 // Detail caches keep the last loaded copy while a fresh copy loads, so pages do not flicker after a change.
 const studentDetails = new Map();
@@ -191,6 +219,8 @@ async function loadData() {
   db.periods = data.catalog.periods;
   db.classes = data.catalog.classes;
   db.certs = data.certificates;
+  db.speaking = data.speaking || db.speaking;
+  db.speakingCefr = data.speakingCefr || [];
   for (const entry of studentDetails.values()) entry.stale = true;
   for (const entry of attemptDetails.values()) entry.stale = true;
   dataReady = true;
@@ -266,17 +296,17 @@ function studentFeed(id) {
   return d ? d.activities : null;
 }
 
-/* Answers and the system log load when a submission page opens. */
+/* Answers, the speaking recording, and the system log load when a submission page opens. */
 function withDetail(a) {
   if (!a) return a;
   const d = loadDetail(attemptDetails, a.id, `/api/admin/attempts/${a.id}`,
-    (raw) => ({ answers: raw.answers, log: raw.log, device: raw.device, country: raw.country, consent: raw.consent }),
+    (raw) => ({ answers: raw.answers, log: raw.log, device: raw.device, country: raw.country, consent: raw.consent, speaking: raw.speaking || null }),
     () => route().parts[3] === a.id);
-  return d ? { ...a, ...d, loading: false } : { ...a, answers: null, log: null, consent: "", loading: true };
+  return d ? { ...a, ...d, loading: false } : { ...a, answers: null, log: null, consent: "", loading: true, speaking: a.speaking || null };
 }
 
 /* ===================== UI state ===================== */
-const attemptFilter = (days) => ({ q: "", status: "all", level: "", days, period: "", program: "", result: "", page: 1, selected: new Set() });
+const attemptFilter = (days) => ({ q: "", status: "all", speaking: "all", level: "", days, period: "", program: "", result: "", page: 1, selected: new Set() });
 const ui = {
   period: 7,
   test: "placement",
@@ -401,6 +431,14 @@ function viewOverview() {
       </div>`,
     })}
     <div class="stack">
+      ${db.speaking.review || db.speaking.failedLastHour >= 5 ? `<section class="panel" aria-label="Speaking">
+        <div class="notice" role="note">${icon("mic")}<div class="notice__body">
+          ${db.speaking.review ? `${db.speaking.review} rekaman speaking menunggu dinilai tim.` : ""}
+          ${db.speaking.failedLastHour >= 5 ? `${db.speaking.review ? " " : ""}${db.speaking.failedLastHour} penilaian speaking gagal dalam satu jam terakhir, jadi periksa kunci atau kuota Speechace.` : ""}
+          <button class="link-btn" type="button" data-action="open-speaking-review">Buka antrean penilaian</button>
+        </div></div>
+      </section>` : ""}
+
       <section class="panel" aria-label="Angka utama">
         <div class="stats">
           ${stat("Submission placement test", fmtNum(submitted), deltaText)}
@@ -658,7 +696,7 @@ function viewStudent(id) {
           <tbody>${attempts.map((a) => `<tr data-href="#/tes/${a.test}/submission/${a.id}">
             <td><a class="cell-main" href="#/tes/${a.test}/submission/${a.id}">${esc(TEST_META[a.test].name)}</a></td>
             <td class="nowrap">${esc(fmtDate(a.startedAt))}<span class="cell-sub">${esc(fmtTime(a.startedAt))}</span></td>
-            <td class="nowrap">${resultCell(a)}</td>
+            <td class="nowrap">${resultCell(a)}${a.test === "placement" && a.speaking ? `<span class="cell-sub">${speakingRowLabel(a)}</span>` : ""}</td>
             <td class="hide-sm">${outcomeCell(a)}</td>
             <td class="hide-md tnum">${fmtClock(a.durationSec)}</td>
             <td class="hide-md tnum${a.violations >= (a.maxViolations || 3) ? " is-wrong" : ""}">${a.violations}</td>
@@ -942,6 +980,8 @@ function attemptMatches(a, f, ignoreStatus) {
   }
   const s = a.studentId ? studentById(a.studentId) : null;
   if (ui.test === "placement") {
+    if (f.speaking === "review" && !speakingNeedsAttention(a)) return false;
+    if (f.speaking === "waiting" && !(a.speaking && (a.speaking.status === "pending" || a.speaking.status === "grading"))) return false;
     if (f.level && a.levelKey !== f.level) return false;
     if (f.days !== "all" && a.startedAt < NOW - Number(f.days) * DAY) return false;
   } else {
@@ -969,7 +1009,7 @@ function renderAttemptsTab() {
        <select class="select select--auto" data-change="attempts-program" aria-label="Saring program">${options(programOptions("Semua program"), f.program)}</select>
        ${ui.test === "post" ? `<select class="select select--auto" data-change="attempts-result" aria-label="Saring hasil">${options([["", "Semua hasil"], ["true", "Lulus"], ["false", "Belum lulus"]], f.result)}</select>` : ""}`;
   $("#tab-body").innerHTML = `<section class="panel">
-    <div class="toolbar"><div class="chips" id="attempts-chips" role="group" aria-label="Saring status submission"></div></div>
+    <div class="toolbar"><div class="chips" id="attempts-chips" role="group" aria-label="Saring status submission"></div>${ui.test === "placement" ? `<div class="chips" id="speaking-chips" role="group" aria-label="Saring speaking"></div>` : ""}</div>
     <div class="toolbar toolbar--last">
       <label class="search"><span class="sr-only">Cari submission</span>${icon("search")}<input class="input" type="search" data-input="attempts-q" placeholder="${ui.test === "placement" ? "Cari nama, email, WhatsApp, atau ID" : "Cari nama, email, atau kelas"}" value="${esc(f.q)}" autocomplete="off"></label>
       ${filters}
@@ -998,7 +1038,7 @@ function attemptRow(a) {
       <td class="hide-sm">${level ? esc(level.label) : `<span class="muted">Tidak ada</span>`}</td>
       <td class="hide-md tnum">${fmtClock(a.durationSec)}</td>
       <td class="hide-md tnum${a.violations >= (a.maxViolations || 3) ? " is-wrong" : ""}">${a.violations}</td>
-      <td class="hide-xl">${email}</td>${tail}</tr>`;
+      <td class="hide-xl">${email}${a.speaking ? `<span class="cell-sub">${speakingRowLabel(a)}</span>` : ""}</td>${tail}</tr>`;
   }
   const pre = a.test === "post" && s ? latestGraded(s.id, "pre") : null;
   const d = pre && a.score !== null ? nilaiOf(a) - nilaiOf(pre) : null;
@@ -1021,6 +1061,13 @@ function renderAttemptsResults() {
     : [["all", "Semua"], ["done", "Selesai"], ["failed", "Gagal"], ["void", "Dibatalkan"]];
   const countOf = (k) => (k === "all" ? base.length : k === "failed" ? base.filter((a) => a.status === "timeout" || a.status === "violation").length : base.filter((a) => a.status === k).length);
   $("#attempts-chips").innerHTML = chipsList.map(([k, label]) => chip("attempts-status", k, label, countOf(k), f.status === k)).join("");
+  if (ui.test === "placement") {
+    const speakChips = [["all", "Semua speaking"], ["review", "Perlu dinilai"], ["waiting", "Menunggu penilaian"]];
+    const speakCount = (k) => (k === "all" ? null : k === "review"
+      ? base.filter(speakingNeedsAttention).length
+      : base.filter((a) => a.speaking && (a.speaking.status === "pending" || a.speaking.status === "grading")).length);
+    $("#speaking-chips").innerHTML = speakChips.map(([k, label]) => chip("attempts-speaking", k, label, speakCount(k), f.speaking === k)).join("");
+  }
   const rows = base.filter((a) => attemptMatches(a, f, false));
   const pages = Math.max(1, Math.ceil(rows.length / PAGE_SIZE));
   f.page = Math.min(Math.max(1, f.page), pages);
@@ -1042,6 +1089,50 @@ function renderAttemptsResults() {
 }
 
 /* --- Pengaturan --- */
+/* The Speaking switch and its one question. The server stores these on the placement test row. */
+function speakingSettingsPanel() {
+  const st = T().settings;
+  const sum = db.speaking;
+  const cefrOptions = (selected) => options([["", "Tidak diisi"], ...db.speakingCefr.map((c) => [c, c])], selected);
+  return `<section class="panel" id="panel-speaking">
+    <header class="panel__head"><div>
+      <h2 class="panel__title">Bagian speaking</h2>
+      <p class="panel__desc">Kalau dinyalakan, peserta merekam satu jawaban setelah soal pilihan ganda. Rekaman dinilai Speechace, dan hasil lengkap baru dikirim setelah penilaian selesai. Nilai speaking tampil terpisah dan tidak mengubah level dari soal pilihan ganda.</p>
+    </div></header>
+    <div class="panel__body rules">
+      <div class="field">
+        <label class="switch"><input type="checkbox" id="set-speak-on" data-change="speaking-dirty" ${st.speakingEnabled ? "checked" : ""}><span class="switch__track" aria-hidden="true"></span>Nyalakan bagian speaking</label>
+        <p class="hint">${sum.configured ? "Kunci Speechace sudah terpasang di server, jadi rekaman dinilai otomatis." : "Kunci Speechace belum terpasang di server ini, jadi semua rekaman langsung masuk antrean penilaian manual."}</p>
+      </div>
+      <div class="field">
+        <label class="label" for="set-speak-prompt">Pertanyaan speaking</label>
+        <textarea class="input" id="set-speak-prompt" rows="2" maxlength="300" data-input="speaking-dirty">${esc(st.speakingPrompt)}</textarea>
+        <p class="hint">Tampil di layar peserta dan ikut dikirim ke Speechace sebagai konteks relevansi.</p>
+      </div>
+      <div class="field">
+        <label class="label" for="set-speak-max">Durasi maksimal, detik</label>
+        <input class="input tnum" id="set-speak-max" type="number" min="15" max="90" value="${st.speakingSeconds}" data-input="speaking-dirty">
+        <p class="hint">Rekaman berhenti sendiri saat mencapai batas ini.</p>
+      </div>
+      <div class="field">
+        <label class="label" for="set-speak-min">Durasi minimal, detik</label>
+        <input class="input tnum" id="set-speak-min" type="number" min="5" max="30" value="${st.speakingMinSeconds}" data-input="speaking-dirty">
+        <p class="hint">Tombol berhenti baru aktif setelah durasi ini, supaya jawabannya cukup panjang untuk dinilai.</p>
+      </div>
+      <div class="field">
+        <label class="label" for="set-speak-dialect">Aksen penilaian</label>
+        <select class="select select--auto" id="set-speak-dialect" data-change="speaking-dirty">${options([["en-us", "English (US)"], ["en-gb", "English (UK)"]], st.speakingDialect)}</select>
+        <p class="hint">Penilaian otomatis memakai aksen ini. Jawaban dalam bahasa lain ditolak Speechace.</p>
+      </div>
+      <p class="error" id="speaking-err" hidden></p>
+    </div>
+    <div class="panel__foot panel__foot--end">
+      <span class="hint">${sum.review ? `Ada ${sum.review} rekaman menunggu dinilai tim.` : sum.waiting ? `${sum.waiting} rekaman sedang menunggu penilaian.` : "Belum ada rekaman yang menunggu."}</span>
+      <button class="btn btn--primary" type="button" data-action="speaking-save" id="speaking-save" disabled>Simpan pengaturan speaking</button>
+    </div>
+  </section>`;
+}
+
 function renderSettingsTab() {
   const t = T(), st = t.settings, key = ui.test;
   const own30 = db.attempts.filter((a) => a.test === key && a.startedAt >= NOW - 30 * DAY);
@@ -1140,6 +1231,8 @@ function renderSettingsTab() {
       <div class="panel__foot panel__foot--end"><button class="btn btn--primary" type="button" data-action="rules-save" id="rules-save" disabled>Simpan aturan tes</button></div>
     </section>
 
+    ${key === "placement" ? speakingSettingsPanel() : ""}
+
     ${key === "placement" ? `<section class="panel" id="panel-levels">
       <header class="panel__head"><div>
         <h2 class="panel__title">Ambang level</h2>
@@ -1232,7 +1325,7 @@ function viewAttempt(key, id) {
     if ((e.type === "email_sent" || e.type === "email_failed" || e.type === "email_resent") && s && s.email) text += ` ke ${s.email}`;
     if (e.type === "consent" && a.consent) text += ` versi ${a.consent}`;
     if (e.by) text += ` oleh ${e.by}`;
-    return `<li class="feed__item"><span class="feed__icon" aria-hidden="true">${icon(e.strike ? "alert" : e.type.startsWith("email") ? "mail" : e.type === "voided" ? "ban" : "clock")}</span>
+    return `<li class="feed__item"><span class="feed__icon" aria-hidden="true">${icon(e.strike ? "alert" : e.type.startsWith("email") ? "mail" : e.type.startsWith("speaking") ? "mic" : e.type === "voided" ? "ban" : "clock")}</span>
       <div><p class="feed__text">${esc(text)}</p><p class="feed__meta"><span class="log__time">${esc(fmtDate(e.at))}, ${esc(fmtTime(e.at, true))}</span></p></div></li>`;
   }).join("");
   const cell = (label, value, sub) => `<div class="stat"><p class="stat__label">${esc(label)}</p><p class="stat__value${/^\d/.test(value) ? "" : " stat__value--text"}">${value}</p><p class="stat__note">${esc(sub)}</p></div>`;
@@ -1293,6 +1386,8 @@ function viewAttempt(key, id) {
           : ""}
       </section>
 
+      ${key === "placement" ? speakingPanelHtml(a) : ""}
+
       <section class="panel">
         <header class="panel__head"><div>
           <h2 class="panel__title">Catatan sistem</h2>
@@ -1302,6 +1397,111 @@ function viewAttempt(key, id) {
       </section>
     </div>`;
   return `${meta.name} ${a.short}`;
+}
+
+/* ===================== Speaking on a submission ===================== */
+const SPEAKING_ASPECTS = [["pronunciation", "Pronunciation"], ["fluency", "Fluency"], ["grammar", "Grammar"], ["vocab", "Vocabulary"], ["coherence", "Coherence"]];
+const speakingAudioUrl = (id) => `/api/admin/speaking/${encodeURIComponent(id)}/audio`;
+
+/** The recording, its scores, and the manual grading form. Empty when the attempt has no speaking part. */
+function speakingPanelHtml(a) {
+  const sp = a.speaking;
+  if (!sp) return "";
+  if (a.loading) {
+    return `<section class="panel" aria-label="Speaking">
+      <header class="panel__head"><div><h2 class="panel__title">Speaking</h2></div></header>
+      <p class="loading-line" role="status">Memuat rekaman speaking...</p>
+    </section>`;
+  }
+  const scores = sp.scores || {};
+  const aspects = scores.aspects || {};
+  const hasScores = sp.status === "graded" || sp.status === "manual";
+  const canGrade = sp.status === "failed" || (sp.status === "graded" && sp.needsReview);
+  const studentSkip = sp.status === "skipped" && scores.source === "student";
+  const meta = [
+    sp.durationSeconds ? `durasi ${sp.durationSeconds} detik` : "",
+    sp.audioBytes ? `${Math.max(1, Math.round(sp.audioBytes / 1024))} KB` : "",
+    sp.tries ? `dicoba ${sp.tries} kali` : "",
+    sp.requestId ? `Speechace ${esc(sp.requestId)}` : "",
+    sp.gradedAt ? (sp.gradedBy ? `dinilai ${esc(sp.gradedBy)} pada ${esc(fmtDateTime(sp.gradedAt))}` : `dinilai ${esc(fmtDateTime(sp.gradedAt))}`) : "",
+  ].filter(Boolean).join(", ");
+
+  const scoreRows = SPEAKING_ASPECTS.map(([key, label]) => {
+    const v = aspects[key] || {};
+    return `<tr><td>${label}</td><td>${v.cefr ? esc(v.cefr) : `<span class="muted">-</span>`}</td><td>${v.ielts ?? ""}</td><td>${v.score === null || v.score === undefined ? `<span class="muted">-</span>` : Math.round(v.score)}</td></tr>`;
+  }).join("");
+  const overall = scores.overall || {};
+  const notes = [...(scores.notes || []), ...(scores.note ? [scores.note] : [])].filter(Boolean);
+  const issues = scores.issues || [];
+
+  const actions = [];
+  if (sp.status === "failed") {
+    actions.push(`<button class="btn btn--secondary" type="button" data-action="speaking-retry" data-id="${sp.id}">Coba nilai lagi</button>`);
+    actions.push(`<button class="btn btn--quiet" type="button" data-action="speaking-skip" data-id="${sp.id}">Tidak dinilai</button>`);
+  }
+  if (sp.status === "graded" && sp.needsReview) {
+    actions.push(`<button class="btn btn--secondary" type="button" data-action="speaking-reviewed" data-id="${sp.id}">Sudah dicek</button>`);
+  }
+  if (sp.nextAttemptAt) {
+    actions.push(`<span class="cell-sub">Dicoba lagi otomatis ${esc(fmtDateTime(sp.nextAttemptAt))}.</span>`);
+  }
+
+  const cefrSelect = (id, label, selected) => `<div class="field">
+    <label class="label" for="${id}">${label}</label>
+    <select class="select select--auto" id="${id}">${options([["", "Pilih"], ...db.speakingCefr.map((c) => [c, c])], selected)}</select>
+  </div>`;
+
+  const gradeForm = canGrade ? `<div class="speak-grade">
+    <p class="panel__desc">${sp.status === "failed" ? "Nilai rekaman ini secara manual. Hasil dikirim otomatis setelah disimpan." : "Koreksi nilai Speechace kalau hasilnya tidak wajar. Nilai yang kamu isi menggantikan nilai otomatis."}</p>
+    <div class="speak-grade__grid">
+      ${cefrSelect("sg-cefr", "CEFR keseluruhan", "")}
+      <div class="field">
+        <label class="label" for="sg-ielts">IELTS, opsional</label>
+        <input class="input tnum" id="sg-ielts" type="text" inputmode="decimal" placeholder="Contoh: 6.5">
+      </div>
+      ${SPEAKING_ASPECTS.map(([key, label]) => cefrSelect(`sg-a-${key}`, label, aspects[key]?.cefr || "")).join("")}
+    </div>
+    <div class="field">
+      <label class="label" for="sg-note">Catatan untuk siswa, opsional</label>
+      <textarea class="input" id="sg-note" rows="2" maxlength="500" placeholder="Contoh: jawaban bagus, tapi banyak jeda panjang."></textarea>
+    </div>
+    <p class="error" id="sg-err" hidden></p>
+    <button class="btn btn--primary" type="button" data-action="speaking-grade" data-id="${sp.id}">Simpan nilai dan kirim hasil</button>
+  </div>` : "";
+
+  return `<section class="panel" aria-label="Speaking">
+    <header class="panel__head">
+      <div>
+        <h2 class="panel__title">Speaking ${speakingStatusHtml(sp)}</h2>
+        <p class="panel__desc">Pertanyaan: ${esc(sp.prompt || "-")}${meta ? `. ${meta}.` : ""}</p>
+      </div>
+      ${actions.length ? `<span class="row-actions">${actions.join("")}</span>` : ""}
+    </header>
+    <div class="stack">
+      ${sp.error ? `<div class="notice" role="note">${icon("alert")}<div class="notice__body">${esc(sp.error)}</div></div>` : ""}
+      ${studentSkip ? `<div class="notice notice--neutral" role="note">${icon("user")}<div class="notice__body">${esc(sp.error || "Peserta melewati bagian speaking.")} Hasil dikirim tanpa nilai speaking.</div></div>` : ""}
+      ${sp.hasAudio ? `<audio class="speak-audio" controls preload="none" src="${speakingAudioUrl(sp.id)}"></audio>
+        <p class="hint">Rekaman disimpan 30 hari setelah tes, lalu dihapus otomatis. Nilai dan transkrip tetap tersimpan.</p>` : `<p class="hint">Rekaman sudah tidak tersimpan${sp.gradedAt ? ", tetapi nilai dan transkripnya masih ada" : ""}.</p>`}
+
+      ${sp.transcript ? `<div class="transcript-block">
+        <p class="speak-label">Transkrip jawaban</p>
+        <p class="transcript-text">${esc(sp.transcript)}</p>
+      </div>` : ""}
+
+      ${hasScores ? `<div class="table-wrap"><table class="table speak-table">
+        <thead><tr><th scope="col">Aspek</th><th scope="col">CEFR</th><th scope="col">IELTS</th><th scope="col">Skor 0-100</th></tr></thead>
+        <tbody>
+          <tr><td><strong>Keseluruhan</strong></td><td><strong>${esc(sp.cefr || "-")}</strong></td><td><strong>${sp.ielts ?? "-"}</strong></td><td><strong>${overall.score === null || overall.score === undefined ? "-" : Math.round(overall.score)}</strong></td></tr>
+          ${scoreRows}
+        </tbody></table></div>
+        ${scores.previous ? `<p class="hint">Sebelum dinilai manual, Speechace memberi ${esc(scores.previous.cefr || "tidak ada")}${scores.previous.ielts === null || scores.previous.ielts === undefined ? "" : `, IELTS ${scores.previous.ielts}`}. Skor aslinya tetap tercatat.</p>` : ""}
+        ${scores.source === "speechace" && scores.relevance ? `<p class="hint">Relevansi dengan pertanyaan: ${scores.relevance === "TRUE" ? "sesuai" : "belum sesuai"}.</p>` : ""}
+        ${issues.length ? `<p class="hint">${issues.map((i) => esc(i.message || i.code)).join(" ")}</p>` : ""}
+        ${notes.length ? `<div class="stack">${notes.map((n) => `<p class="note-line">${esc(n)}</p>`).join("")}</div>` : ""}` : ""}
+
+      ${gradeForm}
+    </div>
+  </section>`;
 }
 
 /* ===================== View: Sertifikat ===================== */
@@ -2593,6 +2793,62 @@ const ACTIONS = {
   "export-attempts": () => exportAttempts(db.attempts.filter((a) => attemptMatches(a, ui.attempts[ui.test], false))),
   "answers-filter": (el) => { ui.answers = el.dataset.value; const y = window.scrollY; render(); window.scrollTo(0, y); },
   "resend-email": (el) => resendEmail(attemptById(el.dataset.id), el),
+  "attempts-speaking": (el) => { const f = ui.attempts[ui.test]; f.speaking = el.dataset.value; f.page = 1; renderAttemptsResults(); $(`#speaking-chips [data-value="${el.dataset.value}"]`)?.focus(); },
+  "open-speaking-review": () => { ui.attempts.placement.speaking = "review"; ui.attempts.placement.page = 1; const target = "#/tes/placement/submission"; if (location.hash === target) render(); else location.hash = target; },
+  "speaking-save": async (el) => {
+    clearErrors($("#panel-speaking"));
+    const on = $("#set-speak-on").checked;
+    const prompt = $("#set-speak-prompt").value.trim();
+    const max = Number($("#set-speak-max").value);
+    const min = Number($("#set-speak-min").value);
+    const dialect = $("#set-speak-dialect").value;
+    const bad = (input, id, message) => { fieldError(input, "speaking-err", message); input.focus(); };
+    if (on && !prompt) return bad($("#set-speak-prompt"), "speaking-err", "Tulis pertanyaannya dulu sebelum menyalakan bagian speaking.");
+    if (!Number.isInteger(min) || min < 5 || min > 30) return bad($("#set-speak-min"), "speaking-err", "Durasi minimal harus antara 5 dan 30 detik.");
+    if (!Number.isInteger(max) || max < 15 || max > 90) return bad($("#set-speak-max"), "speaking-err", "Durasi maksimal harus antara 15 dan 90 detik.");
+    if (min >= max) return bad($("#set-speak-min"), "speaking-err", "Durasi minimal harus lebih pendek dari durasi maksimal.");
+    const done = busy(el, "Menyimpan...");
+    await mutate(() => api("/api/admin/tests/placement", {
+      method: "PUT",
+      body: { speakingEnabled: on, speakingPrompt: prompt, speakingSeconds: max, speakingMinSeconds: min, speakingDialect: dialect },
+    }), on ? "Bagian speaking aktif untuk peserta yang mulai setelah ini." : "Bagian speaking dimatikan. Peserta yang sedang merekam tetap bisa mengirim.");
+    done();
+  },
+  "speaking-retry": (el) => mutate(() => api(`/api/admin/speaking/${el.dataset.id}/retry`, { method: "POST" }), "Rekaman masuk antrean penilaian Speechace lagi."),
+  "speaking-reviewed": (el) => mutate(() => api(`/api/admin/speaking/${el.dataset.id}/reviewed`, { method: "POST" }), "Nilai speaking ditandai sudah dicek."),
+  "speaking-skip": async (el) => {
+    const r = await confirmDialog({
+      title: "Lewati penilaian speaking ini?",
+      message: "Hasil tes dikirim tanpa nilai speaking. Tindakan ini tidak bisa dibatalkan, jadi pakai ini kalau rekamannya memang tidak bisa dinilai.",
+      confirmLabel: "Kirim tanpa nilai speaking",
+      reasonLabel: "Alasan, opsional",
+      reasonPlaceholder: "Contoh: rekaman rusak, suara tidak terdengar.",
+    });
+    if (!r.ok) return;
+    await mutate(() => api(`/api/admin/speaking/${el.dataset.id}/skip`, { method: "POST", body: { reason: r.reason || "" } }), "Hasil dikirim tanpa nilai speaking.");
+  },
+  "speaking-grade": async (el) => {
+    clearErrors(el.closest(".speak-grade"));
+    const id = el.dataset.id;
+    const cefr = $("#sg-cefr").value;
+    const ielts = $("#sg-ielts").value.trim();
+    const note = $("#sg-note").value.trim();
+    const aspects = Object.fromEntries(SPEAKING_ASPECTS.map(([key]) => [key, $(`#sg-a-${key}`).value]));
+    if (!cefr) { fieldError($("#sg-cefr"), "sg-err", "Pilih CEFR keseluruhan dulu."); $("#sg-cefr").focus(); return; }
+    const done = busy(el, "Menyimpan...");
+    try {
+      const result = await api(`/api/admin/speaking/${id}/grade`, { method: "POST", body: { cefr, ielts: ielts || null, aspects, note } });
+      await loadData();
+      render();
+      toast(result.sending ? "Nilai speaking disimpan dan hasil dikirim ke peserta." : "Nilai speaking disimpan. Hasilnya sudah terkirim sebelumnya.");
+    } catch (error) {
+      if (error.field === "cefr") fieldError($("#sg-cefr"), "sg-err", error.message);
+      else if (error.field === "ielts") fieldError($("#sg-ielts"), "sg-err", error.message);
+      else if (error.field && $(`#sg-a-${error.field}`)) fieldError($(`#sg-a-${error.field}`), "sg-err", error.message);
+      else fieldError($("#sg-note"), "sg-err", error.message);
+    }
+    done();
+  },
   "bulk-clear": (el) => { selectedSet(el.dataset.scope).clear(); render(); },
   "bulk-export": (el) => {
     const scope = el.dataset.scope, set = selectedSet(scope);
@@ -2718,6 +2974,7 @@ const CHANGES = {
   "qe-passage-toggle": (el) => { $("#qe-passage-field").hidden = !el.checked; if (el.checked) $("#qe-passage").focus(); },
   "time-mode": () => { clearErrors($("#panel-time")); syncTimeForm(); },
   "rules-dirty": () => { const st = T().settings; $("#rules-save").disabled = $("#set-open").checked === st.open && Number($("#set-viol").value) === st.maxViolations; },
+  "speaking-dirty": () => { if (!$("#panel-speaking")) return; clearErrors($("#panel-speaking")); const st = T().settings; $("#speaking-save").disabled = $("#set-speak-on").checked === st.speakingEnabled && $("#set-speak-prompt").value === st.speakingPrompt && Number($("#set-speak-max").value) === st.speakingSeconds && Number($("#set-speak-min").value) === st.speakingMinSeconds && $("#set-speak-dialect").value === st.speakingDialect; },
 };
 
 let searchTimer = null;
@@ -2728,6 +2985,7 @@ const INPUTS = {
   "time-dirty": () => { clearErrors($("#panel-time")); syncTimeForm(); },
   "pass-dirty": () => syncPassForm(),
   "levels-dirty": () => { $("#levels-save").disabled = false; },
+  "speaking-dirty": () => CHANGES["speaking-dirty"](),
   "wa-text": () => syncWaForm(),
   "certs-q": (el) => { clearTimeout(searchTimer); searchTimer = setTimeout(() => { ui.certs.q = el.value; ui.certs.page = 1; renderCertsResults(); }, 140); },
   "ct-preview": (el) => { if (el.id === "ct-last") ctState.lastDirty = true; syncCertTypeForm(); },

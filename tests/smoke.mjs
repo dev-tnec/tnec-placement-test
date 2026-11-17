@@ -19,6 +19,10 @@ import { attemptStatus, focusStrikes } from "@tnec/core/store";
 import { normalizeWhatsapp } from "@tnec/core/http";
 import { sendWhatsApp, whatsappConfigured, buildResultWhatsApp, PLACEMENT_LEAD_SOURCE } from "@tnec/core/whatsapp";
 import { runInBackground, drainDeliveries, deliverResult } from "@tnec/core/delivery";
+import {
+  mapSpeechaceResult, classifyFailure, afterFailure, speakingFacts, aspectLine, isFinalStatus,
+} from "@tnec/core/speaking-result";
+import { speakingType, retryDelays, SPEAKING_MAX_BYTES } from "@tnec/core/speaking";
 import { numberPlaceholders } from "@tnec/core/db";
 import { createMailer, parseAddress } from "@tnec/core/mailer";
 import { buildEnv } from "@tnec/core/env";
@@ -97,9 +101,10 @@ assert.match(randomToken(24), /^[A-Za-z0-9_-]{32}$/);
 assert.equal((await sha256Hex("abc")).length, 64);
 
 /* ---------- Legal text follows the live settings ---------- */
-const filled = fillLegal(TERMS, { total: 30, duration: "8 menit", strikes: 2 });
+const filled = fillLegal(TERMS, { total: 30, duration: "8 menit", strikes: 2, speakingSeconds: 45 });
 const termsText = JSON.stringify(filled);
 assert.ok(termsText.includes("30 soal") && termsText.includes("8 menit") && termsText.includes("ke-2"));
+assert.ok(termsText.includes("45 detik"), "the speaking duration reaches the legal text");
 assert.equal(termsText.includes("{{"), false);
 
 /* ---------- Attempt status ---------- */
@@ -223,6 +228,121 @@ assert.equal((await adminHandler(setupPost({ code: "abcd2345efgh", name: "A" }),
 /* ---------- Background result delivery ---------- */
 const leaseHeld = { DB: { prepare: () => ({ bind: () => ({ first: async () => null }) }) } };
 assert.equal(await deliverResult(leaseHeld, "attempt"), null, "nothing is sent while another server holds the lease");
+
+// A result whose recording is still being scored waits, whatever the email status says.
+// The stub answers only the speaking SELECT; the delivery claim itself finds nothing.
+function speakingStub(row) {
+  return {
+    DB: {
+      prepare(sql) {
+        return {
+          bind() {
+            return {
+              first: async () => (sql.startsWith("SELECT status, cefr_overall") ? row : null),
+            };
+          },
+        };
+      },
+    },
+  };
+}
+assert.equal(await deliverResult(speakingStub({ status: "pending" }), "attempt"), null, "the result waits for the speaking score");
+assert.equal(await deliverResult(speakingStub({ status: "graded", cefr_overall: "B2", ielts_overall: 6, scores: "{}", transcript: "" }), "attempt"), null, "a graded recording no longer blocks the claim, which finds nothing waiting");
+
+/* ---------- Speaking: reading a Speechace response ---------- */
+const speechaceOk = {
+  status: "success",
+  request_id: "req_1",
+  version: "9.17",
+  speech_score: {
+    transcript: "I like visiting <b>Bali</b> because the beaches are beautiful.",
+    relevance: { class: "TRUE" },
+    cefr_score: { pronunciation: "B2", fluency: "B2", grammar: "B1", coherence: "B2", vocab: "B1", overall: "B2" },
+    ielts_score: { pronunciation: 6.5, fluency: 6.5, grammar: 5.5, coherence: 6, vocab: 5.5, overall: 6 },
+    speechace_score: { pronunciation: 78, fluency: 80, grammar: 62, coherence: 70, vocab: 64, overall: 72 },
+    score_issue_list: [],
+    grammar: { errors: [{ message: "Use 'because' to connect the reason." }], overall_metrics: {} },
+    vocab: { overall_metrics: { word_specificity: { level: "low", message: "Use more specific nouns." } } },
+    coherence: { overall_metrics: {} },
+  },
+};
+const graded = mapSpeechaceResult(speechaceOk);
+assert.equal(graded.cefr, "B2");
+assert.equal(graded.ielts, 6);
+assert.equal(graded.needsReview, false);
+assert.equal(graded.transcript.includes("<"), false, "the transcript is plain text");
+assert.deepEqual(graded.scores.aspects.pronunciation, { cefr: "B2", ielts: 6.5, score: 78 });
+assert.deepEqual(graded.scores.notes, ["Use 'because' to connect the reason.", "Use more specific nouns."]);
+assert.equal(graded.scores.relevance, "TRUE");
+
+const tooShort = mapSpeechaceResult({
+  ...speechaceOk,
+  speech_score: {
+    ...speechaceOk.speech_score,
+    cefr_score: { ...speechaceOk.speech_score.cefr_score, overall: "A0" },
+    score_issue_list: [{ short_message: "response_too_short", detail_message: "The response is less than 20 words." }],
+  },
+});
+assert.equal(tooShort.needsReview, true, "a too short answer still scores, but is flagged");
+
+/* ---------- Speaking: failures and retries ---------- */
+assert.equal(classifyFailure({ error: Object.assign(new Error("x"), { name: "TimeoutError" }) }).retry, true);
+assert.equal(classifyFailure({ httpStatus: 500, body: null }).retry, true);
+assert.equal(classifyFailure({ httpStatus: 401, body: null }).retry, false);
+assert.equal(classifyFailure({ httpStatus: 429, body: null }).retry, false);
+assert.equal(classifyFailure({ httpStatus: 200, body: { short_message: "error_no_speech" } }).retry, false);
+assert.equal(classifyFailure({ httpStatus: 200, body: { short_message: "non_dialect_language_detected" } }).retry, false);
+const retryAt = 1_800_000_000;
+const firstTry = afterFailure({ retry: true, code: "timeout", message: "Speechace belum menjawab." }, 1, retryAt, [60, 300]);
+assert.equal(firstTry.status, "pending");
+assert.equal(firstTry.nextAttemptAt, retryAt + 60);
+const lastTry = afterFailure({ retry: true, code: "timeout", message: "Speechace belum menjawab." }, 3, retryAt, [60, 300]);
+assert.equal(lastTry.status, "failed");
+assert.equal(lastTry.needsReview, 1);
+const refused = afterFailure({ retry: false, code: "error_no_speech", message: "Tidak ada suara." }, 1, retryAt, [60, 300]);
+assert.equal(refused.status, "failed", "an error waiting cannot fix goes straight to the team");
+
+/* ---------- Speaking: what the result email and WhatsApp say ---------- */
+const facts = speakingFacts({ status: "graded", cefr_overall: "B2", ielts_overall: 6, transcript: "I like visiting Bali.", scores: JSON.stringify(graded.scores) });
+assert.equal(facts.source, "speechace");
+assert.equal(facts.aspects.length, 5);
+assert.equal(aspectLine(facts.aspects[0]), "Pronunciation 78 (B2)");
+assert.equal(speakingFacts({ status: "skipped", scores: "{}" }), null, "a skipped recording adds no speaking block");
+const manualFacts = speakingFacts({
+  status: "manual", cefr_overall: "B1", ielts_overall: null, transcript: "",
+  scores: JSON.stringify({ source: "manual", overall: { cefr: "B1", ielts: null, score: null }, aspects: { grammar: { cefr: "B1" } }, note: "Bagus, tapi banyak jeda." }),
+});
+assert.equal(manualFacts.source, "manual");
+assert.deepEqual(manualFacts.aspects.map((a) => a.label), ["Grammar"]);
+assert.equal(aspectLine(manualFacts.aspects[0]), "Grammar B1");
+assert.equal(isFinalStatus("pending"), false);
+assert.equal(isFinalStatus("manual"), true);
+
+const emailSpeaking = buildResultEmail({ name: "Rani", email: "rani@example.com", score: 13, total: 25, level: levelForScore(13), speaking: facts });
+assert.ok(emailSpeaking.subject.includes("Speaking B2"));
+assert.ok(emailSpeaking.html.includes("Pronunciation"));
+assert.ok(emailSpeaking.text.includes("Speaking: CEFR B2, IELTS 6.0"));
+assert.equal(emailSpeaking.html.includes("<b>Bali</b>"), false, "the transcript is escaped in the email");
+const emailManual = buildResultEmail({ name: "Rani", email: "rani@example.com", score: 13, total: 25, level: levelForScore(13), speaking: manualFacts });
+assert.ok(emailManual.text.includes("dinilai oleh tim Titik Nol"));
+
+const waSpeaking = buildResultWhatsApp({ name: "Rani Putri Lestari", score: 13, total: 25, level: levelForScore(13), speaking: facts });
+assert.ok(waSpeaking.includes("Speaking (Speechace):"));
+assert.ok(waSpeaking.includes("CEFR B2, IELTS 6.0"));
+assert.ok(waSpeaking.includes("Pronunciation 78 (B2)"));
+assert.ok(waSpeaking.includes("bukan sertifikat resmi"));
+assert.ok(waSpeaking.length <= 1000, "the WhatsApp result stays under 1,000 characters");
+assert.equal(/[\u2013\u2014]/.test(waSpeaking), false, "no en or em dash");
+
+/* ---------- Speaking: the upload the browser sends ---------- */
+assert.equal(SPEAKING_MAX_BYTES, 3 * 1024 * 1024);
+assert.equal(speakingType("audio/webm;codecs=opus"), "audio/webm");
+assert.equal(speakingType("Audio/MP4"), "audio/mp4");
+assert.equal(speakingType("audio/x-wav"), "audio/wav");
+assert.equal(speakingType("audio/mpeg"), null, "mp3 is refused, the recorder never produces it");
+assert.deepEqual(retryDelays({ SPEAKING_RETRY_SECONDS: "5, 10" }), [5, 10]);
+assert.deepEqual(retryDelays({}), [60, 300]);
+
 let finished = false;
 runInBackground(() => new Promise((resolve) => setTimeout(() => { finished = true; resolve(); }, 150)));
 const loud = console.error;

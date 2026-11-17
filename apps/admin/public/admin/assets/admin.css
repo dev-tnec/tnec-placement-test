@@ -652,3 +652,20 @@ body.nav-collapsed .account__out { margin-left: 0; }
   .account { flex-direction: column; gap: 8px; }
   .account__out { margin-left: 0; }
 }
+
+/* ---------- Speaking ---------- */
+.speak-audio { display: block; width: 100%; }
+.speak-label {
+  font-size: 11px; font-weight: 700; letter-spacing: .1em;
+  text-transform: uppercase; color: var(--text-secondary);
+}
+.transcript-block {
+  padding: 14px 16px; border: 1px solid var(--gray-200);
+  border-radius: var(--radius-sm); background: var(--surface-50);
+}
+.transcript-text { margin: 6px 0 0; font-size: 14px; line-height: 1.65; white-space: pre-wrap; }
+.speak-table td, .speak-table th { text-align: left; }
+.speak-grade { display: grid; gap: 14px; padding-top: 18px; border-top: 1px solid var(--gray-200); }
+.speak-grade__grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px 20px; }
+.note-line { margin: 0; font-size: 13px; line-height: 1.6; color: var(--navy-900); }
+@media (max-width: 767px) { .speak-grade__grid { grid-template-columns: 1fr 1fr; } }

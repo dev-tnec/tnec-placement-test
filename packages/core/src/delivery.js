@@ -11,6 +11,11 @@ import { nowSeconds } from "./http.js";
 import { loadLevels, levelFor, publicLevel, addActivity } from "./store.js";
 import { buildResultEmail } from "./email.js";
 import { sendWhatsApp, buildResultWhatsApp, PLACEMENT_LEAD_SOURCE } from "./whatsapp.js";
+import { isFinalStatus, speakingFacts } from "./speaking-result.js";
+
+// A result with a speaking recording waits until that recording is graded, graded by hand, or
+// skipped. The grading (speaking.js) and the dashboard call deliverInBackground again then.
+const SPEAKING_DONE = "NOT EXISTS (SELECT 1 FROM speaking_submissions s WHERE s.attempt_id = attempts.id AND s.status NOT IN ('graded', 'manual', 'skipped'))";
 
 export const EMAIL_SKIPPED = "skipped: email not configured";
 
@@ -56,18 +61,22 @@ export async function drainDeliveries(timeoutMs = 20_000) {
 
 /** Claims one attempt, sends its pending channels, and records what happened. */
 export async function deliverResult(env, attemptId) {
+  const speaking = await env.DB.prepare(
+    "SELECT status, cefr_overall, ielts_overall, scores, transcript FROM speaking_submissions WHERE attempt_id = ?",
+  ).bind(attemptId).first();
+  if (speaking && !isFinalStatus(speaking.status)) return null; // the recording is still being scored
   const now = nowSeconds();
   const attempt = await env.DB.prepare(
     `UPDATE attempts SET delivery_lease_until = ?
       WHERE id = ? AND (email_status = 'pending' OR wa_status = 'pending')
-        AND (delivery_lease_until IS NULL OR delivery_lease_until < ?)
+        AND (delivery_lease_until IS NULL OR delivery_lease_until < ?) AND ${SPEAKING_DONE}
       RETURNING id, student_id, name, email, whatsapp, score, total, level_key, email_status, wa_status`,
   ).bind(now + LEASE_SECONDS, attemptId, now).first();
   if (!attempt) return null; // nothing waiting, or another server is sending it
 
   const levels = await loadLevels(env);
   const level = publicLevel(levels.find((l) => l.key === attempt.level_key) || levelFor(levels, attempt.score ?? 0));
-  const facts = { name: attempt.name, email: attempt.email, score: attempt.score ?? 0, total: attempt.total, level };
+  const facts = { name: attempt.name, email: attempt.email, score: attempt.score ?? 0, total: attempt.total, level, speaking: speakingFacts(speaking) };
   const waText = buildResultWhatsApp(facts);
   const [mail, wa] = await Promise.all([
     attempt.email_status === "pending" ? sendResultEmail(env, facts) : null,
@@ -94,7 +103,7 @@ export async function deliverResult(env, attemptId) {
       statements.push(env.DB.prepare("INSERT INTO wa_messages (student_id, to_number, text, status, provider_message_id, error, created_at, created_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?)")
         .bind(sid, attempt.whatsapp, waText, wa.status, wa.messageId || null, wa.error || null, at, "Sistem"));
       statements.push(addActivity(env, sid, "wa", wa.ok
-        ? `Hasil placement terkirim otomatis lewat WhatsApp:\n${waText}`
+        ? `Hasil placement${facts.speaking ? " dan speaking" : ""} terkirim otomatis lewat WhatsApp:\n${waText}`
         : `Hasil placement gagal terkirim lewat WhatsApp. ${wa.error}`, null, { attemptId }, at));
     }
   }
@@ -113,7 +122,7 @@ export async function deliverPending(env) {
   recheckTimer = null;
   const { results } = await env.DB.prepare(
     `SELECT id, delivery_lease_until FROM attempts
-      WHERE email_status = 'pending' OR wa_status = 'pending'
+      WHERE (email_status = 'pending' OR wa_status = 'pending') AND ${SPEAKING_DONE}
       ORDER BY submitted_at LIMIT ${SWEEP_LIMIT}`,
   ).all();
   let nextExpiry = null;

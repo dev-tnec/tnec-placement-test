@@ -1,17 +1,29 @@
-// Public test API for the web app: config, invites, attempts, violations, submit, and contact.
-// The answer key never leaves the server.
+// Public test API for the web app: config, invites, attempts, violations, submit, speaking, and
+// contact. The answer key never leaves the server, and no route ever sends a recording back.
 
 import { HttpError, json, readJson, nowSeconds, normalizeWhatsapp, isEmail } from "@tnec/core/http";
 import {
   TEST_NAMES, PER_MODE_GRACE_SECONDS, loadTest, loadQuestions, loadLevels, levelFor, publicLevel,
-  focusStrikes, addActivity, upsertStudentFromContact,
+  focusStrikes, addActivity, upsertStudentFromContact, newId,
 } from "@tnec/core/store";
 import { CONSENT_VERSION, PRIVACY, TERMS, WHATSAPP, fillLegal } from "@tnec/core/legal";
 import { whatsappConfigured } from "@tnec/core/whatsapp";
 import { deliverInBackground, EMAIL_SKIPPED } from "@tnec/core/delivery";
 import { sha256Hex } from "@tnec/core/crypto";
+import { SPEAKING_MAX_BYTES, speakingType, speechaceConfigured, gradeInBackground } from "@tnec/core/speaking";
+import { isFinalStatus } from "@tnec/core/speaking-result";
 
 const PUBLIC_BODY_LIMIT = 16 * 1024;
+// The recording comes as the raw request body. The cap is 3 MB plus room for nothing else.
+export const SPEAKING_ROUTE = /^\/api\/attempts\/[0-9a-f-]{36}\/speaking$/;
+export const SPEAKING_BODY_LIMIT = SPEAKING_MAX_BYTES + 1024;
+// A recording has to arrive within 2 hours of submitting the multiple choice answers.
+const SPEAKING_UPLOAD_WINDOW = 2 * 3600;
+const SPEAKING_MIN_BYTES = 1024;
+const SKIP_REASONS = {
+  mic: "Mikrofon tidak bisa dipakai di perangkat peserta, jadi peserta melewati bagian speaking.",
+  unsupported: "Browser peserta tidak bisa merekam suara, jadi peserta melewati bagian speaking.",
+};
 const SUBMIT_GRACE_SECONDS = 15;
 const ATTEMPT_ID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 const CHOICES = new Set(["A", "B", "C", "D"]);
@@ -36,12 +48,14 @@ async function handleApi(request, env, url) {
 
   if (path === "/api/attempts" && request.method === "POST") return createAttempt(request, env);
 
-  const match = path.match(/^\/api\/attempts\/([0-9a-f-]{36})\/(violation|submit|contact)$/);
+  const match = path.match(/^\/api\/attempts\/([0-9a-f-]{36})\/(violation|submit|contact|speaking|speaking-skip)$/);
   if (match && request.method === "POST") {
     const [, attemptId, action] = match;
     if (!ATTEMPT_ID_RE.test(attemptId)) throw new HttpError(400, "ID percobaan tidak valid.");
     if (action === "violation") return logViolation(request, env, attemptId);
     if (action === "submit") return submitAttempt(request, env, attemptId);
+    if (action === "speaking") return uploadSpeaking(request, env, attemptId);
+    if (action === "speaking-skip") return skipSpeaking(request, env, attemptId);
     return saveContact(request, env, attemptId);
   }
   throw new HttpError(404, "Endpoint tidak ditemukan.");
@@ -62,8 +76,11 @@ async function liveTest(env, key) {
   return { test, questions, durationSeconds };
 }
 
+// Speaking runs on the placement test only, and only with a question to answer.
+const speakingOn = (test) => test.key === "placement" && test.speakingEnabled && Boolean(test.speakingPrompt);
+
 function publicConfig({ test, questions, durationSeconds }) {
-  const values = { total: questions.length, duration: spanText(durationSeconds), strikes: test.maxViolations };
+  const values = { total: questions.length, duration: spanText(durationSeconds), strikes: test.maxViolations, speakingSeconds: test.speakingSeconds };
   return {
     consentVersion: CONSENT_VERSION,
     open: test.open && questions.length > 0,
@@ -72,6 +89,9 @@ function publicConfig({ test, questions, durationSeconds }) {
     totalQuestions: questions.length,
     maxViolations: test.maxViolations,
     whatsapp: WHATSAPP,
+    speaking: speakingOn(test)
+      ? { enabled: true, seconds: test.speakingSeconds, minSeconds: test.speakingMinSeconds, prompt: test.speakingPrompt }
+      : { enabled: false },
     terms: fillLegal(TERMS, values),
     privacy: fillLegal(PRIVACY, values),
   };
@@ -297,10 +317,21 @@ async function saveContact(request, env, attemptId) {
   }
   const [saved] = await env.DB.batch(statements);
   const channels = saved.results[0] || {};
-  deliverInBackground(env, attemptId);
 
+  // Read the recording only after the channels are saved as waiting. Grading saves its result
+  // before it starts the delivery, so whichever of the two finishes last sends the result.
+  const speaking = await env.DB.prepare("UPDATE speaking_submissions SET student_id = ? WHERE attempt_id = ? RETURNING status")
+    .bind(student.id, attemptId).first();
+  if (!speaking || isFinalStatus(speaking.status)) deliverInBackground(env, attemptId);
+  const delivery = { email: channelState(channels.email_status), whatsapp: channelState(channels.wa_status) };
+
+  // With a recording, the full result goes out by email and WhatsApp after it is scored, and the
+  // page only says so. A student who skipped speaking sees the result right away, as before.
+  if (speaking && speaking.status !== "skipped") {
+    return json({ delivery, result: null, speaking: { status: speaking.status } });
+  }
   return json({
-    delivery: { email: channelState(channels.email_status), whatsapp: channelState(channels.wa_status) },
+    delivery,
     result: {
       score: attempt.score ?? 0,
       total: attempt.total,
@@ -309,6 +340,73 @@ async function saveContact(request, env, attemptId) {
       violations: attempt.violations,
     },
   });
+}
+
+/* ---------- Speaking ---------- */
+
+async function speakingAttempt(env, attemptId) {
+  const attempt = await getAttempt(env, attemptId);
+  if ((attempt.test_key || "placement") !== "placement") throw new HttpError(409, "Tes ini tidak memakai bagian speaking.");
+  if (attempt.status !== "submitted") throw new HttpError(409, "Kirim jawaban pilihan ganda dulu sebelum mengirim rekaman.");
+  return attempt;
+}
+
+/**
+ * Stores the one recording of an attempt and starts scoring it in the background. The body is the
+ * raw audio. While a stored recording has not been picked up for scoring, a repeated upload
+ * replaces it, so a retry after a dropped connection is safe; after that it is refused.
+ */
+async function uploadSpeaking(request, env, attemptId) {
+  const mime = speakingType(request.headers.get("content-type"));
+  if (!mime) throw new HttpError(415, "Format rekaman ini tidak didukung. Rekam ulang dengan Chrome, Edge, Firefox, atau Safari versi terbaru.");
+  const audio = await request.bytes();
+  if (audio.length > SPEAKING_MAX_BYTES) throw new HttpError(413, "Rekaman terlalu besar, maksimal 3 MB. Rekam ulang dengan jawaban yang lebih singkat.");
+  if (audio.length < SPEAKING_MIN_BYTES) throw new HttpError(400, "Rekaman kosong. Rekam ulang jawaban kamu.");
+
+  const attempt = await speakingAttempt(env, attemptId);
+  const now = nowSeconds();
+  if (now - (attempt.submitted_at || 0) > SPEAKING_UPLOAD_WINDOW) {
+    throw new HttpError(410, "Waktu untuk mengirim rekaman sudah lewat. Lanjutkan dengan mengisi data kamu.", { code: "speaking_closed" });
+  }
+  const test = await loadTest(env, "placement");
+  if (!speakingOn(test)) throw new HttpError(409, "Bagian speaking sedang tidak dipakai. Lanjutkan dengan mengisi data kamu.", { code: "speaking_off" });
+  const declared = Number(request.headers.get("x-duration"));
+  const duration = Number.isFinite(declared) && declared > 0 ? Math.min(120, Math.max(1, Math.round(declared))) : null;
+  if (duration !== null && duration < test.speakingMinSeconds - 1) {
+    throw new HttpError(400, `Rekaman kamu terlalu pendek. Jawab minimal ${test.speakingMinSeconds} detik, lalu rekam ulang.`, { code: "speaking_short" });
+  }
+
+  // Without a Speechace key on this server the recording goes straight to the team's queue.
+  const ready = speechaceConfigured(env);
+  const status = ready ? "pending" : "failed";
+  const error = ready ? null : "Kunci Speechace belum diisi di server, jadi rekaman ini menunggu dinilai tim.";
+  const saved = await env.DB.prepare(
+    `INSERT INTO speaking_submissions (id, attempt_id, student_id, prompt, audio, audio_mime, audio_bytes, duration_seconds, status, needs_review, error, created_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+     ON CONFLICT (attempt_id) DO UPDATE SET prompt = EXCLUDED.prompt, audio = EXCLUDED.audio, audio_mime = EXCLUDED.audio_mime,
+         audio_bytes = EXCLUDED.audio_bytes, duration_seconds = EXCLUDED.duration_seconds, status = EXCLUDED.status,
+         needs_review = EXCLUDED.needs_review, error = EXCLUDED.error, created_at = EXCLUDED.created_at
+       WHERE speaking_submissions.status = 'pending' AND speaking_submissions.tries = 0
+         AND (speaking_submissions.lease_until IS NULL OR speaking_submissions.lease_until < ?)
+     RETURNING id, status`,
+  ).bind(newId("spk"), attemptId, attempt.student_id, test.speakingPrompt, audio, mime, audio.length, duration, status, ready ? 0 : 1, error, now, now).first();
+  if (!saved) throw new HttpError(409, "Rekaman untuk tes ini sudah terkirim.", { code: "speaking_done" });
+  if (saved.status === "pending") gradeInBackground(env, saved.id);
+  return json({ ok: true, status: saved.status === "failed" ? "pending" : saved.status });
+}
+
+/** Records that the student could not record, so the result goes out without the speaking part. */
+async function skipSpeaking(request, env, attemptId) {
+  const body = await readJson(request, PUBLIC_BODY_LIMIT);
+  const reason = SKIP_REASONS[body?.reason] ? body.reason : "mic";
+  const attempt = await speakingAttempt(env, attemptId);
+  const test = await loadTest(env, "placement");
+  const now = nowSeconds();
+  await env.DB.prepare(
+    `INSERT INTO speaking_submissions (id, attempt_id, student_id, prompt, status, error, scores, graded_at, created_at)
+     VALUES (?, ?, ?, ?, 'skipped', ?, ?, ?, ?) ON CONFLICT (attempt_id) DO NOTHING`,
+  ).bind(newId("spk"), attemptId, attempt.student_id, test.speakingPrompt || "", SKIP_REASONS[reason], JSON.stringify({ source: "student", reason }), now, now).run();
+  return json({ ok: true });
 }
 
 // What the result page says about each channel: already delivered, on its way, or not used.

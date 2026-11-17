@@ -93,6 +93,23 @@ const els = {
   submitTotal: $("#submit-total"),
   submitCancel: $("#submit-cancel"),
   submitConfirm: $("#submit-confirm"),
+  speakingPrompt: $("#speaking-prompt"),
+  speakNote: $("#speak-note"),
+  speakError: $("#speak-error"),
+  speakMeter: $("#speak-meter"),
+  speakMeterFill: $("#speak-meter-fill"),
+  speakTimer: $("#speak-timer"),
+  speakStart: $("#speak-start"),
+  speakStop: $("#speak-stop"),
+  speakSkip: $("#speak-skip"),
+  speakReview: $("#speak-review"),
+  speakAudio: $("#speak-audio"),
+  speakRetake: $("#speak-retake"),
+  speakSend: $("#speak-send"),
+  pendingWa: $("#pending-wa"),
+  pendingEmailNote: $("#pending-email-note"),
+  detailsLead: $("#details-lead"),
+  detailsBenefit: $("#details-benefit-score"),
   timeupDialog: $("#timeup-dialog"),
   timeupRetry: $("#timeup-retry"),
   timeupBack: $("#timeup-back"),
@@ -125,6 +142,19 @@ const state = {
   delivery: null,
   restarting: false,
   toastTimer: null,
+  speaking: null,
+  recStream: null,
+  recCtx: null,
+  recAnalyser: null,
+  recMeterId: null,
+  recTimerId: null,
+  recorder: null,
+  recChunks: [],
+  recStart: 0,
+  recBlob: null,
+  recBlobUrl: null,
+  recDuration: 0,
+  speakBusy: false,
 };
 
 let pendingConsent = null;
@@ -177,6 +207,11 @@ async function init() {
   els.finishBtn.addEventListener("click", openSubmit);
   els.submitCancel.addEventListener("click", () => els.submitDialog.close());
   els.submitConfirm.addEventListener("click", submitAnswers);
+  els.speakStart.addEventListener("click", startRecording);
+  els.speakStop.addEventListener("click", stopRecording);
+  els.speakRetake.addEventListener("click", retakeRecording);
+  els.speakSend.addEventListener("click", sendRecording);
+  els.speakSkip.addEventListener("click", skipSpeaking);
   els.violationClose.addEventListener("click", reenterFullscreen);
   els.endRetry.addEventListener("click", retry);
   els.endBack.addEventListener("click", backToStart);
@@ -267,6 +302,16 @@ function applySettings(config) {
     if (values[el.dataset.fill] !== undefined) el.textContent = values[el.dataset.fill];
   }
   state.maxStrikes = config.maxViolations || 3;
+
+  // Speaking runs on the placement test only, after the multiple choice part.
+  state.speaking = config.speaking?.enabled ? config.speaking : null;
+  if (state.speaking) {
+    els.detailsLead.textContent =
+      "Jawaban dan rekaman kamu sudah tersimpan dengan aman. Lengkapi data di bawah ini, lalu kami siapkan hasil lengkap tes kamu dan mengirimkannya ke email dan WhatsApp kamu.";
+    els.detailsBenefit.innerHTML =
+      "<strong>Level, skor, dan lima nilai speaking</strong> dari tes yang sudah kamu kerjakan";
+    els.contactBtn.textContent = "Kirim dan siapkan hasil";
+  }
 
   if (config.timeMode === "per") {
     setCopy("rule-time", `Tes terdiri dari ${total} soal pilihan ganda, dan setiap soal punya batas waktunya sendiri. Saat waktu satu soal habis, soal berikutnya langsung muncul, dan soal sebelumnya tidak bisa dibuka lagi.`);
@@ -422,6 +467,7 @@ function beginAttempt(data) {
 
   els.contactForm.reset();
   clearErrors();
+  clearRecording();
   els.fsWarning.hidden = Boolean(document.fullscreenElement);
 
   // Per-question time moves forward only, so there is nothing to go back to or flag.
@@ -441,7 +487,7 @@ function beginAttempt(data) {
 }
 
 function showScreen(name, { focus = true } = {}) {
-  for (const key of ["intro", "test", "details", "result", "score"]) {
+  for (const key of ["intro", "test", "speaking", "details", "result", "pending", "score"]) {
     $(`#screen-${key}`).hidden = key !== name;
   }
   document.body.dataset.screen = name;
@@ -451,8 +497,10 @@ function showScreen(name, { focus = true } = {}) {
   if (!focus) return;
   const target = {
     intro: "#intro-title",
+    speaking: "#speaking-title",
     details: "#details-title",
     result: "#result-level",
+    pending: "#pending-title",
     score: "#score-title",
   }[name];
   if (target) $(target).focus({ preventScroll: true });
@@ -702,10 +750,14 @@ async function submitAnswers() {
     if (data.result) {
       renderScore(data.result);
       showScreen("score");
+      await exitFullscreen();
+    } else if (state.speaking) {
+      await exitFullscreen();
+      enterSpeaking();
     } else {
       showScreen("details");
+      await exitFullscreen();
     }
-    await exitFullscreen();
   } catch (error) {
     state.submitting = false;
     if (Date.now() < state.deadline) {
@@ -766,14 +818,272 @@ async function saveContact(event) {
     });
     state.contact = { name, email };
     state.delivery = data.delivery || null;
-    renderResult(data.result);
-    showScreen("result");
+    if (data.result) {
+      renderResult(data.result);
+      showScreen("result");
+    } else {
+      renderPending();
+      showScreen("pending");
+    }
   } catch (error) {
     toast(error.message || "Data gagal disimpan. Silakan coba lagi.");
   } finally {
     els.contactBtn.disabled = false;
-    els.contactBtn.textContent = "Lihat hasil saya";
+    els.contactBtn.textContent = state.speaking ? "Kirim dan siapkan hasil" : "Lihat hasil saya";
   }
+}
+
+/* ---------- Speaking ---------- */
+
+// Chrome and Edge record webm, Firefox ogg, and Safari mp4. The server accepts all of them.
+const REC_MIMES = ["audio/webm;codecs=opus", "audio/webm", "audio/ogg;codecs=opus", "audio/ogg", "audio/mp4"];
+
+const recordingSupported = () => Boolean(window.MediaRecorder && navigator.mediaDevices?.getUserMedia);
+
+function speakInstruction() {
+  const sp = state.speaking;
+  return `Jawab dalam bahasa Inggris selama ${sp.minSeconds} sampai ${sp.seconds} detik. Tekan Mulai rekam, izinkan mikrofonnya, bicara dalam satu tarikan, lalu tekan Selesai merekam.`;
+}
+
+function resetSpeakUi() {
+  els.speakError.hidden = true;
+  els.speakMeter.hidden = true;
+  els.speakTimer.hidden = true;
+  els.speakStart.hidden = false;
+  els.speakStart.disabled = false;
+  els.speakStop.hidden = true;
+  els.speakSkip.hidden = true;
+  els.speakReview.hidden = true;
+  els.speakSend.disabled = false;
+  els.speakRetake.disabled = false;
+  $("#speak-send-label").textContent = "Kirim rekaman";
+}
+
+function enterSpeaking() {
+  const sp = state.speaking;
+  if (!sp) {
+    showScreen("details");
+    return;
+  }
+  clearRecording();
+  els.speakingPrompt.textContent = sp.prompt;
+  resetSpeakUi();
+  els.speakNote.textContent = speakInstruction();
+  showScreen("speaking");
+  if (!recordingSupported()) {
+    speakUnavailable("Browser ini tidak bisa merekam suara, jadi bagian speaking dilewati. Tes kamu tetap bisa dilanjutkan.");
+  }
+}
+
+function speakUnavailable(message) {
+  els.speakError.textContent = message;
+  els.speakError.hidden = false;
+  els.speakStart.hidden = true;
+  els.speakStop.hidden = true;
+  els.speakMeter.hidden = true;
+  els.speakTimer.hidden = true;
+  els.speakSkip.hidden = false;
+}
+
+async function startRecording() {
+  if (state.speakBusy || state.recorder) return;
+  state.speakBusy = true;
+  els.speakStart.disabled = true;
+  try {
+    state.recStream = await navigator.mediaDevices.getUserMedia({
+      audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
+    });
+  } catch {
+    state.speakBusy = false;
+    els.speakStart.disabled = false;
+    speakUnavailable("Mikrofon tidak bisa dipakai. Periksa izin mikrofon di browser kamu, atau lanjutkan tanpa rekaman.");
+    return;
+  }
+  state.speakBusy = false;
+
+  const mime = REC_MIMES.find((type) => MediaRecorder.isTypeSupported(type)) || "";
+  const recorder = new MediaRecorder(state.recStream, mime ? { mimeType: mime } : undefined);
+  state.recorder = recorder;
+  state.recChunks = [];
+  recorder.ondataavailable = (event) => {
+    if (event.data.size) state.recChunks.push(event.data);
+  };
+  recorder.onstop = finishRecording;
+  recorder.start();
+
+  state.recStart = Date.now();
+  els.speakStart.hidden = true;
+  els.speakError.hidden = true;
+  els.speakMeter.hidden = false;
+  els.speakTimer.hidden = false;
+  els.speakStop.hidden = false;
+  els.speakStop.disabled = state.speaking.minSeconds > 1;
+  startMeter();
+  announce("Perekaman dimulai.");
+
+  state.recTimerId = setInterval(() => {
+    const elapsed = Math.floor((Date.now() - state.recStart) / 1000);
+    els.speakTimer.textContent = formatTime(elapsed);
+    if (els.speakStop.disabled && elapsed >= state.speaking.minSeconds) {
+      els.speakStop.disabled = false;
+      els.speakStop.focus();
+    }
+    if (elapsed >= state.speaking.seconds) stopRecording();
+  }, 250);
+}
+
+function stopRecording() {
+  clearInterval(state.recTimerId);
+  state.recTimerId = null;
+  stopMeter();
+  if (state.recorder && state.recorder.state !== "inactive") state.recorder.stop();
+}
+
+function finishRecording() {
+  const recorder = state.recorder;
+  state.recorder = null;
+  if (state.recStream) state.recStream.getTracks().forEach((track) => track.stop());
+  state.recStream = null;
+  state.recDuration = Math.max(1, Math.round((Date.now() - state.recStart) / 1000));
+  const type = (recorder?.mimeType || REC_MIMES[0]).split(";")[0];
+  state.recBlob = new Blob(state.recChunks, { type });
+  state.recChunks = [];
+
+  els.speakStop.hidden = true;
+  els.speakMeter.hidden = true;
+  els.speakTimer.hidden = true;
+  if (state.recBlobUrl) URL.revokeObjectURL(state.recBlobUrl);
+  state.recBlobUrl = URL.createObjectURL(state.recBlob);
+  els.speakAudio.src = state.recBlobUrl;
+  els.speakReview.hidden = false;
+  els.speakNote.textContent = "Dengarkan rekaman kamu. Kalau ada yang kurang jelas, rekam ulang. Kalau sudah pas, kirim rekamannya.";
+  announce("Rekaman selesai, dan siap untuk didengarkan.");
+  els.speakSend.focus();
+}
+
+function clearRecording() {
+  if (state.recBlobUrl) URL.revokeObjectURL(state.recBlobUrl);
+  state.recBlobUrl = null;
+  state.recBlob = null;
+  state.recChunks = [];
+  state.recorder = null;
+  if (els.speakAudio.getAttribute("src")) {
+    els.speakAudio.removeAttribute("src");
+    els.speakAudio.load();
+  }
+  els.speakReview.hidden = true;
+}
+
+function retakeRecording() {
+  clearRecording();
+  resetSpeakUi();
+  els.speakNote.textContent = speakInstruction();
+  els.speakStart.focus();
+}
+
+async function sendRecording() {
+  if (!state.recBlob || state.speakBusy || !state.attempt) return;
+  state.speakBusy = true;
+  els.speakSend.disabled = true;
+  els.speakRetake.disabled = true;
+  $("#speak-send-label").textContent = "Mengirim...";
+  try {
+    await api(`/api/attempts/${state.attempt.id}/speaking`, {
+      method: "POST",
+      headers: { "content-type": state.recBlob.type, "x-duration": String(state.recDuration) },
+      body: state.recBlob,
+    });
+    clearRecording();
+    showScreen("details");
+  } catch (error) {
+    if (error.code === "speaking_closed" || error.code === "speaking_off" || error.code === "speaking_done") {
+      toast(error.message);
+      showScreen("details");
+      return;
+    }
+    toast(error.message || "Rekaman gagal dikirim. Periksa koneksi kamu, lalu coba lagi.");
+    if (error.code === "speaking_short") els.speakNote.textContent = error.message;
+  } finally {
+    state.speakBusy = false;
+    els.speakSend.disabled = false;
+    els.speakRetake.disabled = false;
+    $("#speak-send-label").textContent = "Kirim rekaman";
+  }
+}
+
+async function skipSpeaking() {
+  if (!state.attempt || state.speakBusy) return;
+  state.speakBusy = true;
+  els.speakSkip.disabled = true;
+  try {
+    await api(`/api/attempts/${state.attempt.id}/speaking-skip`, {
+      method: "POST",
+      body: { reason: "mic" },
+    });
+    clearRecording();
+    showScreen("details");
+  } catch (error) {
+    toast(error.message || "Bagian ini belum bisa dilewati. Coba lagi.");
+  } finally {
+    state.speakBusy = false;
+    els.speakSkip.disabled = false;
+  }
+}
+
+function startMeter() {
+  try {
+    state.recCtx = new AudioContext();
+    const source = state.recCtx.createMediaStreamSource(state.recStream);
+    state.recAnalyser = state.recCtx.createAnalyser();
+    state.recAnalyser.fftSize = 1024;
+    source.connect(state.recAnalyser);
+  } catch {
+    state.recCtx = null;
+    state.recAnalyser = null;
+    return;
+  }
+  const data = new Uint8Array(state.recAnalyser.fftSize);
+  const tick = () => {
+    if (!state.recAnalyser) return;
+    state.recAnalyser.getByteTimeDomainData(data);
+    let sum = 0;
+    for (const value of data) {
+      const x = (value - 128) / 128;
+      sum += x * x;
+    }
+    const level = Math.min(1, Math.sqrt(sum / data.length) * 6);
+    els.speakMeterFill.style.transform = `scaleX(${level.toFixed(3)})`;
+    els.speakMeter.classList.toggle("is-loud", level > 0.9);
+    state.recMeterId = requestAnimationFrame(tick);
+  };
+  tick();
+}
+
+function stopMeter() {
+  cancelAnimationFrame(state.recMeterId);
+  state.recMeterId = null;
+  state.recAnalyser = null;
+  if (state.recCtx) state.recCtx.close().catch(() => {});
+  state.recCtx = null;
+  els.speakMeterFill.style.transform = "scaleX(0)";
+  els.speakMeter.classList.remove("is-loud");
+}
+
+/* The waiting screen, shown when the recording is still being scored. */
+function renderPending() {
+  const name = state.contact?.name || "";
+  const waText = `Halo Admin Titik Nol, saya ${name}. Saya baru selesai mengerjakan tes penempatan dan ingin menanyakan hasil saya.`;
+  els.pendingWa.href = `https://wa.me/${state.config.whatsapp}?text=${encodeURIComponent(waText)}`;
+
+  const to = state.contact?.email || "email kamu";
+  const viaEmail = state.delivery?.email === "sending" || state.delivery?.email === "sent";
+  const viaWa = state.delivery?.whatsapp === "sending" || state.delivery?.whatsapp === "sent";
+  let note;
+  if (viaEmail && viaWa) note = `Setelah penilaian selesai, hasilnya kami kirim ke ${to} dan ke WhatsApp kamu.`;
+  else if (viaEmail) note = `Setelah penilaian selesai, hasilnya kami kirim ke ${to}.`;
+  else if (viaWa) note = "Setelah penilaian selesai, hasilnya kami kirim ke WhatsApp kamu.";
+  else note = "Hasil belum bisa kami kirim ke email maupun WhatsApp, jadi hubungi admin lewat tombol di bawah.";
+  els.pendingEmailNote.textContent = note;
 }
 
 function renderResult(result) {
@@ -1055,11 +1365,12 @@ function clearErrors() {
 
 /* ---------- Utilities ---------- */
 
-async function api(path, { method = "GET", body } = {}) {
+async function api(path, { method = "GET", body, headers } = {}) {
+  const isRaw = body instanceof Blob;
   const response = await fetch(path, {
     method,
-    headers: body ? { "Content-Type": "application/json" } : undefined,
-    body: body ? JSON.stringify(body) : undefined,
+    headers: headers ?? (body && !isRaw ? { "Content-Type": "application/json" } : undefined),
+    body: isRaw ? body : body ? JSON.stringify(body) : undefined,
     cache: "no-store",
   });
 
@@ -1073,6 +1384,7 @@ async function api(path, { method = "GET", body } = {}) {
   if (!response.ok) {
     const error = new Error(data?.error || "Permintaan gagal diproses. Silakan coba lagi.");
     error.status = response.status;
+    error.code = data?.code || null;
     throw error;
   }
   return data;

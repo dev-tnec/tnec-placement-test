@@ -4,6 +4,8 @@
 // Baileys, so a message can go to any number at any time. The 422 text below only applies if the
 // channel ever moves to Meta's Cloud API.
 
+import { aspectLine, formatBand } from "./speaking-result.js";
+
 const DEFAULT_BASE = "https://csq-api.onrender.com/api/v1";
 const TIMEOUT_MS = 25000;
 
@@ -67,9 +69,46 @@ export async function sendWhatsApp(env, { to, text, source, timeoutMs = TIMEOUT_
   }
 }
 
+const WHATSAPP_MAX = 1000;
+const TRANSCRIPT_IN_WHATSAPP = 300;
+const NO_CERTIFICATE = "_Hasil ini dipakai untuk penempatan kelas dan bukan sertifikat resmi._";
+
+/**
+ * The result with its speaking part, in the format of the PRD. It stays under 1,000 characters:
+ * the transcript (only when it is shorter than 300 characters) and the notes go first.
+ */
+function buildSpeakingWhatsApp(first, { score, total, level, speaking: sp }) {
+  const program = String(level.program || "").replace(/\.$/, "");
+  const head = [
+    `Halo ${first}, hasil tes penempatan kamu sudah siap.`,
+    "",
+    `Level: ${level.label}`,
+    `Skor tes: ${score} dari ${total}`,
+    "",
+    sp.source === "manual" ? "Speaking (dinilai tim Titik Nol):" : "Speaking (Speechace):",
+    `CEFR ${sp.cefr}${sp.ielts === null ? "" : `, IELTS ${formatBand(sp.ielts)}`}`,
+    ...sp.aspects.map(aspectLine),
+  ];
+  const extra = [];
+  if (sp.transcript && sp.transcript.length < TRANSCRIPT_IN_WHATSAPP) extra.push("", "Transkrip jawaban kamu:", `"${sp.transcript}"`);
+  if (sp.notes.length) extra.push("", "Catatan:", ...sp.notes);
+  const tail = [
+    "",
+    `Program yang kami sarankan: ${program}.`,
+    "",
+    "Balas pesan ini kalau ingin konsultasi.",
+    "",
+    NO_CERTIFICATE,
+  ];
+  const full = [...head, ...extra, ...tail].join("\n");
+  return full.length <= WHATSAPP_MAX ? full : [...head, ...tail].join("\n").slice(0, WHATSAPP_MAX);
+}
+
 /** The placement result as a WhatsApp message, sent automatically after the contact step. */
-export function buildResultWhatsApp({ name, score, total, level }) {
+export function buildResultWhatsApp({ name, score, total, level, speaking = null }) {
   const first = String(name || "").trim().split(/\s+/)[0];
+  if (speaking) return buildSpeakingWhatsApp(first, { score, total, level, speaking });
+  // Without a speaking part the message stays exactly as it was before the speaking section.
   return [
     `Halo ${first}, terima kasih sudah mengerjakan tes penempatan Titik Nol English Course.`,
     "",

@@ -2,6 +2,7 @@
 // Palette mirrors the TNEC tokens in DESIGN.md.
 
 import { CAMPUS_ADDRESS, WHATSAPP } from "./legal.js";
+import { aspectLine, formatBand } from "./speaking-result.js";
 
 const NAVY = "#0A1B38";
 const NAVY_700 = "#16325C";
@@ -20,13 +21,87 @@ export function escapeHtml(value) {
     .replaceAll("'", "&#39;");
 }
 
-export function buildResultEmail({ name, email, score, total, level }) {
+const TRANSCRIPT_MAX = 600;
+const eyebrow = (text) => `<div style="font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:${GRAY};font-weight:700;">${text}</div>`;
+const shorten = (value, max) => (value.length > max ? `${value.slice(0, max - 3).trimEnd()}...` : value);
+
+/** The sentence that explains a lowered overall score, or the relevance note. */
+function speakingNote(sp) {
+  if (sp.tooShort) return "Jawaban kamu kurang dari 20 kata, jadi nilai keseluruhannya belum stabil. Tim kami akan memeriksanya.";
+  if (sp.offTopic) return "Relevansi: belum sesuai pertanyaan, jadi nilai keseluruhannya diturunkan.";
+  if (sp.relevance === "TRUE") return "Relevansi: sesuai pertanyaan.";
+  return "";
+}
+
+/** The speaking card, the transcript, and the notes. Empty when the result has no speaking part. */
+function speakingHtml(sp) {
+  if (!sp) return "";
+  const hasPoints = sp.aspects.some((a) => a.score !== null);
+  const cell = "padding:10px 0;border-top:1px solid " + BORDER + ";font-size:14px;color:" + NAVY + ";";
+  const rows = sp.aspects.map((a) => `<tr>
+          <td style="${cell}">${escapeHtml(a.label)}</td>
+          <td style="${cell}font-weight:700;text-align:right;">${escapeHtml(a.cefr || "-")}</td>
+          ${hasPoints ? `<td style="${cell}text-align:right;width:76px;">${a.score === null ? "-" : Math.round(a.score)}</td>` : ""}
+        </tr>`).join("");
+  const note = speakingNote(sp);
+  const transcript = sp.transcript ? shorten(sp.transcript, TRANSCRIPT_MAX) : "";
+  return `
+      <div style="border:1px solid ${BORDER};border-radius:12px;padding:24px;margin:0 0 24px;">
+        ${eyebrow("Speaking")}
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-top:8px;border-collapse:collapse;">
+          <tr>
+            <td style="vertical-align:bottom;">
+              <div style="font-size:30px;line-height:1.2;font-weight:800;color:${NAVY};">CEFR ${escapeHtml(sp.cefr)}</div>
+              <div style="font-size:13px;color:${GRAY};margin-top:2px;">${sp.source === "manual" ? "Dinilai oleh tim Titik Nol" : "Dinilai otomatis oleh Speechace"}</div>
+            </td>
+            ${sp.ielts === null ? "" : `<td style="vertical-align:bottom;text-align:right;">
+              <div style="font-size:24px;line-height:1.2;font-weight:800;color:${NAVY};">${formatBand(sp.ielts)}</div>
+              <div style="font-size:12px;color:${GRAY};">IELTS</div>
+            </td>`}
+          </tr>
+        </table>
+        ${sp.aspects.length ? `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-top:16px;border-collapse:collapse;">
+          <tr>
+            <td style="padding:0 0 6px;font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:${GRAY};font-weight:700;">Aspek</td>
+            <td style="padding:0 0 6px;font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:${GRAY};font-weight:700;text-align:right;">CEFR</td>
+            ${hasPoints ? `<td style="padding:0 0 6px;font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:${GRAY};font-weight:700;text-align:right;">Skor</td>` : ""}
+          </tr>
+          ${rows}
+        </table>` : ""}
+        ${hasPoints ? `<p style="margin:10px 0 0;font-size:12px;line-height:1.5;color:${GRAY};">Skor aspek memakai skala 0 sampai 100.</p>` : ""}
+        ${note ? `<p style="margin:12px 0 0;font-size:13px;line-height:1.55;color:${NAVY};">${escapeHtml(note)}</p>` : ""}
+      </div>
+      ${transcript ? `<div style="margin:0 0 24px;">
+        ${eyebrow("Transkrip jawaban kamu")}
+        <div style="margin-top:8px;background:${SURFACE};border-radius:12px;padding:16px 18px;font-size:14px;line-height:1.65;color:${NAVY};">${escapeHtml(transcript)}</div>
+      </div>` : ""}
+      ${sp.notes.length ? `<div style="margin:0 0 24px;">
+        ${eyebrow(sp.source === "manual" ? "Catatan dari tim Titik Nol" : "Catatan dari Speechace")}
+        ${sp.notes.map((n) => `<p style="margin:8px 0 0;font-size:14px;line-height:1.6;color:${NAVY};">${escapeHtml(n)}</p>`).join("")}
+      </div>` : ""}`;
+}
+
+function speakingText(sp) {
+  if (!sp) return [];
+  const lines = [
+    "",
+    `Speaking: CEFR ${sp.cefr}${sp.ielts === null ? "" : `, IELTS ${formatBand(sp.ielts)}`} (${sp.source === "manual" ? "dinilai oleh tim Titik Nol" : "dinilai otomatis oleh Speechace"})`,
+    ...sp.aspects.map(aspectLine),
+  ];
+  const note = speakingNote(sp);
+  if (note) lines.push(note);
+  if (sp.transcript) lines.push("", `Transkrip jawaban kamu: ${shorten(sp.transcript, TRANSCRIPT_MAX)}`);
+  if (sp.notes.length) lines.push("", sp.source === "manual" ? "Catatan dari tim Titik Nol:" : "Catatan dari Speechace:", ...sp.notes);
+  return lines;
+}
+
+export function buildResultEmail({ name, email, score, total, level, speaking = null }) {
   const safeName = escapeHtml(name);
   const waLink = `https://wa.me/${WHATSAPP}?text=${encodeURIComponent(
     `Halo Admin Titik Nol, saya ${name}. Saya baru selesai mengerjakan tes penempatan dengan hasil ${level.label} (${score} dari ${total}) dan ingin berkonsultasi tentang program yang sesuai.`,
   )}`;
 
-  const subject = `Hasil Tes Penempatan Kamu: ${level.label} (${score}/${total})`;
+  const subject = `Hasil Tes Penempatan Kamu: ${level.label} (${score}/${total})${speaking ? `, Speaking ${speaking.cefr}` : ""}`;
 
   const html = `<!DOCTYPE html>
 <html lang="id">
@@ -55,6 +130,7 @@ export function buildResultEmail({ name, email, score, total, level }) {
         </div>
       </div>
 
+      ${speakingHtml(speaking)}
       <p style="margin:0 0 20px;font-size:16px;line-height:1.65;">${escapeHtml(level.description)}</p>
 
       <div style="border-left:4px solid ${YELLOW};padding:4px 0 4px 16px;margin:0 0 28px;">
@@ -87,6 +163,7 @@ export function buildResultEmail({ name, email, score, total, level }) {
     "",
     `Level kamu: ${level.label}`,
     `Skor: ${score} dari ${total}`,
+    ...speakingText(speaking),
     "",
     level.description,
     "",

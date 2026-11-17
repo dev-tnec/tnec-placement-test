@@ -29,7 +29,7 @@ export const BASE_HEADERS = {
   "Permissions-Policy": "camera=(), microphone=(), geolocation=()",
 };
 
-export const STRICT_CSP = "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'self'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'";
+export const STRICT_CSP = "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; media-src 'self' blob:; connect-src 'self'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'";
 
 /** Returns a Response for a file under `root`, or null when there is no such file. */
 export async function staticResponse(root, pathname, { headers = {}, cacheControl } = {}) {
@@ -58,12 +58,12 @@ export function textResponse(status, text, headers = {}) {
   return new Response(text, { status, headers: { "Content-Type": "text/plain; charset=utf-8", ...BASE_HEADERS, ...headers } });
 }
 
-async function readBody(req) {
+async function readBody(req, limit) {
   const chunks = [];
   let size = 0;
   for await (const chunk of req) {
     size += chunk.length;
-    if (size > MAX_BODY_BYTES) {
+    if (size > limit) {
       const error = new Error("Data terlalu besar.");
       error.status = 413;
       throw error;
@@ -73,7 +73,7 @@ async function readBody(req) {
   return Buffer.concat(chunks);
 }
 
-async function toRequest(req, trustProxy) {
+async function toRequest(req, trustProxy, bodyLimit) {
   const first = (v) => String(v || "").split(",")[0].trim();
   const proto = (trustProxy && first(req.headers["x-forwarded-proto"])) || (req.socket.encrypted ? "https" : "http");
   const host = (trustProxy && first(req.headers["x-forwarded-host"])) || req.headers.host || "localhost";
@@ -83,13 +83,16 @@ async function toRequest(req, trustProxy) {
     if (Array.isArray(value)) value.forEach((v) => headers.append(key, v));
     else if (value !== undefined) headers.set(key, String(value));
   }
-  const body = req.method === "GET" || req.method === "HEAD" ? Buffer.alloc(0) : await readBody(req);
+  // A handler can allow a bigger body on one route (the speaking upload) through handler.bodyLimit.
+  const limit = Number(bodyLimit?.(req.method, url.pathname)) || MAX_BODY_BYTES;
+  const body = req.method === "GET" || req.method === "HEAD" ? Buffer.alloc(0) : await readBody(req, limit);
   return {
     method: req.method,
     url: url.href,
     headers,
     async text() { return body.toString("utf8"); },
     async json() { return JSON.parse(body.toString("utf8") || "{}"); },
+    async bytes() { return body; },
   };
 }
 
@@ -116,7 +119,7 @@ export function closeServers(servers, timeoutMs = 5000) {
 export function startServer({ name, port, host = "0.0.0.0", handler, env }) {
   const server = http.createServer(async (req, res) => {
     try {
-      const request = await toRequest(req, env.TRUST_PROXY);
+      const request = await toRequest(req, env.TRUST_PROXY, handler.bodyLimit);
       const response = await handler(request, env, { remoteAddress: req.socket.remoteAddress || "" });
       await sendResponse(res, response, req.method);
     } catch (error) {
