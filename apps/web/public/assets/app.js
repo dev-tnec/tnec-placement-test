@@ -1164,9 +1164,9 @@ async function skipSpeaking() {
   }
 }
 
-/* The sound wave: one bar per slice of the mic signal, so the student sees the recording is
-   live. The overall level still drives the "too loud" state. */
-const WAVE_BARS = 28;
+/* The sound wave: one bar per frequency band of the voice range, so the row visibly rises and
+   falls with the voice like a voice memo. The overall level still drives the "too loud" state. */
+const WAVE_BARS = 40;
 
 function startMeter() {
   try {
@@ -1184,23 +1184,32 @@ function startMeter() {
     for (let i = 0; i < WAVE_BARS; i += 1) els.recWave.append(document.createElement("span"));
   }
   const bars = [...els.recWave.children];
-  const data = new Uint8Array(state.recAnalyser.fftSize);
-  const chunk = Math.ceil(data.length / bars.length);
-  const rms = (from, to) => {
-    let sum = 0;
-    for (let i = from; i < to; i += 1) {
-      const x = (data[i] - 128) / 128;
-      sum += x * x;
-    }
-    return Math.sqrt(sum / Math.max(1, to - from));
-  };
+  const time = new Uint8Array(state.recAnalyser.fftSize);
+  const freq = new Uint8Array(state.recAnalyser.frequencyBinCount);
+  const nyquist = state.recCtx.sampleRate / 2;
+  const binAt = (hz) => Math.min(freq.length - 1, Math.max(0, Math.round((hz / nyquist) * freq.length)));
+  // Log spaced bands from 120 Hz to 9 kHz, the range of a speaking voice.
+  const edges = bars.map((_, i) => binAt(120 * (9000 / 120) ** (i / (bars.length - 1))));
   const tick = () => {
     if (!state.recAnalyser) return;
-    state.recAnalyser.getByteTimeDomainData(data);
-    els.speakMeter.classList.toggle("is-loud", Math.min(1, rms(0, data.length) * 6) > 0.9);
+    state.recAnalyser.getByteTimeDomainData(time);
+    let sum = 0;
+    for (const value of time) {
+      const x = (value - 128) / 128;
+      sum += x * x;
+    }
+    els.speakMeter.classList.toggle("is-loud", Math.min(1, Math.sqrt(sum / time.length) * 6) > 0.9);
+    state.recAnalyser.getByteFrequencyData(freq);
     bars.forEach((bar, i) => {
-      const from = i * chunk;
-      const level = Math.min(1, rms(from, Math.min(from + chunk, data.length)) * 6);
+      const from = edges[i];
+      const to = i + 1 < edges.length ? Math.max(from + 1, edges[i + 1]) : freq.length;
+      let band = 0;
+      let count = 0;
+      for (let j = from; j < to; j += 1) {
+        band += freq[j];
+        count += 1;
+      }
+      const level = Math.min(1, ((band / Math.max(1, count)) / 200) ** 0.8);
       bar.style.transform = `scaleY(${(0.12 + level * 0.88).toFixed(3)})`;
     });
     state.recMeterId = requestAnimationFrame(tick);
