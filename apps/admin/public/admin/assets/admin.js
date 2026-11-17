@@ -1418,18 +1418,6 @@ function speakingPanelHtml(a) {
   const hasScores = sp.status === "graded" || sp.status === "manual";
   const canGrade = sp.status === "failed" || (sp.status === "graded" && sp.needsReview);
   const studentSkip = sp.status === "skipped" && scores.source === "student";
-  const meta = [
-    sp.durationSeconds ? `durasi ${sp.durationSeconds} detik` : "",
-    sp.audioBytes ? `${Math.max(1, Math.round(sp.audioBytes / 1024))} KB` : "",
-    sp.tries ? `dicoba ${sp.tries} kali` : "",
-    sp.requestId ? `Speechace ${esc(sp.requestId)}` : "",
-    sp.gradedAt ? (sp.gradedBy ? `dinilai ${esc(sp.gradedBy)} pada ${esc(fmtDateTime(sp.gradedAt))}` : `dinilai ${esc(fmtDateTime(sp.gradedAt))}`) : "",
-  ].filter(Boolean).join(", ");
-
-  const scoreRows = SPEAKING_ASPECTS.map(([key, label]) => {
-    const v = aspects[key] || {};
-    return `<tr><td>${label}</td><td>${v.cefr ? esc(v.cefr) : `<span class="muted">-</span>`}</td><td>${v.ielts ?? ""}</td><td>${v.score === null || v.score === undefined ? `<span class="muted">-</span>` : Math.round(v.score)}</td></tr>`;
-  }).join("");
   const overall = scores.overall || {};
   const notes = [...(scores.notes || []), ...(scores.note ? [scores.note] : [])].filter(Boolean);
   const issues = scores.issues || [];
@@ -1452,7 +1440,7 @@ function speakingPanelHtml(a) {
   </div>`;
 
   const gradeForm = canGrade ? `<div class="speak-grade">
-    <p class="panel__desc">${sp.status === "failed" ? "Nilai rekaman ini secara manual. Hasil dikirim otomatis setelah disimpan." : "Koreksi nilai Speechace kalau hasilnya tidak wajar. Nilai yang kamu isi menggantikan nilai otomatis."}</p>
+    <p class="panel__desc">${sp.status === "failed" ? "Nilai rekaman ini secara manual. Hasil dikirim otomatis setelah disimpan." : "Koreksi nilai otomatis kalau hasilnya tidak wajar. Nilai yang kamu isi menggantikan nilai sebelumnya."}</p>
     <div class="speak-grade__grid">
       ${cefrSelect("sg-cefr", "CEFR keseluruhan", "")}
       <div class="field">
@@ -1469,36 +1457,69 @@ function speakingPanelHtml(a) {
     <button class="btn btn--primary" type="button" data-action="speaking-grade" data-id="${sp.id}">Simpan nilai dan kirim hasil</button>
   </div>` : "";
 
+  const figure = (label, value, sub) => `<div class="prop">
+    <span class="prop__label">${label}</span>
+    <span class="prop__value prop__value--figure">${value}</span>
+    <span class="prop__sub">${sub}</span>
+  </div>`;
+  const summary = hasScores ? `<div class="props" aria-label="Ringkasan nilai speaking">
+    ${figure("CEFR keseluruhan", esc(sp.cefr || "-"), "level speaking")}
+    ${figure("IELTS", sp.ielts === null || sp.ielts === undefined ? "-" : Number(sp.ielts).toFixed(1), "perkiraan band")}
+    ${figure("Skor", overall.score === null || overall.score === undefined ? "-" : Math.round(overall.score), "dari 100")}
+    ${figure("Dinilai", sp.status === "manual" ? "Manual" : "Otomatis", sp.gradedAt ? esc(fmtDateTime(sp.gradedAt)) : "belum ada waktu")}
+  </div>` : "";
+
+  const aspectRows = SPEAKING_ASPECTS.map(([key, label]) => {
+    const v = aspects[key] || {};
+    return `<tr><td>${label}</td><td>${v.cefr ? esc(v.cefr) : `<span class="muted">-</span>`}</td><td>${v.ielts ?? `<span class="muted">-</span>`}</td><td>${v.score === null || v.score === undefined ? `<span class="muted">-</span>` : Math.round(v.score)}</td></tr>`;
+  }).join("");
+
+  const relevance = scores.source === "speechace" && scores.relevance
+    ? `<p class="speak-relevance">${scores.relevance === "TRUE" ? statusHtml("Sesuai pertanyaan", "done") : statusHtml("Belum sesuai pertanyaan", "red")}</p>`
+    : "";
+
+  const scoreBlock = hasScores ? `<div class="speak-columns">
+    <div class="speak-block">
+      <p class="speak-label">Rincian nilai</p>
+      <table class="table speak-table">
+        <thead><tr><th scope="col">Aspek</th><th scope="col">CEFR</th><th scope="col">IELTS</th><th scope="col">Skor</th></tr></thead>
+        <tbody>${aspectRows}</tbody>
+      </table>
+      ${scores.previous ? `<p class="hint">Sebelum dikoreksi, nilai otomatisnya ${esc(scores.previous.cefr || "tidak ada")}${scores.previous.ielts === null || scores.previous.ielts === undefined ? "" : `, IELTS ${scores.previous.ielts}`}.</p>` : ""}
+      ${issues.length ? `<p class="hint">${issues.map((i) => esc(i.message || i.code)).join(" ")}</p>` : ""}
+    </div>
+    <div class="speak-block">
+      ${sp.transcript ? `<p class="speak-label">Transkrip jawaban</p>
+      <p class="transcript-text">${esc(sp.transcript)}</p>` : ""}
+      ${relevance}
+      ${notes.length ? `<p class="speak-label${sp.transcript ? " speak-label--gap" : ""}">Catatan penilai</p>
+      <ol class="speak-notes">${notes.map((n) => `<li>${esc(n)}</li>`).join("")}</ol>` : ""}
+      ${!sp.transcript && !notes.length && !relevance ? `<p class="hint">Tidak ada transkrip atau catatan untuk rekaman ini.</p>` : ""}
+    </div>
+  </div>` : "";
+
   return `<section class="panel" aria-label="Speaking">
     <header class="panel__head">
       <div>
         <h2 class="panel__title">Speaking ${speakingStatusHtml(sp)}</h2>
-        <p class="panel__desc">Pertanyaan: ${esc(sp.prompt || "-")}${meta ? `. ${meta}.` : ""}</p>
+        <p class="panel__desc">Pertanyaan: ${esc(sp.prompt || "-")}</p>
       </div>
       ${actions.length ? `<span class="row-actions">${actions.join("")}</span>` : ""}
     </header>
-    <div class="stack">
+    ${summary}
+    <div class="panel__body speak-body">
       ${sp.error ? `<div class="notice" role="note">${icon("alert")}<div class="notice__body">${esc(sp.error)}</div></div>` : ""}
       ${studentSkip ? `<div class="notice notice--neutral" role="note">${icon("user")}<div class="notice__body">${esc(sp.error || "Peserta melewati bagian speaking.")} Hasil dikirim tanpa nilai speaking.</div></div>` : ""}
-      ${sp.hasAudio ? `<audio class="speak-audio" controls preload="none" src="${speakingAudioUrl(sp.id)}"></audio>
-        <p class="hint">Rekaman disimpan 30 hari setelah tes, lalu dihapus otomatis. Nilai dan transkrip tetap tersimpan.</p>` : `<p class="hint">Rekaman sudah tidak tersimpan${sp.gradedAt ? ", tetapi nilai dan transkripnya masih ada" : ""}.</p>`}
 
-      ${sp.transcript ? `<div class="transcript-block">
-        <p class="speak-label">Transkrip jawaban</p>
-        <p class="transcript-text">${esc(sp.transcript)}</p>
-      </div>` : ""}
+      <div class="speak-block">
+        <p class="speak-label">Rekaman${sp.durationSeconds ? `, ${sp.durationSeconds} detik` : ""}${sp.audioBytes ? `, ${Math.max(1, Math.round(sp.audioBytes / 1024))} KB` : ""}</p>
+        ${sp.hasAudio
+          ? `<audio class="speak-audio" controls preload="none" src="${speakingAudioUrl(sp.id)}"></audio>
+             <p class="hint">Rekaman disimpan 30 hari setelah tes, lalu dihapus otomatis. Nilai dan transkrip tetap tersimpan.</p>`
+          : `<p class="hint">Rekaman sudah tidak tersimpan${sp.gradedAt ? ", tetapi nilai dan transkripnya masih ada" : ""}.</p>`}
+      </div>
 
-      ${hasScores ? `<div class="table-wrap"><table class="table speak-table">
-        <thead><tr><th scope="col">Aspek</th><th scope="col">CEFR</th><th scope="col">IELTS</th><th scope="col">Skor 0-100</th></tr></thead>
-        <tbody>
-          <tr><td><strong>Keseluruhan</strong></td><td><strong>${esc(sp.cefr || "-")}</strong></td><td><strong>${sp.ielts ?? "-"}</strong></td><td><strong>${overall.score === null || overall.score === undefined ? "-" : Math.round(overall.score)}</strong></td></tr>
-          ${scoreRows}
-        </tbody></table></div>
-        ${scores.previous ? `<p class="hint">Sebelum dinilai manual, Speechace memberi ${esc(scores.previous.cefr || "tidak ada")}${scores.previous.ielts === null || scores.previous.ielts === undefined ? "" : `, IELTS ${scores.previous.ielts}`}. Skor aslinya tetap tercatat.</p>` : ""}
-        ${scores.source === "speechace" && scores.relevance ? `<p class="hint">Relevansi dengan pertanyaan: ${scores.relevance === "TRUE" ? "sesuai" : "belum sesuai"}.</p>` : ""}
-        ${issues.length ? `<p class="hint">${issues.map((i) => esc(i.message || i.code)).join(" ")}</p>` : ""}
-        ${notes.length ? `<div class="stack">${notes.map((n) => `<p class="note-line">${esc(n)}</p>`).join("")}</div>` : ""}` : ""}
-
+      ${scoreBlock}
       ${gradeForm}
     </div>
   </section>`;
