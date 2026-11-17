@@ -584,4 +584,9 @@ for (const report of [bandReport, scoreReport, placementReport]) {
   assert.equal(/[\u2013\u2014]/.test(copy), false, "the report copy has no en or em dash");
 }
 
+// The favicon is the official TNP emblem, not a hand-made text tile.
+assert.ok(existsSync(new URL("../apps/web/public/favicon.png", import.meta.url)), "the web favicon exists");
+assert.ok(existsSync(new URL("../apps/admin/public/favicon.png", import.meta.url)), "the admin favicon exists");
+assert.equal(existsSync(new URL("../apps/web/public/favicon.svg", import.meta.url)), false, "the old text favicon is gone");
+
 console.log("smoke ok");

@@ -50,8 +50,8 @@ export async function serveAdminPage(request, env, url) {
   const path = url.pathname;
   if (request.method !== "GET" && request.method !== "HEAD") return withHeaders(textResponse(405, "Metode tidak diizinkan."));
   if (path === "/" || path === "/admin") return Response.redirect(new URL("/admin/", url), 302);
-  if (path.startsWith("/admin/assets/") || path.startsWith("/assets/") || path === "/favicon.svg") {
-    const file = await staticResponse(PUBLIC_DIR, path, { cacheControl: path === "/favicon.svg" ? "public, max-age=86400" : "private, max-age=300" });
+  if (path.startsWith("/admin/assets/") || path.startsWith("/assets/") || path === "/favicon.png") {
+    const file = await staticResponse(PUBLIC_DIR, path, { cacheControl: path === "/favicon.png" ? "public, max-age=86400" : "private, max-age=300" });
     return withHeaders(file || textResponse(404, "File tidak ditemukan."), null);
   }
   // The stylesheets and drawings of the certificate templates. The HTML templates are never served raw.

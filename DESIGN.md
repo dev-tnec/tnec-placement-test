@@ -175,7 +175,7 @@ The details screen never shows the score. The score is withheld until the contac
 
 The result is a React report at `/hasil`, one page for all four tests: the placement test, pre-test, post-test, and IELTS mockup. The placement test opens it with `?token=`, the invited tests with `?attempt=`. It is a 1180px wrap.
 
-A white sticky header carries the TN mark, the brand, and two actions: Rekomendasi Belajar and Unduh PDF / Cetak. The print action calls `window.print()`.
+A white sticky header carries the official Titik Nol lockup and two actions: Rekomendasi Belajar and Unduh PDF / Cetak. The print action calls `window.print()`.
 
 The navy hero carries the test eyebrow, the public code, the student name, one lead sentence, and four meta boxes (package or program, date, status, profile). Its right side is the score card: a gold arc dial, the score, the band or level label, the scale, and the one-line caption. For the IELTS mockup the dial is the overall band out of 9.0; for the placement test it is the multiple choice score; for the pre-test and post-test it is the score out of 100.
 
@@ -320,7 +320,9 @@ Both apps declare the same globals once: `[hidden] { display: none !important; }
 
 The CSS lives in `apps/web/public/assets/app.css`. Tokens are declared once at the top. Component classes are prefixed by block name (`option`, `nav-btn`, `dialog`, `stepper`, `ladder`) rather than utility names. State classes use `is-` (`is-selected`, `is-current`, `is-answered`, `is-flagged`, `is-warning`, `is-active`, `is-done`).
 
-The brand logo is `apps/web/public/assets/logo-titik-nol.png` (black lockup, 502 by 85 pixels) and `apps/web/public/assets/logo-titik-nol-white.png` (white lockup, 501 by 84 pixels), copied from the TNEC asset folder. The white lockup renders at 140px in the hero, the black lockup at 110px in the footer. Do not redraw or recolor either file.
+The brand logo is `apps/web/public/assets/logo-titik-nol.png` (black lockup, 502 by 85 pixels) and `apps/web/public/assets/logo-titik-nol-white.png` (white lockup, 501 by 84 pixels), copied from the TNEC asset folder. The white lockup renders at 140px in the hero, the black lockup at 110px in the footer and at 150px in the result header. Do not redraw or recolor either file.
+
+The favicon is `apps/web/public/favicon.png` and `apps/admin/public/favicon.png`: the square emblem cropped from the official black TNP lockup and placed on a white square, 180 by 180 pixels. Do not redraw it as a text tile.
 
 The content security policy is set by the server in `packages/core/src/node-server.js`: `default-src 'self'`, no inline scripts, no inline styles, no third-party fonts, no external images. Any new dependency must fit that policy or the policy must be changed deliberately.
 

@@ -33,14 +33,8 @@ function Header() {
     <header className="report__header">
       <div className="report__header-inner">
         <div className="brand">
-          <span className="brand__mark" aria-hidden="true">TN</span>
-          <span className="brand__text">
-            <span className="brand__row">
-              <span className="brand__name">TITIK NOL</span>
-              <span className="brand__tag">English Course</span>
-            </span>
-            <span className="brand__sub">Hasil Tes dan Diagnostik</span>
-          </span>
+          <img className="brand__logo" src="/assets/logo-titik-nol.png" alt="Titik Nol English Course" width="502" height="85" />
+          <span className="brand__sub">Hasil Tes dan Diagnostik</span>
         </div>
         <div className="header-actions">
           <a className="btn btn--ghost" href="#rencana">Rekomendasi Belajar</a>
@@ -309,8 +303,8 @@ function Footer({ report }) {
   return (
     <footer className="footer">
       <div className="footer__brand">
-        <span className="footer__mark" aria-hidden="true">TN</span>
-        <span><strong>Titik Nol English Course</strong> · Kampung Inggris Pare, Kediri, Jawa Timur</span>
+        <img className="footer__logo" src="/assets/logo-titik-nol.png" alt="" width="502" height="85" />
+        <span>Kampung Inggris Pare, Kediri, Jawa Timur</span>
       </div>
       <div className="footer__meta">
         <span>{report.name}</span>

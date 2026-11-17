@@ -54,7 +54,7 @@ The full flow passes in a headless browser against the `dev` branch: first admin
 |---|---|
 | `apps/web/server.js` | Test site server: static pages and the public API |
 | `apps/web/src/api.js` | Public API: config, invites, attempts, violations, submit, contact. Reads test settings and levels on every request, so dashboard changes apply to the next test right away |
-| `apps/web/public/` | `index.html`, `assets/app.css`, `assets/app.js`, logos, favicon |
+| `apps/web/public/` | `index.html`, `assets/app.css`, `assets/app.js`, logos, and `favicon.png` |
 | `apps/web/result/` | The React result report source: `src/App.jsx`, `src/report.js`, `src/hasil.css`, the Vite config, and `build.mjs` |
 | `apps/web/public/hasil/` | The committed Vite build output of the result report, served at `/hasil` |
 | `apps/admin/server.js` | Dashboard server and the first admin setup notice |
@@ -96,7 +96,6 @@ The full flow passes in a headless browser against the `dev` branch: first admin
 | `tests/smoke.mjs` | `npm test`, no database needed |
 | `.env.example` | Every setting. `.env` holds the real values and is never committed |
 | `dashboard-prototype.html` | Approved single file prototype of the dashboard. Not served |
-| `ielts-mockup-result.html` | Standalone sample of the IELTS mockup result page with the logo embedded and CSS inline, for printing or sharing. Not served |
 | `assets/code.html`, `placement-test-questions.*` | Source material. Do not edit |
 
 ## Running
