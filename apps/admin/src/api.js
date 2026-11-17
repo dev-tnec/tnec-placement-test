@@ -18,6 +18,7 @@ import { staticResponse, textResponse } from "@tnec/core/node-server";
 import { deliverInBackground } from "@tnec/core/delivery";
 import { gradeInBackground, speechaceConfigured } from "@tnec/core/speaking";
 import { ASPECTS, MANUAL_CEFR, isFinalStatus, speakingFacts } from "@tnec/core/speaking-result";
+import { mockupSpeakingPlan } from "@tnec/core/speaking-mockup";
 import {
   CERT_DIR, certificateData, certificatePage, saveCertificateType, deleteCertificateType,
   issueCertificate, updateCertificate, certificateAction,
@@ -368,6 +369,7 @@ async function bootstrap(request, env, user, url) {
       questions: questions.filter((q) => q.test_key === key).map(mapQuestion),
       sections: sections.filter((s) => s.test_key === key).map(mapSection),
       packages: packages.filter((p) => p.test_key === key).map(mapPackage),
+      mockupSpeaking: key === "ielts-mockup" ? mockupSpeakingPlan() : null,
       stats: stats[key] || { d7: {}, d30: {} },
     }])),
     levels: levels.map((l) => ({ key: l.key, label: l.label, min: l.min_score, max: l.max_score, program: l.program })),

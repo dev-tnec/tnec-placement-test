@@ -1161,6 +1161,19 @@ progress::-moz-progress-bar { background: var(--navy-900); border-radius: var(--
   margin: var(--space-4) 0;
 }
 
+/* The navigator is split by section so Listening Part 1 to Part 4 and each Reading passage
+   read as separate groups. The group wrapper carries the spacing instead of every grid. */
+.nav-groups { display: flex; flex-direction: column; gap: var(--space-3); margin: var(--space-4) 0; }
+.nav-groups .nav-grid { margin: 0; }
+.nav-group__title {
+  margin-bottom: 6px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+}
+
 .nav-btn {
   position: relative;
   height: 38px;

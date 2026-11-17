@@ -302,7 +302,19 @@ export function TestScreen({ attempt, index, answers, flagged, perMode, timeLeft
   const section = question.sectionId ? attempt.sections.find((item) => item.id === question.sectionId) : null;
   const passage = section?.passage || question.passage;
   const image = section?.image || "";
-  const navItems = sectionMode ? sectionQuestions : attempt.questions.map((item, position) => ({ q: item, i: position }));
+  const navItems = (sectionMode ? sectionQuestions : attempt.questions.map((item, position) => ({ q: item, i: position })))
+    .map((item, position) => ({ ...item, n: position + 1 }));
+  // The navigator is split by section, so Listening shows Part 1 to Part 4 and Reading shows
+  // each passage, instead of one long grid of every question in the test.
+  const navGroups = [];
+  for (const item of navItems) {
+    const own = item.q.sectionId ? attempt.sections.find((s) => s.id === item.q.sectionId) : null;
+    const key = own?.id || (item.q.part ? `part-${item.q.part}` : "all");
+    const title = own?.title || (item.q.part ? `Bagian ${item.q.part}` : "");
+    let group = navGroups.find((g) => g.key === key);
+    if (!group) { group = { key, title, items: [] }; navGroups.push(group); }
+    group.items.push(item);
+  }
   const displayPosition = sectionMode ? sectionPosition + 1 : index + 1;
   const displayTotal = sectionMode ? sectionTotal : total;
   const answered = sectionMode ? sectionQuestions.filter(({ q }) => answers[q.id]).length : Object.keys(answers).length;
@@ -432,25 +444,32 @@ export function TestScreen({ attempt, index, answers, flagged, perMode, timeLeft
                 <span className="legend__item"><span className="dot dot--current" aria-hidden="true" />Aktif</span>
                 <span className="legend__item"><span className="dot dot--flagged" aria-hidden="true" />Ditandai <strong id="nav-flagged">{flaggedCount}</strong></span>
               </div>
-              <div className="nav-grid" id="nav-grid">
-                {navItems.map(({ q: item, i: globalIndex }, position) => {
-                  const isAnswered = Boolean(answers[item.id]);
-                  const isCurrent = globalIndex === index;
-                  const isItemFlagged = flagged.has(item.id);
-                  return (
-                    <button
-                      className={`nav-btn${isAnswered ? " is-answered" : ""}${isCurrent ? " is-current" : ""}${isItemFlagged ? " is-flagged" : ""}`}
-                      key={item.id}
-                      type="button"
-                      disabled={perMode}
-                      aria-current={isCurrent ? "true" : undefined}
-                      aria-label={`Soal ${position + 1}${isAnswered ? ", sudah dijawab" : ""}${isItemFlagged ? ", ditandai" : ""}`}
-                      onClick={() => onGoTo(globalIndex)}
-                    >
-                      {position + 1}
-                    </button>
-                  );
-                })}
+              <div className="nav-groups" id="nav-grid">
+                {navGroups.map((group) => (
+                  <div className="nav-group" key={group.key}>
+                    {group.title ? <p className="nav-group__title">{group.title}</p> : null}
+                    <div className="nav-grid">
+                      {group.items.map((item) => {
+                        const isAnswered = Boolean(answers[item.q.id]);
+                        const isCurrent = item.i === index;
+                        const isItemFlagged = flagged.has(item.q.id);
+                        return (
+                          <button
+                            className={`nav-btn${isAnswered ? " is-answered" : ""}${isCurrent ? " is-current" : ""}${isItemFlagged ? " is-flagged" : ""}`}
+                            key={item.q.id}
+                            type="button"
+                            disabled={perMode}
+                            aria-current={isCurrent ? "true" : undefined}
+                            aria-label={`Soal ${item.n}${isAnswered ? ", sudah dijawab" : ""}${isItemFlagged ? ", ditandai" : ""}`}
+                            onClick={() => onGoTo(item.i)}
+                          >
+                            {item.n}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ))}
               </div>
               <button className="btn btn--primary btn--block" id="finish-btn" type="button" onClick={sectionMode ? onSectionFinish : onFinish}>
                 {sectionMode && finishLabel !== "Selesaikan dan kirim" ? <Arrow /> : <Check />} {sectionMode ? finishLabel : "Selesaikan dan kirim"}

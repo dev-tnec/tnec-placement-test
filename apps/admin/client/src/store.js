@@ -80,7 +80,7 @@ function applyBootstrap(data, cached = false) {
   db.publicUrl = data.publicUrl;
   db.whatsapp = data.whatsapp;
   db.levels = data.levels;
-  db.tests = Object.fromEntries(TEST_KEYS.map((k) => [k, { key: k, settings: data.tests[k].settings, questions: data.tests[k].questions, sections: data.tests[k].sections || [], packages: data.tests[k].packages || [], stats: data.tests[k].stats }]));
+  db.tests = Object.fromEntries(TEST_KEYS.map((k) => [k, { key: k, settings: data.tests[k].settings, questions: data.tests[k].questions, sections: data.tests[k].sections || [], packages: data.tests[k].packages || [], mockupSpeaking: data.tests[k].mockupSpeaking || null, stats: data.tests[k].stats }]));
   db.students = data.students;
   db.attempts = data.attempts;
   db.enrolledAt = data.enrolledAt;

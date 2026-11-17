@@ -3,7 +3,7 @@
 // Ported from viewTest, renderQuestionsTab, renderAttemptsTab, renderLeadTab, renderSettingsTab,
 // viewAttempt, and speakingPanelHtml.
 
-import { useState } from "react";
+import { Fragment, useState } from "react";
 import { api, db, mutate, notify, reload, ui, useVersion, withDetail, PAGE_SIZE, KEYS } from "../store.js";
 import {
   LOG_TEXT, SKILLS, SPEAKING_ASPECTS, accuracyMap, activeQuestions, attemptMatches, attemptTotal,
@@ -50,7 +50,8 @@ export function TestPage({ testKey, tab }) {
   }
   tabs.push(["pengaturan", "Pengaturan", null]);
   if (!tabs.some((x) => x[0] === tab)) tab = "soal";
-  const actions = tab === "soal"
+  const speakingBank = testKey === "ielts-mockup" && ui.questions[testKey]?.skill === "Speaking";
+  const actions = tab === "soal" && !speakingBank
     ? <button className="btn btn--primary" type="button" onClick={() => openQuestionEditor(null)}><Icon name="plus" />Tambah soal</button>
     : tab === "submission" ? <button className="btn btn--quiet" type="button" onClick={() => exportAttempts(db.attempts.filter((a) => attemptMatches(a, ui.attempts[testKey], false)))}><Icon name="download" />Ekspor CSV</button>
       : tab === "bagian" ? <button className="btn btn--primary" type="button" onClick={() => openSectionEditor(null)}><Icon name="plus" />Tambah bagian</button>
@@ -72,39 +73,79 @@ export function TestPage({ testKey, tab }) {
 /* ===================== Soal & Jawaban ===================== */
 let questionTimer = null;
 
+/* The 18 speaking questions come from the fixed interview plan in the server, not from the
+   question bank, so this view is read-only and grouped by part. */
+function SpeakingBank({ plan }) {
+  let n = 0;
+  return <>
+    <div className="panel__body">
+      <Notice icon="mic" neutral>18 pertanyaan speaking memakai video examiner tetap dan dipakai semua paket, jadi tidak diedit dari bank soal. Rekaman, transkrip, dan nilainya ada di tab Submission.</Notice>
+    </div>
+    <div className="table-wrap"><table className="table">
+      <caption className="sr-only">Pertanyaan speaking IELTS Mockup</caption>
+      <thead><tr>
+        <th scope="col" className="is-no">No</th><th scope="col">Pertanyaan</th>
+        <th scope="col" className="hide-sm">Video examiner</th><th scope="col" className="is-num">Waktu jawab</th>
+      </tr></thead>
+      <tbody>
+        {plan.parts.map((part) => (
+          <Fragment key={part.part}>
+            <tr><th scope="colgroup" colSpan="4">{part.title}</th></tr>
+            {part.questions.map((q) => {
+              n += 1;
+              return <tr key={`${part.part}-${q.no}`}>
+                <td className="is-no is-top">{pad(n)}</td>
+                <td>
+                  <p className="q-prompt">{q.text}</p>
+                  {part.cue && q.no === 1 ? <p className="cell-sub">{part.cue.join(" ")}</p> : null}
+                </td>
+                <td className="hide-sm"><span className="q-tag"><Icon name="volume" cls="icon--sm" />{q.video.split("/").pop()}</span></td>
+                <td className="is-num nowrap">{part.prepSeconds ? `${part.prepSeconds} dtk siap, ${part.speakSeconds} dtk jawab` : `${part.speakSeconds} dtk`}</td>
+              </tr>;
+            })}
+          </Fragment>
+        ))}
+      </tbody>
+    </table></div>
+  </>;
+}
+
 function QuestionsTab() {
   useVersion();
   const t = db.tests[ui.test], f = ui.questions[ui.test];
   const per = t.settings.timeMode === "per";
   const stats = accuracyMap(ui.test, 30 * 86400000);
   const qs = packageQuestions(t);
+  const speakPlan = t.mockupSpeaking;
+  const speakingView = Boolean(speakPlan) && f.skill === "Speaking";
   const q = f.q.trim().toLowerCase();
   const rows = qs.filter((x) => (f.skill === "all" || x.skill === f.skill)
     && (!q || `${x.prompt} ${x.passage} ${Object.values(x.options).join(" ")}`.toLowerCase().includes(q)));
   const counts = { all: qs.length };
   const skills = [...new Set(qs.map((x) => x.skill))];
   skills.forEach((k) => { counts[k] = qs.filter((x) => x.skill === k).length; });
+  if (speakPlan) { skills.push("Speaking"); counts.Speaking = speakPlan.total; }
 
   return <div className="stack">
     {ui.test === "placement" ? <LevelMismatchNotice /> : null}
     <section className="panel">
       <div className="toolbar toolbar--last">
-        {ui.test === "ielts-mockup" ? <select className="select select--auto" aria-label="Paket soal" value={packageOf(t)?.id || ""}
+        {ui.test === "ielts-mockup" && !speakingView ? <select className="select select--auto" aria-label="Paket soal" value={packageOf(t)?.id || ""}
           onChange={(e) => { ui.package[ui.test] = e.target.value; notify(); }}>
           <OptList list={t.packages.map((p) => [p.id, p.name])} />
         </select> : null}
-        <label className="search"><span className="sr-only">Cari soal</span><Icon name="search" />
+        {!speakingView ? <label className="search"><span className="sr-only">Cari soal</span><Icon name="search" />
           <input className="input" type="search" placeholder="Cari teks soal atau pilihan jawaban" value={f.q} autoComplete="off"
             onChange={(e) => { clearTimeout(questionTimer); const v = e.target.value; questionTimer = setTimeout(() => { f.q = v; notify(); }, 140); }} />
-        </label>
+        </label> : null}
         <div className="chips" role="group" aria-label="Saring skill">
           {[["all", "Semua"], ...skills.map((k) => [k, k])].map(([k, label]) => (
             <Chip key={k} value={k} label={label} n={counts[k]} pressed={f.skill === k} onClick={(v) => { f.skill = v; notify(); }} />
           ))}
         </div>
-        <p className="toolbar__meta">Urutan di tabel sama dengan urutan soal di tes.</p>
+        <p className="toolbar__meta">{speakingView ? "18 pertanyaan wawancara tetap, dipakai semua paket." : "Urutan di tabel sama dengan urutan soal di tes."}</p>
       </div>
-      {rows.length ? <div className="table-wrap"><table className="table">
+      {speakingView ? <SpeakingBank plan={speakPlan} /> : rows.length ? <div className="table-wrap"><table className="table">
         <caption className="sr-only">Bank soal {TEST_META[ui.test].name}</caption>
         <thead><tr>
           <th scope="col" className="is-no">No</th><th scope="col">Soal dan pilihan jawaban</th><th scope="col" className="hide-md">Skill</th>
@@ -127,10 +168,10 @@ function QuestionsTab() {
                 </div> : null}
                 <p className="q-prompt">{x.prompt}</p>
                 {x.type === "longtext"
-                  ? <ul className="opts" aria-label="Esai"><li className="opt is-key"><span className="opt__key">Esai</span><span className="opt__text">Minimal {x.minWords} kata, dinilai AI</span></li></ul>
+                  ? <ul className="opts" aria-label="Esai"><li className="opt is-key"><span className="opt__key opt__key--word">Esai</span><span className="opt__text">Minimal {x.minWords} kata, dinilai AI</span></li></ul>
                   : x.type === "text"
                     ? <ul className="opts" aria-label="Jawaban yang diterima">
-                      <li className="opt is-key"><span className="opt__key">Kunci</span><span className="opt__text">{(x.accepted || []).join(", ")}</span></li>
+                      <li className="opt is-key"><span className="opt__key opt__key--word">Kunci</span><span className="opt__text">{(x.accepted || []).join(", ")}</span></li>
                     </ul>
                     : <ul className="opts" aria-label={`Pilihan jawaban, kunci ${x.answer}`}>
                       {Object.keys(x.options).map((k) => <li key={k} className={`opt${k === x.answer ? " is-key" : ""}`}><span className="opt__key">{k}</span><span className="opt__text">{x.options[k]}</span></li>)}
