@@ -14,6 +14,7 @@ These come from the owner and outrank convenience.
 6. Both apps declare the global `[hidden] { display: none !important; }` rule. A component class that sets `display` otherwise beats the hidden attribute and leaves widgets that should be hidden on screen.
 7. When the owner names one screen, check every screen that shows the same data before replying. The owner should never have to point out the second place.
 8. Search the 21st MCP (`mcp.21st` in the OpenCode config) before building a UI component. Port the real component with its license and source link instead of approximating it by hand. The listening player is the 21st.dev Voice Note by ebnsina, ported in `apps/web/student/src/voice-note.jsx`.
+9. Never close a reply with what was skipped, left unchecked, or a risk note. If a check matters for the answer, run it before replying; if a piece is genuinely out of scope for the request, say so once inside the answer in plain words. "Skipped" and "not checked" are not a deliverable.
 
 ## Owner complaints and the standing fixes
 
