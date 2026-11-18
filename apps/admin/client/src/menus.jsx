@@ -3,13 +3,38 @@
 // root, and one document-level listener drives triggers, items, outside clicks, and the keyboard.
 
 import { api, db, mutate, notify, route, ui } from "./store.js";
-import { $, $$, iconHtml } from "./dom.js";
+import { $, $$, iconHtml, toast } from "./dom.js";
 import { fmtDate, openCertPage } from "./lib.js";
 import { confirmThen, openCertDialog, openQuestionEditor, questionAction, deleteQuestion } from "./dialogs.jsx";
 import { bulkStudents, deleteAttempts, deleteStudents, revokeCert, sendTestLink, toggleCertType, voidAttempt } from "./actions.js";
 import { Icon } from "./ui.jsx";
 
 let menuState = null;
+
+/* The certificate sends attach the PDF the team saved from the print dialog. Picking it here
+   saves the trip to the print page; the upload replaces an earlier file and keeps its link. */
+function uploadCertificatePdf(c) {
+  const input = document.createElement("input");
+  input.type = "file";
+  input.accept = "application/pdf,.pdf";
+  input.addEventListener("change", () => {
+    const file = input.files?.[0];
+    if (!file) return;
+    if (file.size > 5 * 1024 * 1024) { toast("PDF-nya lebih dari 5 MB. Cetak ulang dengan ukuran lebih kecil."); return; }
+    mutate(async () => {
+      const response = await fetch(`/api/admin/certificates/${c.id}/pdf?name=${encodeURIComponent(file.name)}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/pdf" },
+        body: file,
+        credentials: "same-origin",
+      });
+      const data = await response.json().catch(() => null);
+      if (!response.ok) throw new Error(data?.error || "PDF gagal diunggah. Coba lagi.");
+      return data;
+    }, `PDF ${file.name} tersimpan. Sertifikat ${c.number} siap dikirim.`);
+  });
+  input.click();
+}
 
 export function openMenu(anchor, items) {
   if (menuState && menuState.anchor === anchor) { closeMenu(true); return; }
@@ -127,9 +152,23 @@ export function contextMenu(kind, id) {
     if (s && route().parts[0] !== "siswa") items.push({ label: "Buka profil siswa", icon: "user", run: () => { location.hash = `#/siswa/${s.id}`; } });
     if (!c.revokedAt && s) {
       items.push({ sep: true });
-      const noPdf = { label: c.pdf ? "Kirim ulang email" : "Kirim email, butuh PDF", icon: "mail", disabled: !c.pdf || !s.email, run: () => mutate(() => api(`/api/admin/certificates/${c.id}/send-email`, { method: "POST" }), c.pdf ? `Sertifikat ${c.number} dikirim ke email ${s.email}.` : "") };
-      const noWa = { label: c.waSentAt ? "Kirim ulang WhatsApp" : "Kirim WhatsApp", icon: "message", disabled: !c.pdf || !s.wa, run: () => mutate(() => api(`/api/admin/certificates/${c.id}/send-whatsapp`, { method: "POST" }), c.pdf ? `Sertifikat ${c.number} dikirim lewat WhatsApp.` : "") };
-      items.push(noPdf, noWa);
+      // Neither channel has anything to attach before the printed PDF is uploaded, so the menu
+      // offers that step right here instead of two dead send items.
+      if (!c.pdf) {
+        items.push({ label: "Unggah PDF hasil cetak", icon: "upload", run: () => uploadCertificatePdf(c) });
+      } else {
+        items.push({
+          label: s.email ? (c.emailSentAt ? "Kirim ulang email" : "Kirim email") : "Kirim email, siswa belum punya email",
+          icon: "mail", disabled: !s.email,
+          run: () => mutate(() => api(`/api/admin/certificates/${c.id}/send-email`, { method: "POST" }), `Sertifikat ${c.number} dikirim ke email ${s.email}.`),
+        });
+        items.push({
+          label: s.wa ? (c.waSentAt ? "Kirim ulang WhatsApp" : "Kirim WhatsApp") : "Kirim WhatsApp, siswa belum punya nomor",
+          icon: "message", disabled: !s.wa,
+          run: () => mutate(() => api(`/api/admin/certificates/${c.id}/send-whatsapp`, { method: "POST" }), `Sertifikat ${c.number} dikirim lewat WhatsApp.`),
+        });
+        items.push({ label: "Ganti PDF sertifikat", icon: "upload", run: () => uploadCertificatePdf(c) });
+      }
     }
     items.push({ sep: true });
     items.push(c.revokedAt

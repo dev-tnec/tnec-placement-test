@@ -463,8 +463,8 @@ export async function sendCertificateWhatsApp(request, env, user, url, id) {
 /* ===================== Printable page ===================== */
 const PAGE_HEAD = `<meta name="robots" content="noindex, nofollow">
 <link rel="icon" href="/favicon.svg" type="image/svg+xml">
-<link rel="stylesheet" href="/admin/assets/certificate-page.css?v=2">
-<script src="/admin/assets/certificate-page.js?v=2" defer></script>`;
+<link rel="stylesheet" href="/admin/assets/certificate-page.css?v=3">
+<script src="/admin/assets/certificate-page.js?v=3" defer></script>`;
 
 function fillTemplate(html, values) {
   return html.replace(/\{\{(\w+)\}\}/g, (_, key) => escapeHtml(values[key] ?? ""));
@@ -474,7 +474,7 @@ function barHtml({ info, note, back, send = null }) {
   const sendHtml = send ? `
   <div class="cert-send" data-cert-id="${send.id}" data-pdf="${send.hasPdf ? "1" : "0"}" data-email="${escapeHtml(send.email)}" data-whatsapp="${escapeHtml(send.whatsapp)}">
     <label class="cert-send__upload"><input type="file" id="cert-pdf-input" accept="application/pdf,.pdf" hidden /> Unggah PDF</label>
-    <span class="cert-send__state" id="cert-pdf-state">${send.hasPdf ? `PDF tersimpan: ${escapeHtml(send.pdfName)}` : "Unggah PDF yang kamu simpan dari tombol cetak untuk bisa mengirim sertifikat ini."}</span>
+    <span class="cert-send__state" id="cert-pdf-state">${send.hasPdf ? `PDF tersimpan: ${escapeHtml(send.pdfName)}` : "Belum ada PDF. Cetak, simpan PDF-nya, lalu unggah di sini."}</span>
     <button class="cert-send__btn" type="button" id="cert-send-email" hidden>${send.emailSentAt ? "Kirim ulang email" : "Kirim email"}${send.email ? ` ke ${escapeHtml(send.email)}` : ""}</button>
     <button class="cert-send__btn" type="button" id="cert-send-wa" hidden>Kirim WhatsApp${send.whatsapp ? ` ke ${escapeHtml(send.whatsapp)}` : ""}</button>
   </div>` : "";
