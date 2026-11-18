@@ -5,7 +5,7 @@
 import { useEffect, useState } from "react";
 import { api, db, mutate, useVersion, NOW } from "../store.js";
 import { fmtDate, fmtDateTime, fmtWa, programById, periodById, downloadCsv, toDateInput } from "../lib.js";
-import { Empty, Icon, PageHead, PendaftaranStatus, Status, rowRun } from "../ui.jsx";
+import { Empty, Icon, PageHead, PendaftaranStatus, Status } from "../ui.jsx";
 import { openSessionEditor, openSessionImport, openMoveInvite, openTestSend } from "../dialogs.jsx";
 import { toast } from "../dom.js";
 
@@ -81,7 +81,8 @@ export function SessionsTab() {
           <th scope="col">Status</th><th scope="col" className="is-action"><span className="sr-only">Aksi</span></th>
         </tr></thead>
         <tbody>{rows.map((s) => (
-          <tr key={s.id} onClick={rowRun(() => { location.hash = `#/tes/ielts-mockup/sesi/${s.id}`; })}>
+          // The row itself stays inert: the session page opens only from its Peserta button.
+          <tr key={s.id}>
             <td><p className="q-prompt">{s.name}</p><span className="cell-sub">Dibuat {fmtDateTime(s.createdAt)}</span></td>
             <td className="nowrap">{windowText(s)}</td>
             <td>{packageNames(s.packageIds) || "-"}</td>
@@ -89,7 +90,10 @@ export function SessionsTab() {
             <td className="hide-md tnum">{s.counts.roster}{s.quota ? ` dari ${s.quota}` : ""}</td>
             <td className="hide-sm tnum">WA {s.counts.waSent}, email {s.counts.emailSent}</td>
             <td><Status label={KIND[s.status]?.[0] || s.status} kind={KIND[s.status]?.[1] || "ring"} muted={s.status !== "open"} /></td>
-            <td className="is-action"><button className="btn btn--quiet" type="button" onClick={(e) => { e.stopPropagation(); openSessionEditor(s.id); }}>Ubah</button></td>
+            <td className="is-action"><span className="row-actions">
+              <button className="btn btn--quiet btn--sm" type="button" onClick={() => { location.hash = `#/tes/ielts-mockup/sesi/${s.id}`; }}><Icon name="users" cls="icon--sm" />Peserta</button>
+              <button className="btn btn--quiet btn--sm" type="button" onClick={() => openSessionEditor(s.id)}>Ubah</button>
+            </span></td>
           </tr>
         ))}</tbody>
       </table></div>
