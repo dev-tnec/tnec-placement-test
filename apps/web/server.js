@@ -91,7 +91,7 @@ if (isMain) {
   const env = buildEnv();
   await migrate(env.DB);
   // A host such as Render tells a single app its port through PORT.
-  const server = startServer({ name: "Tes (web)", port: Number(process.env.PORT) || env.WEB_PORT, handler: createWebHandler(), env });
+  const server = startServer({ name: "Tes (web)", port: Number(process.env.PORT) || env.WEB_PORT, handler: createWebHandler(), env, expectedHost: new URL(env.PUBLIC_WEB_URL).host });
   // Send any result that an earlier run left waiting, for example after a crash, and pick up
   // speaking recordings that were not scored yet.
   runInBackground(() => deliverPending(env));

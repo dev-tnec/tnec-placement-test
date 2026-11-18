@@ -51,7 +51,7 @@ if (isMain) {
   const env = buildEnv();
   await migrate(env.DB);
   // A host such as Render tells a single app its port through PORT.
-  const server = startServer({ name: "Dasbor (admin)", port: Number(process.env.PORT) || env.ADMIN_PORT, handler: createAdminHandler(), env });
+  const server = startServer({ name: "Dasbor (admin)", port: Number(process.env.PORT) || env.ADMIN_PORT, handler: createAdminHandler(), env, expectedHost: new URL(env.ADMIN_URL).host });
   await announceSetup(env);
   // The dashboard sends results too (after a speaking grade by hand) and can score a recording
   // again, so it finishes what an earlier run left and lets running work end before it stops.

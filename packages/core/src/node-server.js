@@ -73,10 +73,18 @@ async function readBody(req, limit) {
   return Buffer.concat(chunks);
 }
 
-async function toRequest(req, trustProxy, bodyLimit) {
+async function toRequest(req, trustProxy, bodyLimit, expectedHost) {
   const first = (v) => String(v || "").split(",")[0].trim();
-  const proto = (trustProxy && first(req.headers["x-forwarded-proto"])) || (req.socket.encrypted ? "https" : "http");
-  const host = (trustProxy && first(req.headers["x-forwarded-host"])) || req.headers.host || "localhost";
+  let proto = (trustProxy && first(req.headers["x-forwarded-proto"])) || (req.socket.encrypted ? "https" : "http");
+  let host = (trustProxy && first(req.headers["x-forwarded-host"])) || req.headers.host || "localhost";
+  // A forwarded host the edge did not overwrite (Render overwrites the proto but not the host)
+  // must never steer origin decisions: when an expected host is configured, anything else
+  // falls back to it, and the proto is pinned https so a spoofed downgrade cannot strip the
+  // Secure cookie flag. Local development keeps its own host and http.
+  if (expectedHost && host !== expectedHost) {
+    host = expectedHost;
+    if (!/^(localhost|127\.|0\.0\.0\.0|\[::1\])/.test(expectedHost)) proto = "https";
+  }
   const url = new URL(req.url || "/", `${proto}://${host}`);
   const headers = new Headers();
   for (const [key, value] of Object.entries(req.headers)) {
@@ -116,10 +124,10 @@ export function closeServers(servers, timeoutMs = 5000) {
   return Promise.race([closed, timeout]).finally(() => clearTimeout(timer));
 }
 
-export function startServer({ name, port, host = "0.0.0.0", handler, env }) {
+export function startServer({ name, port, host = "0.0.0.0", handler, env, expectedHost }) {
   const server = http.createServer(async (req, res) => {
     try {
-      const request = await toRequest(req, env.TRUST_PROXY, handler.bodyLimit);
+      const request = await toRequest(req, env.TRUST_PROXY, handler.bodyLimit, expectedHost);
       const response = await handler(request, env, { remoteAddress: req.socket.remoteAddress || "" });
       await sendResponse(res, response, req.method);
     } catch (error) {
