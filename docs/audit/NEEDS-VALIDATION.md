@@ -1,6 +1,6 @@
 # Needs validation
 
-Three records remain blocked on deployment facts the repository cannot decide. Each carries its verified source trace, its exact blocker, and a safe owner-observed check. None has a severity, because none is a confirmed vulnerability. Resolving them takes about five minutes total.
+These three records are the only findings still open, and no code change can close them: each is a deployment fact only you can observe. All 14 confirmed findings are already fixed and deployed at `6b505b1`. Resolving these three takes about five minutes total.
 
 ## wave2/proxy-host-header-trust
 

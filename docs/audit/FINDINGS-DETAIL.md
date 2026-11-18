@@ -1,5 +1,7 @@
 # Findings detail
 
+Every finding in this file is fixed and deployed at commit `6b505b1`; see RESOLUTION.md. The reproductions below describe the state as audited at `9a934ef`, kept as the record of why each fix was made.
+
 Full source paths and target-neutral reproductions for every confirmed medium finding and the two low findings with monetary principals, per the report contract. The remaining low findings carry complete traces and reproductions in findings.json.
 
 ## admin-auth/lockout-parallel-bypass

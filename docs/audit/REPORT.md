@@ -1,6 +1,6 @@
 # Security audit report
 
-Run 1 for dev-tnec/tnec-placement-test, 18 November 2026.
+Run 1 for dev-tnec/tnec-placement-test, 18 November 2026. All 14 confirmed findings were fixed and deployed on the same day at commit `6b505b1`; see RESOLUTION.md for the finding-to-fix mapping. What follows is the state as audited at `9a934ef`.
 
 ## Run summary
 
@@ -23,6 +23,8 @@ The codebase is in good shape for its size and age. The strongest controls held 
 The confirmed findings cluster in three places: unbounded work reachable by an anonymous or attempt-holding principal (the mockup speaking re-queue that drains paid Speechace quota, the violation log append, the contact-step re-arm loop), concurrency assumptions that Render's deploy model breaks (the login lockout race, the invite queue drain race, the speaking lease owner gap, the setup and quota races), and the consequences of the repository being public (the paid mockup answer key, the unignored session export). Three deployment facts could not be decided from source and are parked as needs_validation records with one-minute owner checks: Render's forwarded-header handling, the TRUST_PROXY value behind the Secure cookie flag, and whether the service ports are reachable only through the edge.
 
 ## Confirmed findings
+
+All findings in this section are fixed and live as of commit `6b505b1`; RESOLUTION.md maps each to its fix. The table and details below describe the state as audited.
 
 | Severity | Title | Boundary | Observed result |
 |---|---|---|---|
