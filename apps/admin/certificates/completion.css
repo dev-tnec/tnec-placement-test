@@ -238,5 +238,10 @@ body {
   .sheet {
     margin: 0;
     box-shadow: none;
+    /* The two repeating gradients become full-page tiling patterns with gradient shadings
+       inside the PDF, and every viewer then paints the page slowly: blank first, content
+       seconds later, on the phone and on the laptop. On paper the 2% hatch is invisible,
+       so print drops it and keeps the texture on screen. */
+    background-image: none;
   }
 }
