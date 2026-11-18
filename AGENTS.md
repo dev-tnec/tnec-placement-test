@@ -359,7 +359,7 @@ The three React apps (the student runner, the result report, the dashboard) foll
 8. Every `.map` render carries a stable `key`. Conditional rendering uses a ternary or an explicit boolean; never `number && jsx`, which renders the number.
 9. Imports are direct from the file, never through a barrel file, so esbuild tree-shakes and the committed bundle stays small. No runtime CSS-in-JS; styles are the committed `.css` files per app, because both CSPs block inline styles.
 10. Forms in the dashboard are uncontrolled by design: values are read from the DOM at submit, validated with `makeFieldFail()` from `src/dom.js` (one shared helper, not a per-dialog copy) and `busy()` for the submit button. The student test inputs are controlled.
-11. The Vercel React best practices skill (`react-best-practices`) and the 21st component MCP are installed; consult them before new React work, the same way DESIGN.md governs CSS.
+11. The Vercel React best practices skill (`react-best-practices`), the modern-web-guidance skill (installed globally in `~/.config/opencode/skills/modern-web-guidance`; search it with `npx modern-web-guidance@latest search "<query>"` and retrieve a guide by id before writing any web UI code), and the 21st component MCP are installed; consult them before new React work, the same way DESIGN.md governs CSS.
 
 ## Git and push rules
 
