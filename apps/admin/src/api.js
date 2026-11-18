@@ -29,12 +29,18 @@ import {
 } from "./certificates.js";
 
 const PUBLIC_DIR = resolve(dirname(fileURLToPath(import.meta.url)), "../public");
-const ADMIN_MANIFEST = JSON.parse(readFileSync(resolve(PUBLIC_DIR, "admin/admin-manifest.json"), "utf8"));
+// The manifest is read at request time: scripts/start.mjs imports this module before its build
+// step runs, so a manifest read at import time would name the previous build's deleted files.
+let adminManifest = null;
+const manifestEntry = (entry) => {
+  adminManifest ??= JSON.parse(readFileSync(resolve(PUBLIC_DIR, "admin/admin-manifest.json"), "utf8"));
+  return adminManifest[entry];
+};
 
 /* The dashboard and login shells are built here from the hashed files the Node build wrote into
    admin-manifest.json. No HTML file is stored or served from disk. */
 function adminShell(entry) {
-  const { js, css } = ADMIN_MANIFEST[entry];
+  const { js, css } = manifestEntry(entry);
   const title = entry === "login" ? "Masuk | Dasbor Titik Nol" : "Dasbor Titik Nol";
   const bodyClass = entry === "login" ? ' class="login-page"' : "";
   return `<!doctype html>

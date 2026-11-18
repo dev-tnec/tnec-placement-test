@@ -17,8 +17,12 @@ import { handlePublic, SPEAKING_ROUTE, SPEAKING_BODY_LIMIT } from "./src/api.js"
 const PUBLIC_DIR = resolve(dirname(fileURLToPath(import.meta.url)), "public");
 // The speaking section records from this page's own origin. Camera and location stay off.
 const PAGE_HEADERS = { ...BASE_HEADERS, "Permissions-Policy": "camera=(), microphone=(self), geolocation=()", "Content-Security-Policy": STRICT_CSP };
-const runner = JSON.parse(readFileSync(resolve(PUBLIC_DIR, "runner-manifest.json"), "utf8"));
-const report = JSON.parse(readFileSync(resolve(PUBLIC_DIR, "hasil/report-manifest.json"), "utf8"));
+// Read at request time: scripts/start.mjs imports this module before its build step runs, so a
+// manifest read at import time would name the previous build's deleted files.
+let runnerManifest = null;
+let reportManifest = null;
+const runner = () => (runnerManifest ??= JSON.parse(readFileSync(resolve(PUBLIC_DIR, "runner-manifest.json"), "utf8")));
+const report = () => (reportManifest ??= JSON.parse(readFileSync(resolve(PUBLIC_DIR, "hasil/report-manifest.json"), "utf8")));
 
 const htmlResponse = (body) => new Response(body, {
   status: 200,
@@ -37,8 +41,8 @@ function runnerShell() {
   <meta name="theme-color" content="#0A1B38">
   <title>Tes Penempatan Online - Titik Nol English Course</title>
   <link rel="icon" href="/favicon.png" type="image/png">
-  ${styleTag(runner.css)}
-  ${scriptTag(runner.js)}
+  ${styleTag(runner().css)}
+  ${scriptTag(runner().js)}
 </head>
 <body data-screen="intro">
   <div id="root"></div>
@@ -56,8 +60,8 @@ function reportShell() {
   <meta name="robots" content="noindex">
   <link rel="icon" href="/favicon.png" type="image/png">
   <title>Hasil Tes, Titik Nol English Course</title>
-  ${styleTag(report.css)}
-  ${scriptTag(report.js)}
+  ${styleTag(report().css)}
+  ${scriptTag(report().js)}
 </head>
 <body>
   <div id="root"></div>
