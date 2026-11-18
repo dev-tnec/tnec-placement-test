@@ -33,6 +33,7 @@ The owner keeps having to repeat these. Check every row before touching the app.
 | HTML files and Vite | The app is React only, bundled by Node with esbuild, and the servers generate the document shells. No HTML file in the app source or build. Certificates may stay HTML | `scripts/build-react.mjs`, `apps/web/server.js`, `apps/admin/src/api.js` |
 | Speaking missing from the Bagian tab | The three speaking parts are sections of Paket Demo A and appear in the main Bagian table with the other nine, counted in the Paket tab | `0014_speaking_sections.sql`, `SectionsTab` in `Test.jsx` |
 | The submission summary left two empty blocks | The summary grid picks a column count that divides the cells, so no row ends with an empty block | `statsClass` in `Test.jsx`, `.stats--2/3/4/5` in `admin.css` |
+| The profile left a cream block beside Masuk database | Any grid that paints its gaps with the container background must divide its cells across the row. The profile carries 12 props, with Sumber and Masuk database sharing one cell | `.props` in `admin.css`, `SiswaDetail` in `views/Siswa.jsx` |
 | Bulk mockup import | One paid wave is one session with a CSV import that creates students, registrations, invites, and a two-channel send queue, and participants are students, not leads | `docs/prd-ielts-mockup-bulk.md`, `0015_mockup_sessions.sql`, `views/MockupSesi.jsx`, `invite-queue.js` |
 
 ## What this folder is

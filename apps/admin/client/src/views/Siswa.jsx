@@ -278,9 +278,8 @@ export function SiswaDetail({ id }) {
           </div>
           <div className="prop"><span className="prop__label">Jenjang pendidikan</span>{identity?.jenjang ? <span className="prop__value">{identity.jenjang}</span> : <span className="prop__value muted">Belum diisi</span>}</div>
           <div className="prop"><span className="prop__label">Tahu TN dari</span>{identity?.tahuDari ? <span className="prop__value">{identity.tahuDari}</span> : <span className="prop__value muted">Belum diisi</span>}</div>
-          <div className="prop"><span className="prop__label">Sumber</span><span className="prop__value">{s.source}</span></div>
           <div className="prop"><span className="prop__label">Cabang belajar</span>{s.branch ? <span className="prop__value">{branchLabel(s.branch)}</span> : <span className="prop__value muted">Belum dipilih</span>}</div>
-          <div className="prop"><span className="prop__label">Masuk database</span><span className="prop__value">{fmtDate(s.createdAt)}</span><span className="prop__sub">pukul {fmtTime(s.createdAt)}</span></div>
+          <div className="prop"><span className="prop__label">Sumber, masuk database</span><span className="prop__value">{s.source}</span><span className="prop__sub">{fmtDate(s.createdAt)}, pukul {fmtTime(s.createdAt)}</span></div>
         </div>
       </section>
 
