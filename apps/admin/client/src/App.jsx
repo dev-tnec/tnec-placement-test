@@ -16,6 +16,7 @@ import { Sertifikat } from "./views/Sertifikat.jsx";
 import { SessionDetail } from "./views/MockupSesi.jsx";
 import { QuestionEditor } from "./views/QuestionEditor.jsx";
 import { TestPage, AttemptDetail } from "./views/Test.jsx";
+import { AllSubmissions } from "./views/Submission.jsx";
 import { ProgramKelas } from "./views/Program.jsx";
 import { DialogHost, ConfirmHost } from "./dialogs.jsx";
 
@@ -35,6 +36,7 @@ function Sidebar({ nav }) {
     ["tes-pre", "#/tes/pre/soal", "note", "Pre-test"],
     ["tes-post", "#/tes/post/soal", "cap", "Post-test"],
     ["tes-ielts", "#/tes/ielts-mockup/soal", "layers", "IELTS Mockup"],
+    ["submission-all", "#/submission", "send", "Submission"],
   ];
   return (
     <aside className="sidebar" aria-label="Navigasi dasbor">
@@ -125,6 +127,7 @@ function currentView(parts, params) {
     return { view: <SiswaDetail id={parts[1]} />, nav: "siswa", title: s ? s.name : "Siswa tidak ditemukan" };
   }
   if (parts[0] === "siswa") return { view: <SiswaList />, nav: "siswa", title: "Database Siswa" };
+  if (parts[0] === "submission") return { view: <AllSubmissions />, nav: "submission-all", title: "Submission" };
   if (parts[0] === "tes" && parts[2] === "submission" && parts[3]) {
     const meta = TEST_META[parts[1]] || TEST_META.placement;
     const a = db.attempts.find((x) => x.id === parts[3]);

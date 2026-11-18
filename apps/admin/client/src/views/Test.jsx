@@ -12,6 +12,7 @@ import {
   latestGraded, leads, isColdLead, lastActivityAt, levelLabel, exportAttempts, exportLeads, periodById,
   programById, fmtTime, TEST_META, packageOf, packageQuestions, packageSections,
 } from "../lib.js";
+import { BRANCHES } from "@tnec/core/branches";
 import {
   AttemptStatus, Chip, ClassCell, Empty, Icon, LevelCell, Notice, OptList, PageHead, Pager, PassStatus,
   Person, ProgramCell, ResultCell, OutcomeCell, SpeakingRowLabel, SpeakingStatus, StageStatus, Status,
@@ -331,6 +332,9 @@ function SubmissionsTab() {
         <input className="input" type="search" placeholder={ui.test === "placement" ? "Cari nama, email, WhatsApp, atau ID" : "Cari nama, email, atau kelas"} value={f.q} autoComplete="off"
           onChange={(e) => { clearTimeout(attemptTimer); const v = e.target.value; attemptTimer = setTimeout(() => { f.q = v; f.page = 1; notify(); }, 140); }} />
       </label>
+      <select className="select select--auto" aria-label="Saring cabang" value={f.branch} onChange={(e) => { f.branch = e.target.value; f.page = 1; notify(); }}>
+        <OptList list={[["", "Semua cabang"], ...BRANCHES]} />
+      </select>
       {ui.test === "placement" ? <>
         <select className="select select--auto" aria-label="Saring level" value={f.level} onChange={(e) => { f.level = e.target.value; f.page = 1; notify(); }}>
           <OptList list={[["", "Semua level"], ...db.levels.map((l) => [l.key, l.label])]} />

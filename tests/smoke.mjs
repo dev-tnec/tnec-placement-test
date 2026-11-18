@@ -677,4 +677,52 @@ assert.ok(mailInvite.html.includes("Budi &lt;script&gt;"), "the email escapes th
 assert.ok(mailInvite.text.includes("ABC234") && mailInvite.text.includes("paling telat"));
 assert.equal(/[\u2013\u2014]/.test(JSON.stringify(mailInvite)), false, "the invite email copy has no en or em dash");
 
+/* ---------- Rich passage text and the branch question ---------- */
+import { parseRichText } from "@tnec/core/rich";
+import { BRANCHES, branchKey, branchLabel } from "@tnec/core/branches";
+
+const rich = parseRichText("Plain and <b>bold</b>, <i>italic</i>, <u>underlined</u>.");
+assert.equal(rich.length, 1, "one paragraph without a blank line");
+assert.deepEqual(rich[0].lines[0], [
+  { text: "Plain and " },
+  { text: "bold", b: true },
+  { text: ", " },
+  { text: "italic", i: true },
+  { text: ", " },
+  { text: "underlined", u: true },
+  { text: "." },
+], "inline tags become styled runs in order");
+assert.deepEqual(parseRichText("<i><u>both</u></i>")[0].lines[0], [{ text: "<u>both</u>", i: true }], "tags do not nest: an inner tag stays literal");
+
+const split = parseRichText("First paragraph.\n\nSecond <b>one</b>.");
+assert.equal(split.length, 2, "a blank line starts a new paragraph");
+assert.equal(split[1].lines[0][1].b, true);
+
+const soft = parseRichText("Line one\nLine two continues");
+assert.equal(soft[0].lines.length, 2, "a single newline stays inside one paragraph");
+assert.deepEqual(soft[0].lines[1], [{ text: "Line two continues" }]);
+
+const bullets = parseRichText("- Alpha\n- Beta <b>bold</b>");
+assert.equal(bullets[0].type, "ul");
+assert.deepEqual(bullets[0].items[0], [{ text: "Alpha" }]);
+assert.equal(bullets[0].items[1][1].b, true);
+assert.equal(parseRichText("- Only one bullet")[0].type, "ul", "a single bullet line is still a list");
+assert.equal(parseRichText("1. Only one numbered")[0].type, "ol", "a single numbered line is still a list");
+
+const numbered = parseRichText("1. First\n2. Second\n3. Third");
+assert.equal(numbered[0].type, "ol");
+assert.equal(numbered[0].items.length, 3);
+
+assert.deepEqual(parseRichText("Mixed\n- not every line marked")[0], { type: "p", lines: [[{ text: "Mixed" }], [{ text: "- not every line marked" }]] }, "a block with mixed markers stays a paragraph and keeps the literal dash");
+assert.deepEqual(parseRichText("Unknown <x>tag</x> stays <b>text")[0].lines[0], [{ text: "Unknown <x>tag</x> stays <b>text" }], "unknown and unclosed tags stay literal");
+assert.deepEqual(parseRichText("   \n\n  "), [], "empty text parses to no blocks");
+
+assert.equal(BRANCHES.length, 4);
+assert.equal(branchKey("pare"), "pare");
+assert.equal(branchKey(" Online "), "online");
+assert.equal(branchKey("surabaya"), null, "an unknown branch is refused");
+assert.equal(branchKey(""), null);
+assert.equal(branchLabel("medan"), "Medan");
+assert.equal(branchLabel(""), "");
+
 console.log("smoke ok");

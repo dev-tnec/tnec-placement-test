@@ -6,9 +6,9 @@
 import { useState } from "react";
 import { api, db, mutate, useVersion, KEYS } from "../store.js";
 import { TEST_META, packageOf, packageSections, questionById, questionNumber, testSeconds } from "../lib.js";
-import { Icon, OptList, PageHead } from "../ui.jsx";
+import { Icon, OptList, PageHead, RichText, RichToolbar } from "../ui.jsx";
 import { $, busy, clearErrors, makeFieldFail } from "../dom.js";
-import { deleteQuestion } from "../dialogs.jsx";
+import { deleteQuestion, Modal } from "../dialogs.jsx";
 
 const IELTS_SKILLS = [["Listening", "Listening"], ["Reading", "Reading"], ["Writing", "Writing"]];
 const BASE_SKILLS = [["Grammar", "Grammar"], ["Vocabulary", "Vocabulary"], ["Reading", "Reading"]];
@@ -31,6 +31,7 @@ export function QuestionEditor({ testKey, id }) {
   const [sectionId, setSectionId] = useState(q?.sectionId || "");
   const [skill, setSkill] = useState(q ? q.skill : isIelts ? "Listening" : "Grammar");
   const [promptLen, setPromptLen] = useState(q ? q.prompt.length : 0);
+  const [preview, setPreview] = useState(null);
 
   const heading = isEditing ? (num ? `Ubah Soal ${num}` : "Ubah soal draf") : "Tambah Soal";
   const sub = q ? `${name}, ${q.skill}, ${q.status === "aktif" ? "aktif di tes" : "masih draf dan belum tampil di tes"}` : `${name}. Soal baru masuk di urutan terakhir.`;
@@ -52,6 +53,22 @@ export function QuestionEditor({ testKey, id }) {
   function addAccepted() {
     setAccepted((list) => [...list, ""]);
     setTimeout(() => $(`#qe-acc-${accepted.length}`)?.focus(), 0);
+  }
+
+  /* The preview snapshots the form as it is right now, so unsaved edits show up too. */
+  function openPreview() {
+    const section = sections.find((x) => x.id === sectionId);
+    const options = {};
+    (isIelts ? KEYS : KEYS.slice(0, 4)).forEach((k) => { options[k] = $(`#qe-opt-${k}`)?.value.trim() || ""; });
+    setPreview({
+      prompt: $("#qe-prompt").value,
+      passage: isIelts ? (section?.passage || "") : ($("#qe-passage")?.value.trim() || ""),
+      image: isIelts ? (section?.image || "") : "",
+      title: section?.title || "Bacaan",
+      type, options, skill,
+      accepted: accepted.map((a) => a.trim()).filter(Boolean),
+      minWords: Number($("#qe-minwords")?.value) || q?.minWords || 250,
+    });
   }
 
   async function save(e) {
@@ -115,12 +132,14 @@ export function QuestionEditor({ testKey, id }) {
   }
 
   return (
+    <>
     <form className="stack" onSubmit={save} noValidate>
       <PageHead title={heading}
         crumbs={[["Soal & Jawaban", `#/tes/${testKey}/soal`], [heading]]}
         desc={<p className="page-desc">{sub}</p>}
         actions={<>
           <button className="btn btn--quiet" type="button" onClick={() => { location.hash = `#/tes/${testKey}/soal`; }}>Batal</button>
+          <button className="btn btn--quiet" type="button" onClick={openPreview}><Icon name="eye" />Pratinjau Soal</button>
           {isEditing ? <button className="link-btn link-btn--danger" type="button" onClick={() => deleteQuestion(q)}>Hapus soal</button> : null}
           <button className="btn btn--primary" type="submit" id="qe-save">Simpan soal</button>
         </>} />
@@ -149,7 +168,9 @@ export function QuestionEditor({ testKey, id }) {
         <div className="panel__body">
           <label className="check"><input type="checkbox" checked={hasPassage} onChange={(e) => { setHasPassage(e.target.checked); if (e.target.checked) setTimeout(() => $("#qe-passage")?.focus(), 0); }} /><span>Soal ini memakai bacaan</span></label>
           <div className="field" hidden={!hasPassage}>
-            <textarea className="textarea" id="qe-passage" rows="6" defaultValue={q ? q.passage : ""}></textarea>
+            <RichToolbar target="qe-passage" />
+            <textarea className="textarea rt-source" id="qe-passage" rows="6" defaultValue={q ? q.passage : ""}></textarea>
+            <p className="hint">Tanda &lt;b&gt; &lt;i&gt; &lt;u&gt;, baris berbutir "-", dan baris bernomor "1." tampil sesuai formatnya di layar peserta.</p>
             <p className="error" id="qe-passage-err" hidden></p>
           </div>
         </div>
@@ -269,5 +290,56 @@ export function QuestionEditor({ testKey, id }) {
         <button className="btn btn--primary" type="submit">Simpan &amp; perbarui soal</button>
       </div>
     </form>
+
+    {preview ? (
+      <Modal id="dlg-qe-preview" onClose={() => setPreview(null)}>
+        <div className="dialog__form">
+          <header className="dialog__head"><div>
+            <h2 className="dialog__title">Pratinjau Soal</h2>
+            <p className="dialog__sub">Beginilah soal ini tampil di layar peserta, termasuk perubahan yang belum disimpan. Kunci jawaban sengaja tidak ditandai.</p>
+          </div>
+            <button className="icon-btn" type="button" aria-label="Tutup pratinjau" onClick={() => setPreview(null)}><Icon name="x" /></button>
+          </header>
+          <div className="dialog__body dialog__body--scroll">
+            <div className="qe-preview">
+              <span className="q-tag">Soal {num ?? "baru"} · {preview.skill}</span>
+              {preview.passage || preview.image ? (
+                <div className="qe-preview__passage">
+                  <p className="qe-preview__label">{preview.title}</p>
+                  {preview.image ? <img className="qe-preview__image" src={preview.image} alt={preview.title} /> : null}
+                  {preview.passage ? <RichText value={preview.passage} /> : null}
+                </div>
+              ) : null}
+              <p className="qe-preview__prompt">{preview.prompt || "Teks soal belum diisi."}</p>
+              {preview.type === "choice" ? (
+                <ul className="opts" aria-label="Pilihan jawaban">
+                  {Object.keys(preview.options).filter((k) => preview.options[k]).map((k) => (
+                    <li className="opt" key={k}><span className="opt__key">{k}</span><span className="opt__text">{preview.options[k]}</span></li>
+                  ))}
+                </ul>
+              ) : preview.type === "text" ? (
+                <div className="field">
+                  <span className="label">Jawaban kamu</span>
+                  <input className="input" disabled readOnly placeholder="Peserta mengetik jawabannya di sini" />
+                  {preview.accepted.length ? <p className="hint">Dinilai longgar terhadap: {preview.accepted.join(", ")}</p> : null}
+                </div>
+              ) : (
+                <div className="field">
+                  <span className="label">Tulisan kamu</span>
+                  <textarea className="textarea" rows="4" disabled readOnly></textarea>
+                  <p className="hint">Minimal {preview.minWords} kata, dinilai AI dengan empat kriteria IELTS Writing.</p>
+                </div>
+              )}
+            </div>
+          </div>
+          <footer className="dialog__foot">
+            <div className="dialog__foot-end">
+              <button className="btn btn--primary" type="button" onClick={() => setPreview(null)}>Tutup pratinjau</button>
+            </div>
+          </footer>
+        </div>
+      </Modal>
+    ) : null}
+    </>
   );
 }

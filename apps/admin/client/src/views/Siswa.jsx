@@ -20,6 +20,7 @@ import { MenuBtn } from "../menus.jsx";
 import { setClass, setStage } from "../actions.js";
 import { openCertDialog, openDaftar, openPendaftaranForm, openStudentForm, openWhatsApp } from "../dialogs.jsx";
 import { CertRow } from "./Sertifikat.jsx";
+import { BRANCHES, branchLabel } from "@tnec/core/branches";
 
 let searchTimer = null;
 
@@ -42,7 +43,7 @@ export function SiswaList() {
   const base = db.students.filter((s) => s.daftarCount > 0 && studentMatches(s, f, true));
   const counts = { all: base.length };
   SISWA_CHIPS.slice(1).forEach(([k]) => { counts[k] = base.filter((s) => siswaChipOf(s) === k).length; });
-  const hasFilter = Boolean(f.q || f.level || f.program || f.period || f.tutor || f.stage !== "all");
+  const hasFilter = Boolean(f.q || f.level || f.program || f.period || f.tutor || f.branch || f.stage !== "all");
 
   const rows = (f.stage === "all" ? base : base.filter((s) => siswaChipOf(s) === f.stage));
   const last = new Map(db.students.map((s) => [s.id, lastActivityAt(s)]));
@@ -70,7 +71,7 @@ export function SiswaList() {
     pageRows.forEach((s) => { if (checked) f.selected.add(s.id); else f.selected.delete(s.id); });
     notify();
   };
-  const reset = () => { Object.assign(f, { q: "", stage: "all", level: "", program: "", period: "", tutor: "", page: 1 }); notify(); };
+  const reset = () => { Object.assign(f, { q: "", stage: "all", level: "", program: "", period: "", tutor: "", branch: "", page: 1 }); notify(); };
 
   const recent = [...db.pendaftaran].sort((a, b) => b.registeredAt - a.registeredAt).slice(0, 8);
 
@@ -107,6 +108,9 @@ export function SiswaList() {
           </select>
           <select className="select select--auto hide-sm" aria-label="Saring level placement" value={f.level} onChange={(e) => { f.level = e.target.value; f.page = 1; notify(); }}>
             <OptList list={[["", "Semua level"], ["none", "Belum tes"], ...db.levels.map((l) => [l.key, l.label])]} />
+          </select>
+          <select className="select select--auto hide-sm" aria-label="Saring cabang" value={f.branch} onChange={(e) => { f.branch = e.target.value; f.page = 1; notify(); }}>
+            <OptList list={[["", "Semua cabang"], ...BRANCHES]} />
           </select>
           <button className="link-btn" type="button" hidden={!hasFilter} onClick={reset}>Hapus filter</button>
         </div>
@@ -275,6 +279,7 @@ export function SiswaDetail({ id }) {
           <div className="prop"><span className="prop__label">Jenjang pendidikan</span>{identity?.jenjang ? <span className="prop__value">{identity.jenjang}</span> : <span className="prop__value muted">Belum diisi</span>}</div>
           <div className="prop"><span className="prop__label">Tahu TN dari</span>{identity?.tahuDari ? <span className="prop__value">{identity.tahuDari}</span> : <span className="prop__value muted">Belum diisi</span>}</div>
           <div className="prop"><span className="prop__label">Sumber</span><span className="prop__value">{s.source}</span></div>
+          <div className="prop"><span className="prop__label">Cabang belajar</span>{s.branch ? <span className="prop__value">{branchLabel(s.branch)}</span> : <span className="prop__value muted">Belum dipilih</span>}</div>
           <div className="prop"><span className="prop__label">Masuk database</span><span className="prop__value">{fmtDate(s.createdAt)}</span><span className="prop__sub">pukul {fmtTime(s.createdAt)}</span></div>
         </div>
       </section>

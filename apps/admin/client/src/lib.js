@@ -188,6 +188,7 @@ export function siswaChipOf(s) {
 export function studentMatches(s, f, ignoreStage) {
   if (!ignoreStage && f.stage !== "all" && siswaChipOf(s) !== f.stage) return false;
   if (f.program && s.programId !== f.program) return false;
+  if (f.branch && s.branch !== f.branch) return false;
   if (f.period === "none") { if (s.periodId) return false; } else if (f.period && s.periodId !== f.period) return false;
   if (f.tutor) { const c = classById(s.classId); if (f.tutor === "none" ? c : !c || c.tutor !== f.tutor) return false; }
   if (f.level) {
@@ -213,6 +214,7 @@ export function attemptMatches(a, f, ignoreStatus) {
     else if (a.status !== f.status) return false;
   }
   const s = a.studentId ? studentById(a.studentId) : null;
+  if (f.branch && (!s || s.branch !== f.branch)) return false;
   if (ui.test === "placement") {
     if (f.speaking === "review" && !speakingNeedsAttention(a)) return false;
     if (f.speaking === "waiting" && !(a.speaking && (a.speaking.status === "pending" || a.speaking.status === "grading"))) return false;

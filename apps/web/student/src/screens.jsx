@@ -1,6 +1,8 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, Fragment } from "react";
 import { CHECK_SECONDS, formatTime, spanText } from "./lib.js";
 import { VoiceNote } from "./voice-note.jsx";
+import { parseRichText } from "@tnec/core/rich";
+import { BRANCHES } from "@tnec/core/branches";
 
 const Arrow = () => (
   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
@@ -54,6 +56,55 @@ function CheckIcon() {
   return <span className="check__box" aria-hidden="true" />;
 }
 
+/* Inline runs of a parsed passage: b, i, and u wrap each other, everything else is text. */
+const runNodes = (runs) => runs.map((run, i) => {
+  let node = run.text;
+  if (run.b) node = <strong>{node}</strong>;
+  if (run.i) node = <em>{node}</em>;
+  if (run.u) node = <u>{node}</u>;
+  return <Fragment key={i}>{node}</Fragment>;
+});
+
+/* One parsed block: a paragraph, or a bullet or numbered list. */
+function RichBlock({ block }) {
+  if (block.type === "p") {
+    return <p>{block.lines.map((runs, j) => <Fragment key={j}>{j > 0 ? <br /> : null}{runNodes(runs)}</Fragment>)}</p>;
+  }
+  const List = block.type === "ol" ? "ol" : "ul";
+  return <List>{block.items.map((runs, j) => <li key={j}>{runNodes(runs)}</li>)}</List>;
+}
+
+/* A passage with the markdown-lite from @tnec/core/rich: paragraphs, bullet and numbered
+   lists, and <b> <i> <u> inline tags. Built as elements, never innerHTML. */
+export function RichText({ value, id, className = "" }) {
+  const blocks = useMemo(() => parseRichText(value), [value]);
+  if (!blocks.length) return null;
+  return (
+    <div className={`rt${className ? ` ${className}` : ""}`} id={id}>
+      {blocks.map((block, i) => <RichBlock key={i} block={block} />)}
+    </div>
+  );
+}
+
+/* A used, expired, or locked invite opens this full-page error instead of the intro, like a
+   404 page: the status code, the message from the server, and a way back to the start. */
+export function ErrorScreen({ status, message, onBack }) {
+  const titleRef = useRef(null);
+  useEffect(() => { titleRef.current?.focus(); }, []);
+  return (
+    <section className="screen" id="screen-error" aria-labelledby="error-title">
+      <div className="wrap wrap--narrow error-wrap">
+        <div className="error-card">
+          <p className="error-card__code" aria-hidden="true">{status || 404}</p>
+          <h1 className="error-card__title" id="error-title" tabIndex={-1} ref={titleRef}>Tautan tidak bisa dibuka</h1>
+          <p className="error-card__text">{message}</p>
+          <button className="btn btn--primary btn--lg" type="button" onClick={onBack}>Kembali ke halaman awal</button>
+        </div>
+      </div>
+    </section>
+  );
+}
+
 export function Intro({ config, invite, consent, onConsent, code, onCode, codeError, codeInputRef, busy, onStart, onOpenLegal, notice, loadFailed, onReload, titleRef }) {
   const total = config?.totalQuestions ?? 25;
   const seconds = config?.durationSeconds ?? 300;
@@ -101,7 +152,7 @@ export function Intro({ config, invite, consent, onConsent, code, onCode, codeEr
     ? isIelts
       ? "Setelah jawaban terkirim, band Listening, Reading, dan Writing muncul, lalu band Speaking menyusul setelah rekaman dinilai otomatis."
       : "Setelah jawaban terkirim, nilai kamu langsung muncul di layar dan tercatat di data kelas, jadi tutor bisa membahasnya bersama kamu."
-    : "Setelah tes selesai, kamu mengisi nama, email, dan nomor WhatsApp. Level, skor, dan rekomendasi program akan langsung muncul, lalu kami kirimkan juga ke email dan WhatsApp kamu.";
+    : "Setelah tes selesai, kamu mengisi nama, email, nomor WhatsApp, dan cabang tempat kamu ingin belajar. Level, skor, dan rekomendasi program akan langsung muncul, lalu kami kirimkan juga ke email dan WhatsApp kamu.";
 
   const ruleTime = sectionsMode
     ? `Tes terdiri dari 82 soal dan dua esai, dibagi menjadi ${sectionText}. Di dalam Listening, kamu bisa berpindah soal Part 1 sampai Part 4 selama audio diputar. Saat waktu satu bagian habis, bagian itu terkunci dan tes pindah ke bagian berikutnya.`
@@ -117,7 +168,7 @@ export function Intro({ config, invite, consent, onConsent, code, onCode, codeEr
 
   const data1 = invite
     ? "Kami menyimpan jawaban, nilai, waktu pengerjaan, dan catatan pelanggaran selama tes, lalu mencatatnya di data kamu sebagai siswa Titik Nol."
-    : "Kami menyimpan nama, email, nomor WhatsApp, jawaban, skor, waktu pengerjaan, dan catatan pelanggaran selama tes.";
+    : "Kami menyimpan nama, email, nomor WhatsApp, pilihan cabang belajar, jawaban, skor, waktu pengerjaan, dan catatan pelanggaran selama tes.";
   const data2 = invite
     ? "Data itu kami pakai untuk menghitung nilai dan memantau perkembangan belajar kamu bersama tutor. Data tidak dijual dan tidak dipakai untuk iklan."
     : "Data itu kami pakai untuk menghitung skor, menentukan level, mengirim hasil ke email dan WhatsApp kamu, dan menindaklanjuti konsultasi kalau kamu membutuhkannya. Data tidak dijual dan tidak dipakai untuk iklan.";
@@ -127,7 +178,7 @@ export function Intro({ config, invite, consent, onConsent, code, onCode, codeEr
       : isPre
         ? "Setelah jawaban terkirim, nilai kamu langsung muncul di layar. Kamu tidak perlu mengisi data kontak lagi."
         : "Setelah jawaban terkirim, nilai dan hasil kelulusan kamu langsung muncul di layar. Kamu tidak perlu mengisi data kontak lagi."
-    : "Setelah tes selesai, kamu mengisi nama, email, dan nomor WhatsApp. Level, skor, dan rekomendasi program akan muncul di layar, lalu dikirim ke email dan WhatsApp kamu.";
+    : "Setelah tes selesai, kamu mengisi nama, email, nomor WhatsApp, dan cabang tempat kamu ingin belajar. Level, skor, dan rekomendasi program akan muncul di layar, lalu dikirim ke email dan WhatsApp kamu.";
   const data4 = invite
     ? isIelts
       ? sectionsMode
@@ -192,7 +243,7 @@ export function Intro({ config, invite, consent, onConsent, code, onCode, codeEr
             <li className="stepper__step">
               <span className="stepper__bar" /><span className="stepper__index">02</span>
               <span className="stepper__title">Melengkapi data</span>
-              <span className="stepper__meta">Nama, email, WhatsApp</span>
+              <span className="stepper__meta">Nama, email, WhatsApp, cabang</span>
             </li>
           ) : null}
           <li className="stepper__step">
@@ -397,7 +448,7 @@ export function TestScreen({ attempt, index, answers, flagged, perMode, timeLeft
                 <div className="passage" id="passage">
                   <p className="passage__label" id="passage-label">{section?.title || "Bacaan"}</p>
                   {image ? <img className="passage__image" id="passage-image" src={image} alt={section?.title || "Gambar soal"} /> : null}
-                  {passage ? <p className="passage__text" id="passage-text">{passage}</p> : null}
+                  {passage ? <RichText value={passage} id="passage-text" className="passage__text" /> : null}
                 </div>
               ) : null}
 
@@ -677,6 +728,18 @@ export function DetailsScreen({ values, errors, busy, speakingOn, total, onChang
               <input className="input" id="whatsapp" name="whatsapp" type="tel" inputMode="tel" autoComplete="tel" maxLength={20} placeholder="08123456789" aria-describedby="err-wa" aria-invalid={errors.whatsapp ? "true" : undefined} required value={values.whatsapp} onChange={(event) => onChange("whatsapp", event.target.value)} />
               <p className="field__error" id="err-wa">{errors.whatsapp || ""}</p>
             </div>
+            <fieldset className="field">
+              <legend className="label">Di cabang mana kamu ingin belajar?</legend>
+              <div className="radio-row">
+                {BRANCHES.map(([key, label]) => (
+                  <label key={key} className={`radio${values.branch === key ? " is-on" : ""}`}>
+                    <input type="radio" name="branch" value={key} checked={values.branch === key} onChange={() => onChange("branch", key)} />
+                    <span>{label}</span>
+                  </label>
+                ))}
+              </div>
+              <p className="field__error" id="err-branch">{errors.branch || ""}</p>
+            </fieldset>
             <button className="btn btn--primary btn--lg btn--block" id="contact-btn" type="submit" disabled={busy}>
               {busy ? "Menyimpan..." : speakingOn ? "Kirim dan siapkan hasil" : "Lihat hasil saya"}<Arrow />
             </button>

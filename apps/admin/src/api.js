@@ -421,6 +421,7 @@ async function bootstrap(request, env, user, url) {
     levels: levels.map((l) => ({ key: l.key, label: l.label, min: l.min_score, max: l.max_score, program: l.program })),
     students: students.map((s) => ({
       id: s.id, name: s.name, email: s.email || "", wa: s.whatsapp || "", city: s.city || "", source: s.source, stage: s.stage,
+      branch: s.branch || "",
       programId: s.program_id, durationId: s.duration_id, periodId: s.period_id, classId: s.class_id,
       tempatLahir: s.tempat_lahir || "", tanggalLahir: s.tanggal_lahir || "", provinsi: s.provinsi || "",
       kodePos: s.kode_pos || "", jenjang: s.jenjang_pendidikan || "", tahuDari: s.tahu_dari || "",

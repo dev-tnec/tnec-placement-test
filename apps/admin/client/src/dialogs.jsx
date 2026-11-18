@@ -14,7 +14,7 @@ import {
   packageOf, packageQuestions,
 } from "./lib.js";
 import { certFormatProblem, certPeriodLabel, formatCertNumber } from "./cert-number.js";
-import { Icon, OptList } from "./ui.jsx";
+import { Icon, OptList, RichToolbar } from "./ui.jsx";
 import { buildInviteWhatsApp, formatWib } from "@tnec/core/mockup-bulk";
 
 /* ===================== Dialog store ===================== */
@@ -30,7 +30,7 @@ export function closeDialog(kind) { if (typeof kind === "string" && (!dlg || dlg
 export function useDialog() { useVersion(); return dlg; }
 
 /* The base dialog: opens as a modal on mount, focuses a selector, and reports every close. */
-function Modal({ id, className = "", focus, onClose, children }) {
+export function Modal({ id, className = "", focus, onClose, children }) {
   const ref = useRef(null);
   useEffect(() => {
     const d = ref.current;
@@ -187,8 +187,9 @@ function SectionDialog({ id }) {
           </div>
           <div className="field">
             <label className="label" htmlFor="se-passage">Bacaan atau instruksi</label>
-            <textarea className="textarea" id="se-passage" rows="6" defaultValue={s ? s.passage : ""}></textarea>
-            <p className="hint">Tampil di atas setiap soal bagian ini. Kosongkan kalau bagian ini hanya berisi audio.</p>
+            <RichToolbar target="se-passage" />
+            <textarea className="textarea rt-source" id="se-passage" rows="6" defaultValue={s ? s.passage : ""}></textarea>
+            <p className="hint">Tampil di atas setiap soal bagian ini. Kosongkan kalau bagian ini hanya berisi audio. Tanda &lt;b&gt; &lt;i&gt; &lt;u&gt;, baris berbutir "-", dan baris bernomor "1." tampil sesuai formatnya di layar peserta.</p>
             <p className="error" id="se-passage-err" hidden></p>
           </div>
           <div className="field">

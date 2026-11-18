@@ -1,13 +1,14 @@
 // Shared JSX pieces: icons, statuses, cells, the page head, chips, pagers, and selects.
 // They render the same class names as the old template strings, so admin.css keeps working.
 
-import { Fragment } from "react";
+import { Fragment, useMemo } from "react";
 import { db, NOW, PAGE_SIZE } from "./store.js";
 import {
   ATTEMPT_STATUS, SPEAKING_STATUS, attemptTotal, classById, classLabel, durationOf, fmtDate,
   initials, levelByKey, latestGraded, levelLabel, nilaiOf, periodById, periodsSorted, programById,
   siswaChipOf, stageOf,
 } from "./lib.js";
+import { parseRichText } from "@tnec/core/rich";
 
 export function Icon({ name, cls = "" }) {
   return <svg className={`icon ${cls}`} aria-hidden="true" focusable="false"><use href={`#i-${name}`} /></svg>;
@@ -135,6 +136,79 @@ export function Notice({ icon = "alert", neutral = false, children }) {
 export const Stat = ({ label, value, note }) => (
   <div className="stat"><p className="stat__label">{label}</p><p className="stat__value">{value}</p><p className="stat__note">{note}</p></div>
 );
+
+/* ===================== Rich passage text ===================== */
+
+const runNodes = (runs) => runs.map((run, i) => {
+  let node = run.text;
+  if (run.b) node = <strong>{node}</strong>;
+  if (run.i) node = <em>{node}</em>;
+  if (run.u) node = <u>{node}</u>;
+  return <Fragment key={i}>{node}</Fragment>;
+});
+
+function RichBlock({ block }) {
+  if (block.type === "p") {
+    return <p>{block.lines.map((runs, j) => <Fragment key={j}>{j > 0 ? <br /> : null}{runNodes(runs)}</Fragment>)}</p>;
+  }
+  const List = block.type === "ol" ? "ol" : "ul";
+  return <List>{block.items.map((runs, j) => <li key={j}>{runNodes(runs)}</li>)}</List>;
+}
+
+/* The passage as the student sees it, from the shared parser in @tnec/core/rich. */
+export function RichText({ value, className = "" }) {
+  const blocks = useMemo(() => parseRichText(value), [value]);
+  if (!blocks.length) return null;
+  return <div className={`rt${className ? ` ${className}` : ""}`}>{blocks.map((block, i) => <RichBlock key={i} block={block} />)}</div>;
+}
+
+/* The formatting bar above a passage textarea. The buttons edit the textarea's selection in
+   place, so the form stays uncontrolled and the value is still read at submit time. */
+export function RichToolbar({ target }) {
+  const area = () => document.getElementById(target);
+  const after = (el) => { el.focus(); el.dispatchEvent(new Event("input", { bubbles: true })); };
+
+  function wrap(tag) {
+    const el = area();
+    if (!el) return;
+    const from = el.selectionStart, to = el.selectionEnd;
+    el.setRangeText(`</${tag}>`, to, to, "preserve");
+    el.setRangeText(`<${tag}>`, from, from, "preserve");
+    el.selectionStart = from + tag.length + 2;
+    el.selectionEnd = to + tag.length + 2;
+    after(el);
+  }
+
+  function list(kind) {
+    const el = area();
+    if (!el) return;
+    const from = el.value.lastIndexOf("\n", el.selectionStart - 1) + 1;
+    const end = el.value.indexOf("\n", el.selectionEnd);
+    const to = end === -1 ? el.value.length : end;
+    const marked = el.value.slice(from, to).split("\n").map((line, i) => {
+      const bare = line.replace(/^[-•]\s+/, "").replace(/^\d+[.)]\s+/, "");
+      return kind === "ul" ? `- ${bare}` : `${i + 1}. ${bare}`;
+    }).join("\n");
+    el.setRangeText(marked, from, to, "preserve");
+    el.selectionStart = from;
+    el.selectionEnd = from + marked.length;
+    after(el);
+  }
+
+  const btn = (name, label, onClick) => (
+    <button className="icon-btn icon-btn--boxed" type="button" title={label} aria-label={label} onClick={onClick}><Icon name={name} cls="icon--sm" /></button>
+  );
+  return (
+    <div className="rt-toolbar" role="group" aria-label="Format bacaan">
+      {btn("bold", "Tebal", () => wrap("b"))}
+      {btn("italic", "Miring", () => wrap("i"))}
+      {btn("underline", "Garis bawah", () => wrap("u"))}
+      <span className="rt-toolbar__sep" aria-hidden="true" />
+      {btn("list", "Daftar berbutir", () => list("ul"))}
+      {btn("list-ordered", "Daftar bernomor", () => list("ol"))}
+    </div>
+  );
+}
 
 /* A whole table row navigates, unless the click landed on a control inside it. */
 export const rowClick = (href) => (e) => { if (!e.target.closest("a, button, input, select, textarea, label")) location.hash = href; };

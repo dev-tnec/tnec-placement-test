@@ -1122,6 +1122,16 @@ progress::-moz-progress-bar { background: var(--navy-900); border-radius: var(--
 
 .passage__text { font-size: var(--text-card); line-height: 1.7; }
 
+/* Rich passage blocks from @tnec/core/rich. The list reset above is scoped back on here. */
+.rt { display: flex; flex-direction: column; gap: var(--space-3); }
+.rt ul,
+.rt ol { display: flex; flex-direction: column; gap: 6px; padding-left: 22px; }
+.rt ul { list-style: disc outside; }
+.rt ol { list-style: decimal outside; }
+.rt li::marker { color: var(--text-secondary); }
+.rt strong { font-weight: 700; }
+.rt u { text-underline-offset: 3px; }
+
 .prompt-canvas {
   position: relative;
   padding: 26px 28px 30px;
@@ -1468,6 +1478,88 @@ kbd {
 }
 
 .field__error:empty { display: none; }
+
+/* ---------- Branch choice (contact step) ---------- */
+
+fieldset.field { border: 0; padding: 0; margin: 0; }
+
+.radio-row {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: var(--space-2);
+}
+
+@media (max-width: 480px) {
+  .radio-row { grid-template-columns: 1fr; }
+}
+
+.radio {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 14px;
+  border: 1px solid var(--gray-200);
+  border-radius: var(--radius-sm);
+  background: var(--white);
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--navy-900);
+  cursor: pointer;
+  transition: border-color var(--duration-fast) var(--ease-standard),
+              box-shadow var(--duration-fast) var(--ease-standard);
+}
+
+.radio input { width: 18px; height: 18px; margin: 0; accent-color: var(--navy-700); flex: 0 0 auto; }
+
+.radio:hover { border-color: var(--navy-600); }
+
+.radio.is-on {
+  border-color: var(--navy-700);
+  box-shadow: 0 0 0 3px rgba(22, 50, 92, .14);
+}
+
+/* ---------- Full-page link error (used or expired invite) ---------- */
+
+.error-wrap {
+  display: grid;
+  place-items: center;
+  min-height: 72vh;
+  padding-block: var(--space-16);
+}
+
+.error-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-4);
+  width: 100%;
+  max-width: 560px;
+  padding: var(--space-12) var(--space-8);
+  border: 1px solid var(--gray-200);
+  border-radius: var(--radius-lg);
+  background: var(--white);
+  box-shadow: var(--shadow-card);
+  text-align: center;
+}
+
+.error-card__code {
+  font-size: 64px;
+  font-weight: 800;
+  line-height: 1;
+  letter-spacing: .02em;
+  color: var(--navy-700);
+}
+
+.error-card__title {
+  font-size: var(--text-h2);
+  font-weight: 700;
+  color: var(--navy-900);
+}
+
+.error-card__text {
+  font-size: var(--text-body);
+  color: var(--text-secondary);
+}
 
 /* ---------- Dialog ---------- */
 

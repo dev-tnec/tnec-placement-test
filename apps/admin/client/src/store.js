@@ -114,13 +114,14 @@ export function useRoute() {
 }
 
 /* ===================== ui state (survives navigation, like the old app) ===================== */
-const attemptFilter = (days) => ({ q: "", status: "all", speaking: "all", level: "", days, period: "", program: "", result: "", page: 1, selected: new Set() });
+const attemptFilter = (days) => ({ q: "", status: "all", speaking: "all", level: "", days, period: "", program: "", result: "", branch: "", page: 1, selected: new Set() });
 export const ui = {
   ringkasanPeriode: "",
   test: "placement",
   package: {},
   pendaftaran: { q: "", studentId: null },
-  students: { q: "", stage: "all", level: "", program: "", period: "", tutor: "", sort: "activity", dir: "desc", page: 1, selected: new Set() },
+  students: { q: "", stage: "all", level: "", program: "", period: "", tutor: "", branch: "", sort: "activity", dir: "desc", page: 1, selected: new Set() },
+  allSubmissions: { q: "", test: "", branch: "", status: "all", page: 1 },
   questions: { placement: { q: "", skill: "all" }, pre: { q: "", skill: "all" }, post: { q: "", skill: "all" }, "ielts-mockup": { q: "", skill: "all" } },
   attempts: { placement: attemptFilter("30"), pre: attemptFilter("all"), post: attemptFilter("all"), "ielts-mockup": attemptFilter("all") },
   classes: { period: "", program: "" },

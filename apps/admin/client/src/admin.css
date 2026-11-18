@@ -506,6 +506,38 @@ body.has-bulk .toasts { bottom: 88px; }
 }
 .qe-toolbar-row { display: flex; justify-content: flex-end; margin-top: 4px; }
 .qe-foot { display: flex; align-items: center; justify-content: flex-end; gap: 10px; padding-bottom: 32px; }
+
+/* Rich passage text, shared with the student renderer through @tnec/core/rich. */
+.rt { display: flex; flex-direction: column; gap: 10px; font-size: 14px; line-height: 1.7; color: var(--text-primary); }
+.rt ul, .rt ol { display: flex; flex-direction: column; gap: 4px; padding-left: 22px; }
+.rt ul { list-style: disc outside; }
+.rt ol { list-style: decimal outside; }
+.rt li::marker { color: var(--text-secondary); }
+.rt u { text-underline-offset: 3px; }
+
+/* The formatting bar above a passage textarea. It rides on the textarea's top border. */
+.rt-toolbar {
+  display: flex; align-items: center; gap: 2px; width: fit-content;
+  padding: 5px; border: 1px solid var(--gray-200); border-bottom: 0;
+  border-radius: var(--radius-sm) var(--radius-sm) 0 0; background: var(--gray-50);
+}
+.rt-toolbar__sep { width: 1px; height: 20px; margin-inline: 5px; background: var(--gray-200); }
+.rt-source { border-top-left-radius: 0; border-top-right-radius: 0; }
+
+/* The Pratinjau Soal modal: the question as the student sees it. */
+.qe-preview { display: flex; flex-direction: column; gap: 14px; }
+.qe-preview__passage {
+  display: flex; flex-direction: column; gap: 10px; padding: 14px 16px;
+  border: 1px solid var(--gray-200); border-radius: var(--radius-md); background: var(--surface-50);
+}
+.qe-preview__label {
+  font-size: 11px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase;
+  color: var(--text-secondary);
+}
+.qe-preview__image { max-width: 100%; border-radius: var(--radius-sm); }
+.qe-preview__prompt { font-size: 17px; font-weight: 600; line-height: 1.5; color: var(--navy-900); }
+.qe-preview .opts { flex-direction: column; align-items: stretch; margin-top: 0; }
+.qe-preview .opt { padding: 9px 12px 9px 8px; font-size: 14px; color: var(--text-primary); }
 .opt-row { display: flex; align-items: center; gap: 10px; }
 .opt-row .input { flex: 1 1 auto; }
 .key-label { position: relative; flex: none; }

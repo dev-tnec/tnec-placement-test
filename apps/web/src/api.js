@@ -17,6 +17,7 @@ import { isFinalStatus, speakingFacts } from "@tnec/core/speaking-result";
 import { mockupSpeakingPlan, mockupSpeakingQuestion, MOCKUP_SPEAKING_TOTAL } from "@tnec/core/speaking-mockup";
 import { gradeAnswer as gradeMockupAnswer } from "@tnec/core/speaking-mockup-worker";
 import { formatWib } from "@tnec/core/mockup-bulk";
+import { branchKey } from "@tnec/core/branches";
 
 const PUBLIC_BODY_LIMIT = 16 * 1024;
 // Two writing essays need more room than the other JSON bodies.
@@ -149,7 +150,7 @@ async function findInvite(env, token) {
     `SELECT i.*, s.name AS student_name FROM invites i JOIN students s ON s.id = i.student_id WHERE i.token_hash = ?`,
   ).bind(await sha256Hex(token)).first();
   if (!row) throw new HttpError(404, "Tautan tes ini tidak ditemukan. Minta tautan baru ke admin Titik Nol.");
-  if (row.used_at) throw new HttpError(410, "Tautan ini sudah dipakai untuk mengirim jawaban. Hubungi admin Titik Nol kalau kamu perlu mengulang.");
+  if (row.used_at) throw new HttpError(410, "Kode undangan ini sudah pernah dipakai untuk mengirim jawaban, jadi tautannya tidak bisa dibuka lagi. Hubungi admin Titik Nol kalau kamu perlu mengulang.");
   if (row.code_tries >= 3) throw new HttpError(423, "Kode sudah salah tiga kali, jadi undangan ini terkunci. Minta admin membuatkan undangan baru.");
   if (row.expires_at < nowSeconds()) throw new HttpError(410, "Tautan ini sudah kedaluwarsa. Minta tautan baru ke admin Titik Nol.");
   if (row.opens_at && row.opens_at > nowSeconds()) {
@@ -537,10 +538,12 @@ async function saveContact(request, env, attemptId) {
   const name = String(body?.name || "").replace(/\s+/g, " ").trim().slice(0, 80);
   const email = String(body?.email || "").trim().toLowerCase().slice(0, 160);
   const whatsapp = normalizeWhatsapp(body?.whatsapp);
+  const branch = branchKey(body?.branch);
 
   if (name.length < 2) throw new HttpError(400, "Nama harus terdiri dari minimal 2 karakter.");
   if (!isEmail(email)) throw new HttpError(400, "Alamat email belum benar. Periksa kembali penulisannya.");
   if (!whatsapp) throw new HttpError(400, "Nomor WhatsApp belum benar. Contoh penulisan yang benar: 08123456789.");
+  if (!branch) throw new HttpError(400, "Pilih cabang tempat kamu ingin belajar.", { field: "branch" });
 
   const attempt = await getAttempt(env, attemptId);
   if ((attempt.test_key || "placement") !== "placement") throw new HttpError(409, "Tes ini tidak memakai langkah pengisian data.");
@@ -555,7 +558,7 @@ async function saveContact(request, env, attemptId) {
   // The sends run in the background (packages/core/src/delivery.js). A channel that already
   // delivered for this attempt keeps its status, so a repeated contact step never sends it twice;
   // the check sits in SQL so a send finishing at the same moment cannot be overwritten.
-  const student = attempt.student_id ? { id: attempt.student_id, created: false } : await upsertStudentFromContact(env, { name, email, whatsapp });
+  const student = attempt.student_id ? { id: attempt.student_id, created: false } : await upsertStudentFromContact(env, { name, email, whatsapp, branch });
   // The private link to this result, sent by email and WhatsApp and used by the waiting screen.
   const resultToken = attempt.result_token || randomToken(24);
   const statements = [

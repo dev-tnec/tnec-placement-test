@@ -4,7 +4,7 @@ import {
   REC_MIMES, CHECK_SECONDS, recordingSupported, spanText, PER_MODE_CLIENT_GRACE,
 } from "./lib.js";
 import { createLiveWaveform } from "./live-waveform.js";
-import { Intro, TestScreen, SpeakingScreen, DetailsScreen, Dialogs, Footer } from "./screens.jsx";
+import { Intro, TestScreen, SpeakingScreen, DetailsScreen, Dialogs, ErrorScreen, Footer } from "./screens.jsx";
 
 export default function App() {
   const [config, setConfig] = useState(null);
@@ -12,6 +12,7 @@ export default function App() {
   const [inviteToken, setInviteToken] = useState("");
   const [notice, setNotice] = useState("");
   const [loadFailed, setLoadFailed] = useState("");
+  const [loadStatus, setLoadStatus] = useState(0);
   const [screen, setScreen] = useState("intro");
   const [consent, setConsent] = useState({ terms: false, privacy: false, honesty: false });
   const [code, setCode] = useState("");
@@ -37,7 +38,7 @@ export default function App() {
   const [fsWarning, setFsWarning] = useState(false);
   const [audioPlayed, setAudioPlayed] = useState(() => new Set());
   const [audioNote, setAudioNote] = useState("");
-  const [contact, setContact] = useState({ name: "", email: "", whatsapp: "" });
+  const [contact, setContact] = useState({ name: "", email: "", whatsapp: "", branch: "" });
   const [contactErrors, setContactErrors] = useState({});
   const [contactBusy, setContactBusy] = useState(false);
   const [stage, setStage] = useState("check");
@@ -224,6 +225,7 @@ export default function App() {
     }).catch((error) => {
       if (token && error.status) {
         setNotice(error.message);
+        setLoadStatus(error.status);
         setLoadFailed("invite");
       } else {
         setLoadFailed("network");
@@ -317,7 +319,7 @@ export default function App() {
     setVideoPlaying(false);
     setAudioPlayed(new Set());
     setAudioNote("");
-    setContact({ name: "", email: "", whatsapp: "" });
+    setContact({ name: "", email: "", whatsapp: "", branch: "" });
     setContactErrors({});
     setDialogs({ violation: false, end: false, submit: false, timeup: false });
     setLegal(null);
@@ -599,11 +601,12 @@ export default function App() {
     if (name.length < 2) errors.name = "Nama harus terdiri dari minimal 2 karakter.";
     if (!EMAIL_RE.test(email)) errors.email = "Alamat email belum benar. Periksa kembali penulisannya.";
     if (!normalizeWhatsapp(whatsapp)) errors.whatsapp = "Nomor WhatsApp belum benar. Contoh penulisan yang benar: 08123456789.";
+    if (!contact.branch) errors.branch = "Pilih cabang tempat kamu ingin belajar.";
     setContactErrors(errors);
     if (Object.keys(errors).length) return;
     setContactBusy(true);
     try {
-      const data = await api(`/api/attempts/${attempt.id}/contact`, { method: "POST", body: { name, email, whatsapp } });
+      const data = await api(`/api/attempts/${attempt.id}/contact`, { method: "POST", body: { name, email, whatsapp, branch: contact.branch } });
       if (data.resultToken) {
         window.location.assign(`/hasil?token=${encodeURIComponent(data.resultToken)}`);
         return;
@@ -1098,6 +1101,9 @@ export default function App() {
       <a className="skip-link" href="#main">Lewati ke konten</a>
       <main id="main">
         {screen === "intro" ? (
+          loadFailed === "invite" ? (
+            <ErrorScreen status={loadStatus} message={notice} onBack={() => { window.location.assign("/"); }} />
+          ) : (
           <Intro
             config={config}
             invite={inviteInfo}
@@ -1115,6 +1121,7 @@ export default function App() {
             onReload={() => window.location.reload()}
             titleRef={introTitleRef}
           />
+          )
         ) : null}
         {screen === "test" && attempt ? (
           <TestScreen

@@ -182,19 +182,21 @@ export function addActivity(env, studentId, type, text, by = null, meta = null, 
     .bind(studentId, at, type, String(text).slice(0, 2000), by, meta ? JSON.stringify(meta) : null);
 }
 
-/* Placement contact step: link the attempt to an existing student, or create a new lead. */
-export async function upsertStudentFromContact(env, { name, email, whatsapp }) {
+/* Placement contact step: link the attempt to an existing student, or create a new lead.
+   The branch answer fills an empty branch column only, so a later registration choice is
+   never overwritten by a repeated test. */
+export async function upsertStudentFromContact(env, { name, email, whatsapp, branch = null }) {
   const existing = await env.DB.prepare("SELECT * FROM students WHERE whatsapp = ? OR (email IS NOT NULL AND email = ?) ORDER BY whatsapp = ? DESC LIMIT 1")
     .bind(whatsapp, email, whatsapp).first();
   const now = nowSeconds();
   if (existing) {
-    await env.DB.prepare("UPDATE students SET email = COALESCE(email, ?), updated_at = ? WHERE id = ?").bind(email, now, existing.id).run();
+    await env.DB.prepare("UPDATE students SET email = COALESCE(email, ?), branch = COALESCE(branch, ?), updated_at = ? WHERE id = ?").bind(email, branch, now, existing.id).run();
     return { id: existing.id, created: false };
   }
   const id = newId("stu");
   await env.DB.batch([
-    env.DB.prepare(`INSERT INTO students (id, name, email, whatsapp, source, stage, created_at, updated_at)
-                    VALUES (?, ?, ?, ?, 'Placement test', 'baru', ?, ?)`).bind(id, name, email, whatsapp, now, now),
+    env.DB.prepare(`INSERT INTO students (id, name, email, whatsapp, branch, source, stage, created_at, updated_at)
+                    VALUES (?, ?, ?, ?, ?, 'Placement test', 'baru', ?, ?)`).bind(id, name, email, whatsapp, branch, now, now),
     addActivity(env, id, "system", "Masuk ke database dari placement test.", null, null, now),
   ]);
   return { id, created: true };

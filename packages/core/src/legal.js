@@ -1,7 +1,7 @@
 // Legal copy and public config. Bump CONSENT_VERSION whenever the text changes,
 // so every stored consent record points to the exact version the user saw.
 
-export const CONSENT_VERSION = "2026-11-20";
+export const CONSENT_VERSION = "2026-11-22";
 export const WHATSAPP = "6282333143544";
 // Fills the {{total}}, {{duration}}, {{strikes}}, and {{speakingSeconds}} tokens with the live test
 // settings, so the legal text always matches what the dashboard has configured.
@@ -64,7 +64,7 @@ export const TERMS = {
 
 export const PRIVACY = {
   title: "Kebijakan Privasi",
-  updated: "17 November 2026",
+  updated: "18 November 2026",
   sections: [
     {
       heading: "1. Pengendali data",
@@ -77,7 +77,7 @@ export const PRIVACY = {
     {
       heading: "2. Data yang kami kumpulkan",
       paragraphs: [
-        "Data identitas: nama lengkap, alamat email, dan nomor WhatsApp yang kamu isi setelah tes. Kalau kamu sudah terdaftar sebagai siswa, data ini juga bisa berasal dari pendaftaran di kantor kami, dan hasil pre-test atau post-test tercatat di data siswa kamu.",
+        "Data identitas: nama lengkap, alamat email, nomor WhatsApp, dan pilihan cabang tempat kamu ingin belajar, yang kamu isi setelah tes. Kalau kamu sudah terdaftar sebagai siswa, data ini juga bisa berasal dari pendaftaran di kantor kami, dan hasil pre-test atau post-test tercatat di data siswa kamu.",
         "Data pendaftaran dan komunikasi: program, periode, kelas, catatan tim, serta pesan WhatsApp yang kami kirim ke kamu.",
         "Data hasil tes: jawaban, skor, level, waktu mulai dan selesai, serta durasi pengerjaan.",
         "Rekaman suara: kalau tes memuat bagian speaking, kami menyimpan rekaman jawaban lisan kamu, transkrip yang dibuat dari rekaman itu, dan nilai speaking kamu.",

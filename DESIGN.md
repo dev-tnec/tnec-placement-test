@@ -173,9 +173,15 @@ The Listening audio sits in a white card above the question: 24px padding, a 1px
 
 ### Details
 
-A 1000px column with the stepper at the top, step 2 active. Below it a two-column layout: the left column carries the step eyebrow, a large headline, a short lead, and three benefit rows with small yellow check circles. The right column carries the white form panel with three fields and the navy primary button.
+A 1000px column with the stepper at the top, step 2 active. Below it a two-column layout: the left column carries the step eyebrow, a large headline, a short lead, and three benefit rows with small yellow check circles. The right column carries the white form panel with four fields and the navy primary button.
 
-The details screen never shows the score. The score is withheld until the contact form is saved, so the result is only revealed after the user gives their name, email, and WhatsApp.
+The fourth field is the branch choice: a legend asking where the student wants to learn, and a two by one grid of radio cards for Pare, Jogja, Medan, and Online. A radio card is a white label row with a 1px gray border, an 8px radius, 12px 14px padding, a native radio input with a navy accent color, and a 14px/600 label. The selected card gets the navy border and the standard 3px navy focus ring. On screens under 480px the grid becomes one column. The field carries the same red 12px error line as the other fields, and the form refuses to submit until one branch is picked.
+
+The details screen never shows the score. The score is withheld until the contact form is saved, so the result is only revealed after the user gives their name, email, WhatsApp, and branch choice.
+
+### Link error
+
+A used, expired, or locked invitation link opens a full-page error instead of the intro, in the manner of a 404 page. The narrow wrap centers one white card on the gray page: the HTTP status as a 64px/800 navy number, the title "Tautan tidak bisa dibuka" at heading size, the server's message in secondary text, and one navy primary button back to the start page. There is no hero, no consent panel, and no start button behind it. The heading takes focus on mount.
 
 ### Result
 
@@ -249,6 +255,14 @@ Native `<dialog>` with a 16px radius, 24px padding, and a navy backdrop at 72 pe
 ### Form fields
 
 A 48px input with a 1px gray border, 8px radius, 14px text, and a `--navy-700` focus border with a 3px navy ring at 14 percent. The label is 13px/600. The error line is 12px red and sits below the field. Invalid inputs keep the red border after submission.
+
+### Rich passage text
+
+Passages carry a markdown-lite format that both apps render through the same parser in `packages/core/src/rich.js`: paragraphs separated by a blank line, bullet lines starting with "- ", numbered lines starting with "1. ", and the inline tags `<b>`, `<i>`, and `<u>`. Anything the parser does not know stays literal text, so existing passages never change on their own. The renderer builds React elements, never innerHTML.
+
+In the editor, a formatting bar sits flush on top of the passage textarea: a gray-50 strip with a gray border that shares the textarea's top corners, holding icon buttons for bold, italic, underline, bullet list, and numbered list, separated by a 1px gray divider. The buttons edit the textarea's selection in place, so the form stays uncontrolled. The bar rides on the passage fields of the question editor and the section dialog, and the "Pratinjau Soal" action opens the question as the student sees it: the badge, the passage with its rich text, the prompt, and the answer form, with the answer key deliberately unmarked.
+
+In the student runner the passage block keeps its surface fill and label, and its paragraphs and lists render through the same parser. Lists restore the browser's disc and decimal markers with a 22px indent; the app's global list reset does not apply inside a rich passage.
 
 ### Notices
 
@@ -336,13 +350,15 @@ Counts, durations, and the violation limit in the copy are not hardcoded. Elemen
 
 ## 17. Pre-test and post-test screens
 
-A pre-test or post-test opens from a personal link, `/?undangan=<token>`, that the team sends from the dashboard. The intro keeps the same layout, greets the student by first name, hides the contact step and the six level fact, and rewrites the data rules for an enrolled student. There is no details screen. After submit the browser opens the result report at `/hasil?attempt=<id>`, where the score card shows the value out of 100 and the gap row compares it with the pass score on the post-test. A used, expired, or closed link shows a yellow notice in the hero, with a 1px border and no colored edge, and the start button stays disabled.
+A pre-test or post-test opens from a personal link, `/?undangan=<token>`, that the team sends from the dashboard. The intro keeps the same layout, greets the student by first name, hides the contact step and the six level fact, and rewrites the data rules for an enrolled student. There is no details screen. After submit the browser opens the result report at `/hasil?attempt=<id>`, where the score card shows the value out of 100 and the gap row compares it with the pass score on the post-test. A used, expired, locked, or unknown link shows the full-page link error screen. A test that is merely closed still shows the yellow notice in the hero, with a 1px border and no colored edge, and the start button stays disabled.
 
 ## 18. Dashboard
 
 The internal dashboard at `/admin` is React, bundled with Node and esbuild from `apps/admin/client`, and its CSS is `apps/admin/client/src/admin.css`; the build output is committed to `apps/admin/public/admin` so the server only serves files. The dashboard server generates the shell from `admin-manifest.json`, so there is no HTML file. It uses the same tokens with the same color rule: primary and destructive buttons are navy, red is only for status dots, error text, and low accuracy bars, and focus rings are navy. Status is a dot plus a text label. There are no colored edge stripes.
 
 The IELTS Mockup Sesi tab follows the same panel and table pattern: the session list is one table, the session page is a header with actions, one toolbar with the roster and email quota facts, and one roster table. The import dialog is the native dialog with a toolbar, the file field, and a preview table inside `dialog__body`.
+
+The Submission menu item is one page for every attempt across the four tests, in the same panel and table pattern: status chips, a search field, a test filter, and a branch filter in the toolbar, then one table whose first column names the test. A row opens the submission detail of its own test. The per-test Submission tab and Database Siswa carry the same branch filter.
 
 A page header is the title and its actions, with no description under the title. The owner rejected explanatory lines there on 16 November 2026. The only extra item allowed is a test page's Ditutup status when that test is closed. Record pages keep their single line of facts, such as a student's email and WhatsApp number or a submission's start time and device.
 
