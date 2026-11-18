@@ -367,8 +367,8 @@ function placementReport(result, programs) {
     name,
     code: result.code || "",
     date: dateText(result.date),
-    summary: level.summary || "Hasil tes penempatan kamu sudah selesai diproses.",
-    score: { value: String(score), max: `/ ${total}`, scale: `Skor ${score} dari ${total}`, labelTop: "Skor Tes Penempatan", label: level.label || "-", percent, caption: "Level ini dipakai untuk menempatkan kamu di kelas yang paling sesuai." },
+    summary: level.summary || "Hasil Placement Test kamu sudah selesai diproses.",
+    score: { value: String(score), max: `/ ${total}`, scale: `Skor ${score} dari ${total}`, labelTop: "Skor Placement Test", label: level.label || "-", percent, caption: "Level ini dipakai untuk menempatkan kamu di kelas yang paling sesuai." },
     meta: [
       { label: "Program", value: level.program || "-" },
       { label: "Tanggal Tes", value: dateText(result.date) },

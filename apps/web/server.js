@@ -37,9 +37,9 @@ function runnerShell() {
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="description" content="Tes penempatan online Titik Nol English Course, lengkap dengan level, skor, dan rekomendasi program.">
+  <meta name="description" content="Placement Test online Titik Nol English Course, lengkap dengan level, skor, dan rekomendasi program.">
   <meta name="theme-color" content="#0A1B38">
-  <title>Tes Penempatan Online - Titik Nol English Course</title>
+  <title>Placement Test - Titik Nol English Course</title>
   <link rel="icon" href="/favicon.png" type="image/png">
   ${styleTag(runner().css)}
   ${scriptTag(runner().js)}

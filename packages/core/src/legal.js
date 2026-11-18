@@ -21,7 +21,7 @@ export const TERMS = {
       heading: "1. Tentang tes ini",
       paragraphs: [
         "Tes ini dibuat oleh Titik Nol English Course untuk mengukur kemampuan bahasa Inggris kamu. Tes ini terdiri dari {{total}} soal, dengan pilihan ganda, isian, dan pada tes tertentu esai, dan durasinya {{duration}}.",
-        "Kalau tes memuat bagian speaking, kamu menjawab pertanyaan pewawancara satu per satu dengan berbicara dalam bahasa Inggris, dengan waktu yang tampil di layar. Pada tes penempatan ada beberapa pertanyaan speaking, masing-masing paling lama {{speakingSeconds}} detik; pada IELTS Mockup ada tiga bagian dengan beberapa pertanyaan. Rekaman itu dinilai otomatis oleh sistem kami, atau oleh tim kami kalau penilaian otomatis gagal. Nilai speaking ditampilkan terpisah dan tidak mengubah level dari soal pilihan ganda.",
+        "Kalau tes memuat bagian speaking, kamu menjawab pertanyaan pewawancara satu per satu dengan berbicara dalam bahasa Inggris, dengan waktu yang tampil di layar. Pada Placement Test ada beberapa pertanyaan speaking, masing-masing paling lama {{speakingSeconds}} detik; pada IELTS Mockup ada tiga bagian dengan beberapa pertanyaan. Rekaman itu dinilai otomatis oleh sistem kami, atau oleh tim kami kalau penilaian otomatis gagal. Nilai speaking ditampilkan terpisah dan tidak mengubah level dari soal pilihan ganda.",
         "Kalau tes memuat bagian writing, kamu menulis esai sesuai tugas yang tampil dengan jumlah kata minimal yang tertera. Esai dinilai dengan bantuan AI memakai kriteria IELTS Writing, dan hasilnya berupa perkiraan band, bukan penilaian resmi.",
         "Hasil tes ini dipakai untuk menentukan kelas atau memantau perkembangan belajar, dan bukan sertifikat resmi. Jangan memakai hasil ini sebagai bukti kemampuan bahasa Inggris untuk keperluan formal.",
       ],
@@ -71,7 +71,7 @@ export const PRIVACY = {
       paragraphs: [
         "Titik Nol English Course, " +
           CAMPUS_ADDRESS +
-          ", adalah pengendali data pribadi yang dikumpulkan melalui tes penempatan ini.",
+          ", adalah pengendali data pribadi yang dikumpulkan melalui Placement Test ini.",
       ],
     },
     {

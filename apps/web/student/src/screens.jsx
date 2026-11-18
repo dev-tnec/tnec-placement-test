@@ -143,7 +143,7 @@ const ERROR_STATES = {
   },
 };
 
-export function ErrorScreen({ status, message, code, token, whatsapp, onBack }) {
+export function ErrorScreen({ status, message, code, testName, token, whatsapp, onBack }) {
   const titleRef = useRef(null);
   const [copied, setCopied] = useState(false);
   useEffect(() => { titleRef.current?.focus(); }, []);
@@ -185,7 +185,7 @@ export function ErrorScreen({ status, message, code, token, whatsapp, onBack }) 
               <div className="ticket-box" aria-label="Detail status tautan">
                 <div className="ticket-item">
                   <span className="ticket-item__label">Jenis Asesmen</span>
-                  <span className="ticket-item__val">{token ? "Ujian Terundang" : "Tautan Undangan"}</span>
+                  <span className="ticket-item__val">{testName}</span>
                 </div>
                 <div className="ticket-item">
                   <span className="ticket-item__label">Status Akses</span>
@@ -210,7 +210,7 @@ export function ErrorScreen({ status, message, code, token, whatsapp, onBack }) 
                 </li>
                 <li className="step-row">
                   <span className="step-row__num" aria-hidden="true">3</span>
-                  <span>Jika kamu ingin mengukur level bahasa Inggris umum secara cepat, kamu tetap dapat mengikuti <strong>Tes Penempatan Online</strong> gratis tanpa kode akses.</span>
+                  <span>Jika kamu ingin mengukur level bahasa Inggris umum secara cepat, kamu tetap dapat mengikuti <strong>Placement Test</strong> gratis tanpa kode akses.</span>
                 </li>
               </ol>
               <div className="actions">
@@ -219,7 +219,7 @@ export function ErrorScreen({ status, message, code, token, whatsapp, onBack }) 
                   <span>Minta Kode Baru via WhatsApp</span>
                 </a>
                 <a className="btn-error btn-error--secondary" href="/" onClick={(event) => { event.preventDefault(); onBack(); }}>
-                  <span>Ke Tes Penempatan Publik</span>
+                  <span>Ke Placement Test Publik</span>
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6" /></svg>
                 </a>
               </div>
@@ -325,13 +325,13 @@ export function Intro({ config, invite, consent, onConsent, code, onCode, codeEr
     otpRefs.current[focusIndex]?.focus();
   };
 
-  const badge = isInvite ? "Undangan Khusus" : "Akses Terbuka";
+  const badge = isInvite ? "Undangan Khusus" : "Placement Test";
   const sessionLabel = isIelts
     ? `${invite.packageName || "Paket"} • Kandidat: ${invite.firstName}`
     : isInvite
       ? `${invite.testName} • Kandidat: ${invite.firstName}`
-      : "Tes Penempatan Online • Publik";
-  const eyebrow = isIelts ? "Simulasi IELTS Resmi TNEC" : isInvite ? invite.testName : "Asesmen Penempatan Level";
+      : "Placement Test • Publik";
+  const eyebrow = isIelts ? "Simulasi IELTS Resmi TNEC" : isInvite ? invite.testName : "Placement Test";
 
   const title = sectionsMode
     ? <>Halo {invite.firstName}, bersiap untuk IELTS Mockup dalam <span className="hero__accent">{minutes} menit</span>.</>
@@ -404,7 +404,7 @@ export function Intro({ config, invite, consent, onConsent, code, onCode, codeEr
     `Tes terdiri dari ${total} soal pilihan ganda dalam waktu ${minutes} menit tanpa jeda. Tombol kirim aktif setelah semua soal dijawab.`,
     "Layar otomatis masuk mode penuh saat tes dimulai. Dilarang mengecilkan layar atau membuka tab/aplikasi lain.",
     `Setiap perpindahan tab dicatat. Pada pelanggaran ke-${strikes} tes dijeda sementara; jawaban tersimpan jika memilih lanjut.`,
-    "Kerjakan sendiri tanpa kamus, penerjemah, AI, atau bantuan orang lain agar hasil penempatan akurat.",
+    "Kerjakan sendiri tanpa kamus, penerjemah, AI, atau bantuan orang lain agar hasil Placement Test akurat.",
   ];
   const rulesRight = sectionsMode ? [
     "Sistem menyimpan jawaban, skor, durasi pengerjaan, dan catatan pengawasan pada profil siswa Titik Nol kamu.",
@@ -1015,7 +1015,7 @@ export function DetailsScreen({ values, errors, busy, speakingOn, total, onChang
   return (
     <section className="screen" id="screen-details" aria-labelledby="details-title">
       <div className="wrap wrap--details">
-        <ol className="stepper stepper--light" aria-label="Tahapan tes penempatan">
+        <ol className="stepper stepper--light" aria-label="Tahapan Placement Test">
           <li className="stepper__step is-done"><span className="stepper__bar" /><span className="stepper__index">01</span><span className="stepper__title">Mengerjakan tes</span><span className="stepper__meta">Selesai</span></li>
           <li className="stepper__step is-active"><span className="stepper__bar" /><span className="stepper__index">02</span><span className="stepper__title">Melengkapi data</span><span className="stepper__meta">Sekarang</span></li>
           <li className="stepper__step"><span className="stepper__bar" /><span className="stepper__index">03</span><span className="stepper__title">Melihat hasil</span><span className="stepper__meta">Level dan rekomendasi</span></li>

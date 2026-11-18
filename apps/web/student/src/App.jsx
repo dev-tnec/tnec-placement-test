@@ -18,6 +18,7 @@ export default function App() {
   const [code, setCode] = useState("");
   const [codeError, setCodeError] = useState("");
   const [errorCode, setErrorCode] = useState(null);
+  const [errorTest, setErrorTest] = useState(null);
   const [startBusy, setStartBusy] = useState(false);
   const [attempt, setAttempt] = useState(null);
   const [index, setIndex] = useState(0);
@@ -229,7 +230,7 @@ export default function App() {
       if (!data.open) {
         setNotice(data.invite
           ? `${data.invite.testName} sedang ditutup sementara. Hubungi admin atau tutor kamu di Titik Nol untuk menanyakan jadwalnya.`
-          : "Tes penempatan sedang ditutup sementara. Silakan coba lagi nanti, atau hubungi admin Titik Nol lewat WhatsApp.");
+          : "Tes Placement Test sedang ditutup sementara. Silakan coba lagi nanti, atau hubungi admin Titik Nol lewat WhatsApp.");
       }
       if (data.invite) document.title = `${data.invite.testName} - Titik Nol English Course`;
     }).catch((error) => {
@@ -237,6 +238,7 @@ export default function App() {
         setNotice(error.message);
         setLoadStatus(error.status);
         setErrorCode(error.code || null);
+        setErrorTest(error.test || null);
         setLoadFailed("invite");
       } else {
         setLoadFailed("network");
@@ -1143,7 +1145,7 @@ export default function App() {
       <main id="main">
         {screen === "intro" ? (
           loadFailed === "invite" ? (
-            <ErrorScreen status={loadStatus} message={notice} code={errorCode} token={inviteToken} whatsapp={config?.whatsapp || "6282333143544"} onBack={() => { window.location.assign("/"); }} />
+            <ErrorScreen status={loadStatus} message={notice} code={errorCode} testName={errorTest || "Placement Test"} token={inviteToken} whatsapp={config?.whatsapp || "6282333143544"} onBack={() => { window.location.assign("/"); }} />
           ) : (
           <Intro
             config={config}

@@ -110,10 +110,10 @@ function resultLinkHtml(url) {
 export function buildResultEmail({ name, email, score, total, level, speaking = null, resultUrl = null }) {
   const safeName = escapeHtml(name);
   const waLink = `https://wa.me/${WHATSAPP}?text=${encodeURIComponent(
-    `Halo Admin Titik Nol, saya ${name}. Saya baru selesai mengerjakan tes penempatan dengan hasil ${level.label} (${score} dari ${total}) dan ingin berkonsultasi tentang program yang sesuai.`,
+    `Halo Admin Titik Nol, saya ${name}. Saya baru selesai mengerjakan Placement Test dengan hasil ${level.label} (${score} dari ${total}) dan ingin berkonsultasi tentang program yang sesuai.`,
   )}`;
 
-  const subject = `Hasil Tes Penempatan Kamu: ${level.label} (${score}/${total})${speaking ? `, Speaking ${speaking.cefr}` : ""}`;
+  const subject = `Hasil Placement Test Kamu: ${level.label} (${score}/${total})${speaking ? `, Speaking ${speaking.cefr}` : ""}`;
 
   const html = `<!DOCTYPE html>
 <html lang="id">
@@ -126,12 +126,12 @@ export function buildResultEmail({ name, email, score, total, level, speaking = 
   <div style="max-width:600px;margin:0 auto;padding:24px 16px;">
     <div style="background:${NAVY};border-radius:16px 16px 0 0;padding:28px 32px;">
       <div style="font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:${YELLOW};font-weight:700;">Titik Nol English Course</div>
-      <h1 style="margin:8px 0 0;font-size:26px;line-height:1.2;color:#FFFFFF;font-weight:800;">Hasil Tes Penempatan</h1>
+      <h1 style="margin:8px 0 0;font-size:26px;line-height:1.2;color:#FFFFFF;font-weight:800;">Hasil Placement Test</h1>
     </div>
     <div style="background:#FFFFFF;border:1px solid ${BORDER};border-top:0;border-radius:0 0 16px 16px;padding:32px;">
       <p style="margin:0 0 20px;font-size:16px;line-height:1.6;">Halo ${safeName},</p>
       <p style="margin:0 0 24px;font-size:16px;line-height:1.6;color:${GRAY};">
-        Terima kasih sudah mengerjakan tes penempatan. Berikut hasil yang kami hitung dari jawaban kamu.
+        Terima kasih sudah mengerjakan Placement Test. Berikut hasil yang kami hitung dari jawaban kamu.
       </p>
 
       <div style="background:${SURFACE};border:1px solid ${BORDER};border-radius:12px;padding:24px;text-align:center;margin:0 0 24px;">
@@ -172,7 +172,7 @@ export function buildResultEmail({ name, email, score, total, level, speaking = 
   const text = [
     `Halo ${name},`,
     "",
-    "Terima kasih sudah mengerjakan tes penempatan Titik Nol English Course.",
+    "Terima kasih sudah mengerjakan Placement Test Titik Nol English Course.",
     "",
     `Level kamu: ${level.label}`,
     `Skor: ${score} dari ${total}`,

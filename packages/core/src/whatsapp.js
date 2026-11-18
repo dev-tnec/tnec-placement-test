@@ -81,7 +81,7 @@ const NO_CERTIFICATE = "_Hasil ini dipakai untuk penempatan kelas dan bukan sert
 function buildSpeakingWhatsApp(first, { score, total, level, speaking: sp, resultUrl }) {
   const program = String(level.program || "").replace(/\.$/, "");
   const head = [
-    `Halo ${first}, hasil tes penempatan kamu sudah siap.`,
+    `Halo ${first}, hasil Placement Test kamu sudah siap.`,
     "",
     `Level: ${level.label}`,
     `Skor tes: ${score} dari ${total}`,
@@ -112,7 +112,7 @@ export function buildResultWhatsApp({ name, score, total, level, speaking = null
   if (speaking) return buildSpeakingWhatsApp(first, { score, total, level, speaking, resultUrl });
   // Without a speaking part the message stays as it was, plus the result link.
   return [
-    `Halo ${first}, terima kasih sudah mengerjakan tes penempatan Titik Nol English Course.`,
+    `Halo ${first}, terima kasih sudah mengerjakan Placement Test Titik Nol English Course.`,
     "",
     `Skor kamu ${score} dari ${total}, jadi level kamu *${level.label}*.`,
     `Program yang kami sarankan: *${level.program}*.`,

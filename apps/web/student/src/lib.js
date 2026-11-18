@@ -46,6 +46,7 @@ export async function api(path, { method = "GET", body, headers } = {}) {
     const error = new Error(data?.error || "Permintaan gagal diproses. Silakan coba lagi.");
     error.status = response.status;
     error.code = data?.code || null;
+    error.test = data?.test || null;
     throw error;
   }
   return data;
