@@ -17,6 +17,7 @@ export default function App() {
   const [consent, setConsent] = useState({ terms: false, privacy: false, honesty: false });
   const [code, setCode] = useState("");
   const [codeError, setCodeError] = useState("");
+  const [errorCode, setErrorCode] = useState(null);
   const [startBusy, setStartBusy] = useState(false);
   const [attempt, setAttempt] = useState(null);
   const [index, setIndex] = useState(0);
@@ -235,6 +236,7 @@ export default function App() {
       if (token && error.status) {
         setNotice(error.message);
         setLoadStatus(error.status);
+        setErrorCode(error.code || null);
         setLoadFailed("invite");
       } else {
         setLoadFailed("network");
@@ -1141,7 +1143,7 @@ export default function App() {
       <main id="main">
         {screen === "intro" ? (
           loadFailed === "invite" ? (
-            <ErrorScreen status={loadStatus} message={notice} onBack={() => { window.location.assign("/"); }} />
+            <ErrorScreen status={loadStatus} message={notice} code={errorCode} token={inviteToken} whatsapp={config?.whatsapp || "6282333143544"} onBack={() => { window.location.assign("/"); }} />
           ) : (
           <Intro
             config={config}

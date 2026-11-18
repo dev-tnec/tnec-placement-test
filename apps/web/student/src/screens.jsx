@@ -52,10 +52,6 @@ export function Footer() {
   );
 }
 
-function CheckIcon() {
-  return <span className="check__box" aria-hidden="true" />;
-}
-
 /* Inline runs of a parsed passage: images, then b, i, and u wrap each other, everything else is text. */
 const runNodes = (runs) => runs.map((run, i) => {
   if (run.image) return <img className="rt__image" src={run.image} alt={run.alt || ""} key={i} />;
@@ -96,259 +92,571 @@ export function RichText({ value, id, className = "" }) {
   );
 }
 
-/* A used, expired, or locked invite opens this full-page error instead of the intro, like a
-   404 page: the status code, the message from the server, and a way back to the start. */
-export function ErrorScreen({ status, message, onBack }) {
+/* The expired/used/invalid invitation page, converted 1:1 from
+   docs/assets/tnec_expired_invitation_page.html. The server's error code picks the state; the
+   reference is the token fragment the student actually holds so the team can find the row. */
+const ERROR_STATES = {
+  invite_used: {
+    httpTag: "HTTP 410 • INVITE_REDEEMED",
+    badge: "Sudah Digunakan",
+    title: "Kode akses undangan ini sudah pernah digunakan.",
+    lead: "Setiap kode undangan hanya berlaku untuk satu kali pengerjaan sesi ujian. Jika sesi kamu terputus karena kendala teknis, hubungi admin Titik Nol untuk verifikasi ulang.",
+    status: "TERPAKAI (1/1)",
+    diag: "ALREADY_USED",
+    waText: "Halo Admin TNEC, kode undangan ujian saya tercatat sudah terpakai (Ref: %REF%). Mohon bantuan pengecekan sesi saya.",
+  },
+  invite_expired: {
+    httpTag: "HTTP 410 • INVITE_EXPIRED",
+    badge: "Masa Berlaku Habis",
+    title: "Tautan atau kode akses ujian ini sudah kedaluwarsa.",
+    lead: "Demi keamanan evaluasi dan keakuratan jadwal sesi, tautan undangan hanya berlaku dalam batas waktu tertentu yang tertera pada pesan WhatsApp kamu.",
+    status: "KEDALUWARSA",
+    diag: "EXPIRED",
+    waText: "Halo Admin TNEC, tautan undangan ujian saya sudah kedaluwarsa (Ref: %REF%). Mohon bantuannya untuk pembaruan kode akses.",
+  },
+  invite_locked: {
+    httpTag: "HTTP 423 • INVITE_LOCKED",
+    badge: "Terkunci Salah Kode",
+    title: "Kode akses salah tiga kali, jadi undangan ini terkunci.",
+    lead: "Demi keamanan sesi ujian, undangan yang salah memasukkan kode tiga kali otomatis terkunci. Hubungi admin Titik Nol untuk mendapatkan undangan baru.",
+    status: "TERKUNCI",
+    diag: "LOCKED",
+    waText: "Halo Admin TNEC, undangan ujian saya terkunci karena salah kode tiga kali (Ref: %REF%). Mohon dibuatkan undangan baru.",
+  },
+  invite_not_open_yet: {
+    httpTag: "HTTP 423 • INVITE_NOT_OPEN",
+    badge: "Belum Dibuka",
+    title: "Tautan undangan ini belum bisa dibuka.",
+    lead: "Sesi ujian kamu sudah dijadwalkan, dan tautan ini baru aktif pada waktu yang tertera pada pesan WhatsApp kamu. Buka kembali tautan ini nanti.",
+    status: "BELUM DIBUKA",
+    diag: "NOT_OPEN_YET",
+    waText: "Halo Admin TNEC, tautan undangan ujian saya belum bisa dibuka (Ref: %REF%). Mohon konfirmasi jadwal sesi saya.",
+  },
+  invalid: {
+    httpTag: "HTTP 404 • INVITE_NOT_FOUND",
+    badge: "Tautan Tidak Ditemukan",
+    title: "Tautan undangan ujian tidak valid atau sudah ditarik.",
+    lead: "Pastikan kamu membuka tautan secara utuh langsung dari pesan resmi WhatsApp Titik Nol English Course tanpa ada karakter yang terpotong.",
+    status: "TIDAK VALID",
+    diag: "NOT_FOUND",
+    waText: "Halo Admin TNEC, tautan undangan ujian saya tidak valid/404 (Ref: %REF%). Mohon bantuannya untuk mengirimkan tautan yang benar.",
+  },
+};
+
+export function ErrorScreen({ status, message, code, token, whatsapp, onBack }) {
   const titleRef = useRef(null);
+  const [copied, setCopied] = useState(false);
   useEffect(() => { titleRef.current?.focus(); }, []);
+  // The exact server code wins; a bare 404 is the invalid state, anything unknown falls back
+  // to invalid too because every other invite failure carries its code.
+  const state = ERROR_STATES[code] || (status === 423 ? ERROR_STATES.invite_not_open_yet : ERROR_STATES.invalid);
+  const ref = token ? `#${token.slice(0, 8).toUpperCase()}` : "#TIDAK-DIKETAHUI";
+  const waHref = `https://wa.me/${whatsapp}?text=${encodeURIComponent(state.waText.replace("%REF%", ref))}`;
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(`${ref} | ${state.diag}`);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1800);
+    } catch { /* clipboard blocked: the reference stays visible to read out */ }
+  };
   return (
     <section className="screen" id="screen-error" aria-labelledby="error-title">
-      <div className="wrap wrap--narrow error-wrap">
-        <div className="error-card">
-          <p className="error-card__code" aria-hidden="true">{status || 404}</p>
-          <h1 className="error-card__title" id="error-title" tabIndex={-1} ref={titleRef}>Tautan tidak bisa dibuka</h1>
-          <p className="error-card__text">{message}</p>
-          <button className="btn btn--primary btn--lg" type="button" onClick={onBack}>Kembali ke halaman awal</button>
+      <header className="hero-band">
+        <div className="wrap">
+          <div className="topbar">
+            <img className="brand-logo" src="/assets/logo-titik-nol-white.png" alt="Titik Nol English Course" width="136" height="23" />
+            <span className="status-tag">
+              <span className="status-tag__dot" aria-hidden="true" />
+              <span>{state.httpTag}</span>
+            </span>
+          </div>
         </div>
-      </div>
+      </header>
+      <main className="main-stage">
+        <div className="wrap">
+          <section className="status-card" aria-labelledby="error-title">
+            <div className="status-card__top">
+              <div className="alert-badge">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" aria-hidden="true"><circle cx="12" cy="12" r="10" /><polyline points="12 6 12 12 16 14" /></svg>
+                <span>{state.badge}</span>
+              </div>
+              <h1 className="status-card__title" id="error-title" tabIndex={-1} ref={titleRef}>{state.title}</h1>
+              <p className="status-card__lead">{message || state.lead}</p>
+              <div className="ticket-box" aria-label="Detail status tautan">
+                <div className="ticket-item">
+                  <span className="ticket-item__label">Jenis Asesmen</span>
+                  <span className="ticket-item__val">{token ? "Ujian Terundang" : "Tautan Undangan"}</span>
+                </div>
+                <div className="ticket-item">
+                  <span className="ticket-item__label">Status Akses</span>
+                  <span className="ticket-item__val ticket-item__val--red">{state.status}</span>
+                </div>
+                <div className="ticket-item">
+                  <span className="ticket-item__label">Kode Referensi</span>
+                  <span className="ticket-item__val">{ref}</span>
+                </div>
+              </div>
+            </div>
+            <div className="status-card__body">
+              <h2 className="next-heading">Langkah yang bisa kamu lakukan</h2>
+              <ol className="steps-list">
+                <li className="step-row">
+                  <span className="step-row__num" aria-hidden="true">1</span>
+                  <span>Periksa kembali pesan WhatsApp terbaru dari admin Titik Nol untuk memastikan tidak ada tautan undangan pengganti.</span>
+                </li>
+                <li className="step-row">
+                  <span className="step-row__num" aria-hidden="true">2</span>
+                  <span>Hubungi tim akademik TNEC dengan menyertakan kode referensi di bawah agar kami dapat menerbitkan kode akses baru.</span>
+                </li>
+                <li className="step-row">
+                  <span className="step-row__num" aria-hidden="true">3</span>
+                  <span>Jika kamu ingin mengukur level bahasa Inggris umum secara cepat, kamu tetap dapat mengikuti <strong>Tes Penempatan Online</strong> gratis tanpa kode akses.</span>
+                </li>
+              </ol>
+              <div className="actions">
+                <a className="btn-error btn-error--primary" href={waHref} target="_blank" rel="noopener">
+                  <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" aria-hidden="true"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z" /></svg>
+                  <span>Minta Kode Baru via WhatsApp</span>
+                </a>
+                <a className="btn-error btn-error--secondary" href="/" onClick={(event) => { event.preventDefault(); onBack(); }}>
+                  <span>Ke Tes Penempatan Publik</span>
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6" /></svg>
+                </a>
+              </div>
+              <div className="copy-bar">
+                <span>Info diagnostik untuk admin: <span className="copy-bar__code">{ref} | {state.diag}</span></span>
+                <button type="button" className="copy-btn" onClick={copy}>{copied ? "Tersalin!" : "Salin kode"}</button>
+              </div>
+            </div>
+          </section>
+        </div>
+      </main>
     </section>
   );
 }
 
+/* One of the six segmented code boxes. Controlled: value comes from the parent's code string,
+   so paste, backspace, and auto-advance all stay in one state. */
+function OtpBox({ index, char, filled, hasError, autoFocus, onChange, onBackspace, onArrow, onPaste, inputRef }) {
+  return (
+    <input
+      className={`otp-input${filled ? " is-filled" : ""}${hasError ? " is-error" : ""}`}
+      id={`otp-${index}`}
+      type="text"
+      maxLength={1}
+      autoComplete="off"
+      spellCheck="false"
+      inputMode="text"
+      aria-label={`Karakter ${index + 1}`}
+      value={char}
+      ref={inputRef}
+      onChange={(event) => {
+        const clean = event.target.value.replace(/[^a-zA-Z0-9]/g, "").toUpperCase();
+        onChange(index, clean.slice(-1));
+      }}
+      onKeyDown={(event) => {
+        if (event.key === "Backspace" && !char) { event.preventDefault(); onBackspace(index); }
+        else if (event.key === "ArrowLeft" && index > 0) { event.preventDefault(); onArrow(index - 1); }
+        else if (event.key === "ArrowRight" && index < 5) { event.preventDefault(); onArrow(index + 1); }
+      }}
+      onPaste={(event) => {
+        event.preventDefault();
+        const pasted = event.clipboardData.getData("text").replace(/[^a-zA-Z0-9]/g, "").toUpperCase().slice(0, 6);
+        if (pasted) onPaste(pasted);
+      }}
+    />
+  );
+}
+
+/* The front page, converted 1:1 from docs/assets/tnec_online_assessment_front_page_revamp.html:
+   a navy hero with real metrics, a briefing stack (IELTS module timeline, flow steps, rules
+   pills plus a details drawer), and a sticky launch console with the segmented code input and
+   the three consent checkboxes. The mode is the real context: no invite is the Placement
+   variant, an ielts-mockup invite is the IELTS variant, other invites reuse the placement
+   layout with their own copy. */
 export function Intro({ config, invite, consent, onConsent, code, onCode, codeError, codeInputRef, busy, onStart, onOpenLegal, notice, loadFailed, onReload, titleRef }) {
   const total = config?.totalQuestions ?? 25;
   const seconds = config?.durationSeconds ?? 300;
-  const duration = spanText(seconds);
-  const wholeMinutes = seconds % 60 === 0;
-  const timeNum = wholeMinutes ? seconds / 60 : seconds;
-  const timeUnit = wholeMinutes ? "menit" : "detik";
+  const minutes = Math.max(1, Math.round(seconds / 60));
   const strikes = config?.maxViolations ?? 3;
-  const perMode = config?.timeMode === "per";
   const isInvite = Boolean(invite);
   const isIelts = invite?.test === "ielts-mockup";
-  const isPre = invite?.test === "pre";
-  const sectionsMode = config?.timeMode === "sections" && isIelts;
-  const sectionText = (config?.sectionPlan || []).map((s) => `${s.skill} ${Math.round(s.seconds / 60)} menit`).join(", ");
+  const plan = config?.sectionPlan || [];
+  const sectionsMode = isIelts && plan.length > 0;
+  const skillCounts = config?.skillCounts || {};
+  const listeningMin = Math.round((plan.find((s) => s.skill === "Listening")?.seconds || 1920) / 60);
+  const readingMin = Math.round((plan.find((s) => s.skill === "Reading")?.seconds || 3600) / 60);
+  const writingMin = Math.round((plan.find((s) => s.skill === "Writing")?.seconds || 3600) / 60);
+  const speakingMin = Math.round((plan.find((s) => s.skill === "Speaking")?.seconds || 900) / 60);
   const needsCode = Boolean(invite?.needsCode);
   const allConsent = consent.terms && consent.privacy && consent.honesty;
-  const codeOk = !needsCode || code.trim().length >= 6;
+  // The App keeps the code as one string; interior holes are spaces so a cleared middle box
+  // never shifts the later characters left. Completeness ignores the spaces.
+  const otpSlots = useMemo(() => {
+    const padded = (code || "").padEnd(6, " ").slice(0, 6);
+    return Array.from({ length: 6 }, (_, i) => (padded[i] === " " ? "" : padded[i]));
+  }, [code]);
+  const codeLength = code.replace(/\s/g, "").length;
+  const codeOk = !needsCode || codeLength >= 6;
   const canStart = Boolean(config?.open) && allConsent && codeOk && !busy;
   const disabled = loadFailed === "network" ? false : loadFailed ? true : !canStart;
+  const otpRefs = useRef([]);
+  const otpRefCb = (index) => (element) => { otpRefs.current[index] = element; };
+  // The App passes one ref for the single code input; point it at the first box.
+  const codeRefCb = (element) => {
+    otpRefs.current[0] = element;
+    if (codeInputRef) codeInputRef.current = element;
+  };
+  const setOtp = (index, value) => {
+    const slots = [...otpSlots];
+    slots[index] = value;
+    onCode(slots.map((slot) => slot || " ").join(""));
+    if (value && index < 5) otpRefs.current[index + 1]?.focus();
+  };
+  const onOtpBackspace = (index) => {
+    const slots = [...otpSlots];
+    slots[index - 1] = "";
+    onCode(slots.map((slot) => slot || " ").join(""));
+    otpRefs.current[index - 1]?.focus();
+  };
+  const onOtpPaste = (pasted) => {
+    onCode(pasted);
+    const focusIndex = Math.min(pasted.length, 5);
+    otpRefs.current[focusIndex]?.focus();
+  };
 
-  const title = invite ? (
-    isIelts
-      ? <>Halo {invite.firstName}, kerjakan IELTS Mockup {invite.packageName || "paket Desember"} dalam <span className="hero__accent">{duration}</span>.</>
-      : <>Halo {invite.firstName}, selesaikan {invite.testName.toLowerCase()} kamu dalam <span className="hero__accent">{duration}</span>.</>
-  ) : (
-    <>Kenali level bahasa Inggris kamu dalam <span className="hero__accent">{duration}</span>.</>
-  );
+  const badge = isInvite ? "Undangan Khusus" : "Akses Terbuka";
+  const sessionLabel = isIelts
+    ? `${invite.packageName || "Paket"} • Kandidat: ${invite.firstName}`
+    : isInvite
+      ? `${invite.testName} • Kandidat: ${invite.firstName}`
+      : "Tes Penempatan Online • Publik";
+  const eyebrow = isIelts ? "Simulasi IELTS Resmi TNEC" : isInvite ? invite.testName : "Asesmen Penempatan Level";
 
-  const lead = invite
-    ? isIelts
-      ? "Mock test ini meniru tes IELTS sungguhan: bagian Listening dengan satu audio, bagian Reading dari tiga bacaan, dua task Writing yang dinilai AI, dan speaking bersama examiner lewat video. Hasilnya berupa perkiraan band untuk Listening, Reading, Writing, dan Speaking."
-      : isPre
-        ? `Tes ini berisi ${total} soal pilihan ganda. Nilainya kami pakai sebagai titik awal untuk melihat perkembangan kamu selama program.`
-        : `Tes ini berisi ${total} soal pilihan ganda. Hasilnya kami pakai untuk menentukan apakah kamu sudah siap lanjut ke level berikutnya.`
-    : `Tes ini berisi ${total} soal pilihan ganda yang mengukur kemampuan bahasa Inggris kamu. Setelah selesai, level, skor, dan rekomendasi program akan langsung muncul, dan hasilnya juga kami kirim ke email dan WhatsApp kamu.`;
+  const title = sectionsMode
+    ? <>Halo {invite.firstName}, bersiap untuk IELTS Mockup dalam <span className="hero__accent">{minutes} menit</span>.</>
+    : isInvite
+      ? <>Halo {invite.firstName}, selesaikan {invite.testName.toLowerCase()} kamu dalam <span className="hero__accent">{minutes} menit</span>.</>
+      : <>Kenali level bahasa Inggris kamu dalam <span className="hero__accent">{minutes} menit</span>.</>;
 
-  const how2 = sectionsMode
-    ? `Tes berjalan dalam empat bagian dengan waktu masing-masing: ${sectionText}. Setiap bagian terkunci saat waktunya habis, dan kamu tidak bisa kembali ke bagian sebelumnya.`
-    : perMode
-      ? `Tes berlangsung paling lama ${duration} tanpa jeda, dengan batas waktu di setiap soal. Selama tes, layar akan otomatis masuk ke mode penuh agar kamu bisa fokus.`
-      : `Tes berlangsung selama ${duration} tanpa jeda. Selama tes, layar akan otomatis masuk ke mode penuh agar kamu bisa fokus, dan waktu terus berjalan sampai tes selesai.`;
+  const lead = sectionsMode
+    ? "Simulasi penuh mencakup empat keterampilan utama IELTS. Kerjakan dalam satu sesi berurutan untuk mendapatkan estimasi band score yang akurat."
+    : isInvite
+      ? isPreLead(invite)
+      : `Tes ${total} soal pilihan ganda untuk memetakan kemampuan bahasa Inggris kamu secara objektif. Skor, level, dan rekomendasi program langsung tampil setelah selesai.`;
 
-  const how3Title = invite ? (isIelts ? "Melihat band kamu" : "Melihat nilai kamu") : "Melihat hasil dan rekomendasi";
-  const how3Body = invite
-    ? isIelts
-      ? "Setelah jawaban terkirim, band Listening, Reading, dan Writing muncul, lalu band Speaking menyusul setelah rekaman dinilai otomatis."
-      : "Setelah jawaban terkirim, nilai kamu langsung muncul di layar dan tercatat di data kelas, jadi tutor bisa membahasnya bersama kamu."
-    : "Setelah tes selesai, kamu mengisi nama, email, nomor WhatsApp, dan cabang tempat kamu ingin belajar. Level, skor, dan rekomendasi program akan langsung muncul, lalu kami kirimkan juga ke email dan WhatsApp kamu.";
+  const metrics = sectionsMode
+    ? [
+        { val: String(plan.length || 4), lbl: "Bagian" },
+        { val: String(total), lbl: skillCounts.Writing ? "Soal + Esai" : "Soal" },
+        { val: String(minutes), lbl: "Menit Total" },
+      ]
+    : [
+        { val: String(total), lbl: "Soal Pilihan" },
+        { val: String(minutes), lbl: "Menit Durasi" },
+        { val: "6", lbl: "Tingkat Level" },
+      ];
 
-  const ruleTime = sectionsMode
-    ? `Tes terdiri dari 82 soal dan dua esai, dibagi menjadi ${sectionText}. Di dalam Listening, kamu bisa berpindah soal Part 1 sampai Part 4 selama audio diputar. Saat waktu satu bagian habis, bagian itu terkunci dan tes pindah ke bagian berikutnya.`
-    : perMode
-      ? `Tes terdiri dari ${total} soal pilihan ganda, dan setiap soal punya batas waktunya sendiri. Saat waktu satu soal habis, soal berikutnya langsung muncul, dan soal sebelumnya tidak bisa dibuka lagi. Tombol kirim baru bisa dipakai setelah semua soal dijawab.`
-      : `Tes terdiri dari ${total} soal pilihan ganda yang harus diselesaikan dalam ${duration}. Waktu terus berjalan sejak tes dimulai dan tidak bisa dijeda. Tombol kirim baru bisa dipakai setelah semua soal dijawab.`;
+  const flow = sectionsMode
+    ? [
+        { num: "1", title: "Verifikasi Kode & Aturan", desc: "Masukkan kode akses dari WhatsApp undangan dan centang persetujuan standar ujian." },
+        { num: "2", title: "Kerjakan 4 Bagian Berurutan", desc: `Listening (${listeningMin}m), Reading (${readingMin}m), Writing (${writingMin}m), dan Speaking (${speakingMin}m) dalam mode layar penuh.` },
+        { num: "3", title: "Terima Estimasi Band Score", desc: "Band Listening, Reading, dan Writing langsung tampil; Speaking menyusul setelah pemrosesan otomatis." },
+      ]
+    : isInvite
+      ? [
+          { num: "1", title: "Verifikasi & Setujui Aturan", desc: "Pahami aturan layar penuh dan kerjakan secara mandiri tanpa bantuan alat penerjemah." },
+          { num: "2", title: `Selesaikan ${total} Soal (${minutes} Menit)`, desc: "Waktu berjalan terus tanpa jeda. Pastikan seluruh soal terisi sebelum waktu habis." },
+          { num: "3", title: "Lihat Nilai Kamu", desc: "Setelah jawaban terkirim, nilai kamu langsung muncul dan tercatat di data kelas kamu." },
+        ]
+      : [
+          { num: "1", title: "Setujui Ketentuan Tes", desc: "Pahami aturan layar penuh dan kerjakan secara mandiri tanpa bantuan alat penerjemah." },
+          { num: "2", title: `Selesaikan ${total} Soal (${minutes} Menit)`, desc: "Waktu berjalan terus tanpa jeda. Pastikan seluruh soal terisi sebelum waktu habis." },
+          { num: "3", title: "Lengkapi Data & Lihat Hasil", desc: "Isi nama, email, WhatsApp, dan cabang tujuan. Level dan rekomendasi program langsung muncul." },
+        ];
 
-  const startNote = sectionsMode
-    ? `Tes berlangsung ${duration} dalam empat bagian, dan jawaban hanya bisa dikirim satu kali.`
-    : perMode
-      ? `Tes berlangsung paling lama ${duration}, dan jawaban hanya bisa dikirim satu kali.`
-      : `Tes berlangsung ${duration}, dan jawaban hanya bisa dikirim satu kali.`;
+  const privacyShort = sectionsMode
+    ? "Esai dinilai AI dan rekaman speaking dinilai otomatis tanpa nama maupun kontak pribadi."
+    : "Data kontak digunakan untuk pengiriman hasil tes serta konsultasi penempatan kelas.";
 
-  const data1 = invite
-    ? "Kami menyimpan jawaban, nilai, waktu pengerjaan, dan catatan pelanggaran selama tes, lalu mencatatnya di data kamu sebagai siswa Titik Nol."
-    : "Kami menyimpan nama, email, nomor WhatsApp, pilihan cabang belajar, jawaban, skor, waktu pengerjaan, dan catatan pelanggaran selama tes.";
-  const data2 = invite
-    ? "Data itu kami pakai untuk menghitung nilai dan memantau perkembangan belajar kamu bersama tutor. Data tidak dijual dan tidak dipakai untuk iklan."
-    : "Data itu kami pakai untuk menghitung skor, menentukan level, mengirim hasil ke email dan WhatsApp kamu, dan menindaklanjuti konsultasi kalau kamu membutuhkannya. Data tidak dijual dan tidak dipakai untuk iklan.";
-  const data3 = invite
-    ? isIelts
-      ? "Setelah jawaban terkirim, band kamu langsung muncul di layar. Esai Writing dinilai AI dan rekaman speaking dinilai otomatis, tanpa nama atau kontak kamu. Kamu tidak perlu mengisi data kontak lagi."
-      : isPre
-        ? "Setelah jawaban terkirim, nilai kamu langsung muncul di layar. Kamu tidak perlu mengisi data kontak lagi."
-        : "Setelah jawaban terkirim, nilai dan hasil kelulusan kamu langsung muncul di layar. Kamu tidak perlu mengisi data kontak lagi."
-    : "Setelah tes selesai, kamu mengisi nama, email, nomor WhatsApp, dan cabang tempat kamu ingin belajar. Level, skor, dan rekomendasi program akan muncul di layar, lalu dikirim ke email dan WhatsApp kamu.";
-  const data4 = invite
-    ? isIelts
-      ? sectionsMode
-        ? "Kalau waktu satu bagian habis, bagian itu terkunci dan tes pindah ke bagian berikutnya. Jawaban yang sudah terisi tetap dikirim di akhir Writing dan Speaking."
-        : "Kalau waktu habis, jawaban kamu yang sudah terisi terkirim otomatis dan tetap menghasilkan band. Selama tautan dan kodemu belum dipakai, kamu bisa mengulang dari awal."
-      : "Kalau waktu habis sebelum kamu selesai, percobaan ini gagal dan jawaban kamu tidak dikirim. Selama tautan ini masih berlaku, kamu bisa mengulang tes dari awal dengan waktu yang baru."
-    : "Kalau waktu habis sebelum kamu selesai, percobaan ini gagal dan jawaban kamu tidak dikirim. Kamu bisa mengulang tes dari awal dengan waktu yang baru. Hasil tes ini dipakai untuk penempatan kelas, bukan sertifikat resmi.";
+  const modules = sectionsMode
+    ? [
+        { top: "Bagian 01", count: `${skillCounts.Listening || 40} Soal`, name: "Listening", detail: "Audio diputar satu kali. Navigasi bebas Part 1-4.", time: `${listeningMin} Menit` },
+        { top: "Bagian 02", count: `${skillCounts.Reading || 42} Soal`, name: "Reading", detail: "Tiga teks bacaan akademik dengan timer mandiri.", time: `${readingMin} Menit` },
+        { top: "Bagian 03", count: `${skillCounts.Writing || 2} Esai`, name: "Writing", detail: "Task 1 & Task 2 dengan penilaian rubrik AI.", time: `${writingMin} Menit` },
+        { top: "Bagian 04", count: "Video", name: "Speaking", detail: "Sesi tanya jawab dengan examiner virtual.", time: `${speakingMin} Menit` },
+      ]
+    : [];
 
-  const step3Index = invite ? "02" : "03";
-  const step3Meta = invite ? (isIelts ? "Band langsung muncul" : isPre ? "Nilai langsung muncul" : "Nilai dan kelulusan") : "Level dan rekomendasi";
+  const consoleDesc = needsCode
+    ? "Masukkan kode akses 6 karakter dari WhatsApp dan setujui pernyataan di bawah."
+    : "Baca standar pengawasan di samping dan centang ketiga persetujuan untuk memulai.";
+  const consoleMeta = sectionsMode
+    ? `Sesi berjalan ${minutes} menit • Hanya 1 kali kesempatan kirim`
+    : `Durasi ${minutes} menit tanpa jeda • ${isInvite ? "Nilai langsung muncul" : "Hasil dikirim ke Email & WhatsApp"}`;
+
+  const rulesLeft = sectionsMode ? [
+    `Tes terdiri dari ${total} soal dan esai (Listening ${listeningMin} menit, Reading ${readingMin} menit, Writing ${writingMin} menit, Speaking ${speakingMin} menit). Di Listening, kamu bebas berpindah soal Part 1-4 selama audio diputar.`,
+    "Saat tes dimulai, layar otomatis masuk ke mode penuh. Kamu tidak diperkenankan mengecilkan layar atau berpindah tab.",
+    `Pelanggaran layar penuh dicatat oleh sistem. Pada pelanggaran ke-${strikes} tes berhenti sejenak untuk konfirmasi; jawaban tersimpan jika memilih lanjut.`,
+    "Kerjakan sendiri tanpa kamus, penerjemah, kecerdasan buatan, atau bantuan orang lain.",
+  ] : [
+    `Tes terdiri dari ${total} soal pilihan ganda dalam waktu ${minutes} menit tanpa jeda. Tombol kirim aktif setelah semua soal dijawab.`,
+    "Layar otomatis masuk mode penuh saat tes dimulai. Dilarang mengecilkan layar atau membuka tab/aplikasi lain.",
+    `Setiap perpindahan tab dicatat. Pada pelanggaran ke-${strikes} tes dijeda sementara; jawaban tersimpan jika memilih lanjut.`,
+    "Kerjakan sendiri tanpa kamus, penerjemah, AI, atau bantuan orang lain agar hasil penempatan akurat.",
+  ];
+  const rulesRight = sectionsMode ? [
+    "Sistem menyimpan jawaban, skor, durasi pengerjaan, dan catatan pengawasan pada profil siswa Titik Nol kamu.",
+    "Data digunakan untuk mengevaluasi perkembangan belajar bersama tutor dan tidak digunakan untuk keperluan komersial pihak ketiga.",
+    "Penilaian esai Writing dan rekaman Speaking diproses secara anonim tanpa menyertakan identitas kontak.",
+    "Ketika waktu bagian berakhir, bagian terkunci otomatis dan jawaban yang telah diisi tetap tersimpan.",
+  ] : isInvite ? [
+    "Kami menyimpan jawaban, nilai, waktu pengerjaan, dan catatan pelanggaran selama tes, lalu mencatatnya di data kamu sebagai siswa Titik Nol.",
+    "Data itu kami pakai untuk menghitung nilai dan memantau perkembangan belajar kamu bersama tutor. Data tidak dijual dan tidak dipakai untuk iklan.",
+    "Setelah jawaban terkirim, nilai kamu langsung muncul di layar. Kamu tidak perlu mengisi data kontak lagi.",
+    "Kalau waktu habis sebelum kamu selesai, percobaan ini gagal dan jawaban kamu tidak dikirim. Selama tautan ini masih berlaku, kamu bisa mengulang tes dari awal.",
+  ] : [
+    "Kami menyimpan nama, email, nomor WhatsApp, pilihan cabang belajar, jawaban, skor, dan waktu pengerjaan.",
+    "Data dipakai untuk menghitung skor, menentukan level, mengirim laporan hasil, serta tindak lanjut konsultasi belajar.",
+    "Kalau waktu habis sebelum mengirim jawaban, percobaan dinyatakan tidak selesai dan dapat diulang dari awal.",
+    "Hasil tes berfungsi sebagai acuan penempatan kelas TNEC dan bukan sertifikat resmi berstandar internasional.",
+  ];
+
+  let submitText;
+  if (busy) submitText = "Menyiapkan tes...";
+  else if (loadFailed === "network") submitText = "Muat ulang halaman";
+  else if (canStart) submitText = "Mulai Tes Sekarang (Layar Penuh)";
+  else if (needsCode && !codeOk && allConsent) submitText = "Lengkapi 6 Karakter Kode Akses";
+  else if (!allConsent && codeOk) submitText = "Centang Semua Persetujuan";
+  else submitText = needsCode ? "Masukkan Kode & Setujui Aturan" : "Setujui Aturan untuk Mulai";
 
   return (
     <section className="screen" id="screen-intro" aria-labelledby="intro-title">
-      <div className="hero">
-        <div className="wrap hero__grid">
-          <div className="hero__copy">
-            <img className="hero__logo" src="/assets/logo-titik-nol-white.png" alt="Titik Nol English Course" width="140" height="23" />
-            <p className="eyebrow eyebrow--on-dark"><span className="eyebrow__dot" aria-hidden="true" /><span>{invite ? invite.testName : "Tes Penempatan Online"}</span></p>
-            <h1 className="hero__title" id="intro-title" tabIndex={-1} ref={titleRef}>{title}</h1>
-            <p className="hero__lead">{lead}</p>
-            <div className="hero__facts">
-              <span className="fact"><strong>{total}</strong><span>soal</span></span>
-              <span className="fact"><strong>{timeNum}</strong><span>{timeUnit}</span></span>
-              {!isInvite ? <span className="fact"><strong>6</strong><span>level</span></span> : null}
-            </div>
-            {notice ? <p className="banner banner--warning hero__notice" id="intro-notice" role="status">{notice}</p> : null}
+      <header className="hero">
+        <div className="wrap">
+          <div className="topbar">
+            <img className="brand-logo" src="/assets/logo-titik-nol-white.png" alt="Titik Nol English Course" width="136" height="23" />
+            <span className="session-pill">
+              <span className="session-pill__badge">{badge}</span>
+              <span>{sessionLabel}</span>
+            </span>
           </div>
-
-          <div className="preview" aria-hidden="true">
-            <div className="preview__sheet" />
-            <div className="preview__card">
-              <div className="preview__top">
-                <span className="preview__badge">Contoh soal</span>
-                <span className="preview__timer"><Clock /> 04:12</span>
-              </div>
-              <p className="preview__prompt">The results ___ announced tomorrow.</p>
-              <div className="preview__options">
-                <span className="preview__option">was</span>
-                <span className="preview__option is-selected">will be<span className="preview__check"><Check /></span></span>
-                <span className="preview__option">were</span>
-              </div>
-              <div className="preview__foot">
-                <div className="preview__dots">
-                  <span className="is-filled" /><span className="is-filled" /><span className="is-filled" />
-                  <span className="is-current" /><span /><span /><span /><span /><span /><span /><span /><span />
+          <div className="hero__main">
+            <div>
+              <p className="eyebrow eyebrow--hero" id="intro-eyebrow">{eyebrow}</p>
+              <h1 className="hero__title" id="intro-title" tabIndex={-1} ref={titleRef}>{title}</h1>
+              <p className="hero__lead">{lead}</p>
+              {notice ? <p className="banner banner--warning hero__notice" id="intro-notice" role="status">{notice}</p> : null}
+            </div>
+            <div className="hero__metrics" aria-label="Ringkasan durasi dan soal">
+              {metrics.map((metric, i) => (
+                <div className="metric-item" key={i}>
+                  <strong>{metric.val}</strong>
+                  <span>{metric.lbl}</span>
                 </div>
-                <span className="preview__pct">28%</span>
+              ))}
+            </div>
+          </div>
+        </div>
+      </header>
+
+      <main className="workspace">
+        <div className="wrap workspace__grid">
+          <div className="briefing-stack">
+            {sectionsMode ? (
+              <section className="card" aria-labelledby="modules-heading">
+                <div className="card__header">
+                  <div>
+                    <p className="eyebrow eyebrow--muted">Struktur Sesi</p>
+                    <h2 className="card__title" id="modules-heading">Empat bagian berurutan tanpa jeda</h2>
+                  </div>
+                  <span className="card__subtitle">Total {minutes} menit</span>
+                </div>
+                <div className="modules-grid">
+                  {modules.map((module, i) => (
+                    <div className="module-box" key={i}>
+                      <div className="module-box__top"><span>{module.top}</span><span>{module.count}</span></div>
+                      <div className="module-box__name">{module.name}</div>
+                      <div className="module-box__detail">{module.detail}</div>
+                      <div className="module-box__time">
+                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" aria-hidden="true"><circle cx="12" cy="12" r="9" /><path d="M12 7v5l3 2" /></svg>
+                        {module.time}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                <div className="module-note">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><circle cx="12" cy="12" r="10" /><path d="M12 16v-4M12 8h.01" /></svg>
+                  <span>Ketika waktu satu bagian berakhir, bagian tersebut otomatis terkunci dan sistem berlanjut ke bagian berikutnya.</span>
+                </div>
+              </section>
+            ) : null}
+
+            <section className="card" aria-labelledby="flow-heading">
+              <div className="card__header">
+                <div>
+                  <p className="eyebrow eyebrow--muted">Alur Pengerjaan</p>
+                  <h2 className="card__title" id="flow-heading">Tiga tahap menuju laporan hasil</h2>
+                </div>
               </div>
-            </div>
+              <div className="flow-list">
+                {flow.map((step) => (
+                  <div className="flow-step" key={step.num}>
+                    <span className="flow-step__num" aria-hidden="true">{step.num}</span>
+                    <h3 className="flow-step__title">{step.title}</h3>
+                    <p className="flow-step__desc">{step.desc}</p>
+                  </div>
+                ))}
+              </div>
+            </section>
+
+            <section className="card" aria-labelledby="rules-heading">
+              <div className="card__header">
+                <div>
+                  <p className="eyebrow eyebrow--muted">Standar Pengawasan</p>
+                  <h2 className="card__title" id="rules-heading">Aturan teknis &amp; integritas asesmen</h2>
+                </div>
+              </div>
+              <div className="rules-summary-grid">
+                <div className="rule-pill">
+                  <div className="rule-pill__icon" aria-hidden="true">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3" /></svg>
+                  </div>
+                  <div>
+                    <div className="rule-pill__title">Mode Layar Penuh Wajib</div>
+                    <div className="rule-pill__text">Sistem otomatis mengunci ke layar penuh. Berpindah tab atau aplikasi akan tercatat.</div>
+                  </div>
+                </div>
+                <div className="rule-pill">
+                  <div className="rule-pill__icon" aria-hidden="true">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" /><line x1="12" y1="9" x2="12" y2="13" /><line x1="12" y1="17" x2="12.01" y2="17" /></svg>
+                  </div>
+                  <div>
+                    <div className="rule-pill__title">Batas Toleransi {strikes} Pelanggaran</div>
+                    <div className="rule-pill__text">Pada pelanggaran ke-{strikes} tes dijeda sementara. Jawaban tetap aman jika memilih lanjut.</div>
+                  </div>
+                </div>
+                <div className="rule-pill">
+                  <div className="rule-pill__icon" aria-hidden="true">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" /></svg>
+                  </div>
+                  <div>
+                    <div className="rule-pill__title">Tanpa Alat Bantu Eksternal</div>
+                    <div className="rule-pill__text">Dilarang menggunakan kamus, penerjemah, AI, atau bantuan pihak lain selama sesi.</div>
+                  </div>
+                </div>
+                <div className="rule-pill">
+                  <div className="rule-pill__icon" aria-hidden="true">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2" /><path d="M7 11V7a5 5 0 0 1 10 0v4" /></svg>
+                  </div>
+                  <div>
+                    <div className="rule-pill__title">Kerahasiaan &amp; Penilaian</div>
+                    <div className="rule-pill__text">{privacyShort}</div>
+                  </div>
+                </div>
+              </div>
+              <details className="rules-details">
+                <summary>
+                  <span>Lihat rincian lengkap aturan pengerjaan &amp; pemrosesan data</span>
+                  <svg className="rules-details__chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><polyline points="6 9 12 15 18 9" /></svg>
+                </summary>
+                <div className="rules-details__body">
+                  <div className="rules-col">
+                    <h4>Cara tes berjalan</h4>
+                    <ol>
+                      {rulesLeft.map((rule, i) => <li key={i}>{rule}</li>)}
+                    </ol>
+                  </div>
+                  <div className="rules-col">
+                    <h4>Data &amp; evaluasi hasil</h4>
+                    <ol>
+                      {rulesRight.map((rule, i) => <li key={i}>{rule}</li>)}
+                    </ol>
+                  </div>
+                </div>
+              </details>
+            </section>
           </div>
-        </div>
-      </div>
 
-      <div className="wrap wrap--narrow intro__body">
-        <ol className="stepper" aria-label="Tahapan tes penempatan">
-          <li className="stepper__step is-active">
-            <span className="stepper__bar" /><span className="stepper__index">01</span>
-            <span className="stepper__title">Mengerjakan tes</span>
-            <span className="stepper__meta">{total} soal, {duration}</span>
-          </li>
-          {!isInvite ? (
-            <li className="stepper__step">
-              <span className="stepper__bar" /><span className="stepper__index">02</span>
-              <span className="stepper__title">Melengkapi data</span>
-              <span className="stepper__meta">Nama, email, WhatsApp, cabang</span>
-            </li>
-          ) : null}
-          <li className="stepper__step">
-            <span className="stepper__bar" /><span className="stepper__index">{step3Index}</span>
-            <span className="stepper__title">Melihat hasil</span>
-            <span className="stepper__meta">{step3Meta}</span>
-          </li>
-        </ol>
-
-        <div className="section-head">
-          <p className="eyebrow">Cara kerja</p>
-          <h2 className="section-title">Tiga langkah sederhana sebelum kamu melihat hasilnya.</h2>
-        </div>
-
-        <div className="how-grid">
-          <article className="how-card">
-            <span className="how-card__num" aria-hidden="true">01</span>
-            <h3 className="how-card__title">Membaca aturan dan menyetujui</h3>
-            <p className="how-card__body">Sebelum tes dimulai, kamu perlu membaca aturan pengerjaan, syarat dan ketentuan, serta kebijakan privasi. Kalau kamu setuju, centang ketiga pernyataan yang tersedia.</p>
-          </article>
-          <article className="how-card">
-            <span className="how-card__num" aria-hidden="true">02</span>
-            <h3 className="how-card__title">Mengerjakan tes di layar penuh</h3>
-            <p className="how-card__body">{how2}</p>
-          </article>
-          <article className="how-card">
-            <span className="how-card__num" aria-hidden="true">03</span>
-            <h3 className="how-card__title">{how3Title}</h3>
-            <p className="how-card__body">{how3Body}</p>
-          </article>
-        </div>
-
-        <section className="panel consent" aria-labelledby="consent-title">
-          <div className="consent__head">
-            <p className="eyebrow">Sebelum mulai</p>
-            <h2 className="panel__title" id="consent-title">Baca ketentuannya dulu sebelum kamu mulai.</h2>
-            <p className="panel__lead">Halaman ini menjelaskan bagaimana tes berjalan, data apa yang kami simpan, dan hasil apa yang akan kamu terima. Luangkan waktu sebentar untuk membacanya sampai selesai.</p>
-          </div>
-
-          <div className="test-rules">
-            <div className="test-rules__col">
-              <h3 className="test-rules__title">Cara tes berjalan</h3>
-              <ol className="test-rules__list">
-                <li><span className="test-rules__num" aria-hidden="true">1</span><p>{ruleTime}</p></li>
-                <li><span className="test-rules__num" aria-hidden="true">2</span><p>Saat tes dimulai, layar akan otomatis masuk ke mode penuh. Selama tes berlangsung, kamu tidak bisa mengecilkan layar, berpindah tab, atau membuka aplikasi lain.</p></li>
-                <li><span className="test-rules__num" aria-hidden="true">3</span><p>Setiap kali kamu keluar dari layar penuh atau berpindah tab, kejadian itu kami catat dan kamu mendapat peringatan. Kalau pelanggaran sudah mencapai {strikes} kali, tesnya berhenti dulu dan kamu memilih lanjut atau keluar; jawaban kamu tetap tersimpan kalau kamu memilih lanjut.</p></li>
-                <li><span className="test-rules__num" aria-hidden="true">4</span><p>Kerjakan tes ini sendiri tanpa bantuan kamus, penerjemah, kecerdasan buatan, atau orang lain, supaya hasilnya benar-benar menggambarkan kemampuan kamu.</p></li>
-              </ol>
+          <aside className="console" aria-labelledby="console-heading">
+            <div className="console__head">
+              <p className="eyebrow eyebrow--muted">Konfirmasi Mulai</p>
+              <h2 className="console__title" id="console-heading">Siapkan sesi ujian kamu</h2>
+              <p className="console__desc">{consoleDesc}</p>
             </div>
-            <div className="test-rules__col">
-              <h3 className="test-rules__title">Data dan hasil</h3>
-              <ol className="test-rules__list">
-                <li><span className="test-rules__num" aria-hidden="true">1</span><p>{data1}</p></li>
-                <li><span className="test-rules__num" aria-hidden="true">2</span><p>{data2}</p></li>
-                <li><span className="test-rules__num" aria-hidden="true">3</span><p>{data3}</p></li>
-                <li><span className="test-rules__num" aria-hidden="true">4</span><p>{data4}</p></li>
-              </ol>
-            </div>
-          </div>
-
-          <form id="consent-form" noValidate onSubmit={(event) => { event.preventDefault(); if (loadFailed === "network") onReload(); else onStart(); }}>
-            <label className="check">
-              <input type="checkbox" id="consent-terms" className="consent-box" checked={consent.terms} readOnly onClick={(event) => { event.preventDefault(); onOpenLegal("terms", "terms"); }} />
-              <CheckIcon />
-              <span className="check__text">Saya sudah membaca dan menyetujui <a className="check__link" href="#syarat-dan-ketentuan" onClick={(event) => { event.preventDefault(); event.stopPropagation(); onOpenLegal("terms", "terms"); }}>Syarat dan Ketentuan</a> yang berlaku.</span>
-            </label>
-            <label className="check">
-              <input type="checkbox" id="consent-privacy" className="consent-box" checked={consent.privacy} readOnly onClick={(event) => { event.preventDefault(); onOpenLegal("privacy", "privacy"); }} />
-              <CheckIcon />
-              <span className="check__text">Saya sudah membaca dan menyetujui <a className="check__link" href="#kebijakan-privasi" onClick={(event) => { event.preventDefault(); event.stopPropagation(); onOpenLegal("privacy", "privacy"); }}>Kebijakan Privasi</a>, termasuk pengumpulan data yang dijelaskan di atas.</span>
-            </label>
-            <label className="check">
-              <input type="checkbox" id="consent-honesty" className="consent-box" checked={consent.honesty} onChange={(event) => onConsent({ ...consent, honesty: event.target.checked })} />
-              <CheckIcon />
-              <span className="check__text">Saya mengerjakan tes ini sendiri tanpa kamus, penerjemah, kecerdasan buatan, atau bantuan orang lain, dan saya memahami bahwa aktivitas di luar layar tes akan dicatat.</span>
-            </label>
-
-            <div className="consent__action">
+            <form id="consent-form" noValidate onSubmit={(event) => { event.preventDefault(); if (loadFailed === "network") onReload(); else onStart(); }}>
               {needsCode ? (
-                <div className="field" id="code-field">
-                  <label className="label" htmlFor="invite-code">Kode akses dari pesan WhatsApp</label>
-                  <input className="input" id="invite-code" ref={codeInputRef} type="text" inputMode="text" maxLength={12} autoComplete="off" placeholder="6 karakter" value={code} onChange={(event) => onCode(event.target.value)} />
-                  {codeError ? <p className="error" id="code-error" role="alert">{codeError}</p> : null}
+                <div className="code-box" id="code-field">
+                  <div className="code-box__header">
+                    <span className="code-box__label" id="otp-group-label">
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" aria-hidden="true"><rect x="3" y="11" width="18" height="11" rx="2" /><path d="M7 11V7a5 5 0 0 1 10 0v4" /></svg>
+                      Kode Akses Undangan
+                    </span>
+                    <span className="code-box__hint">6 karakter (WhatsApp)</span>
+                  </div>
+                  <div className="otp-group" role="group" aria-labelledby="otp-group-label">
+                    {otpSlots.map((char, i) => (
+                      <OtpBox
+                        key={i}
+                        index={i}
+                        char={char}
+                        filled={Boolean(char)}
+                        hasError={Boolean(codeError)}
+                        onChange={setOtp}
+                        onBackspace={onOtpBackspace}
+                        onArrow={(target) => otpRefs.current[target]?.focus()}
+                        onPaste={onOtpPaste}
+                        inputRef={i === 0 ? codeRefCb : otpRefCb(i)}
+                      />
+                    ))}
+                  </div>
+                  <div className="code-box__status">
+                    <span className={codeError ? "code-box__feedback code-box__error" : "code-box__feedback"} role={codeError ? "alert" : undefined}>
+                      {codeError || (codeOk ? "Format kode lengkap (6 karakter)" : "Tempel atau ketik 6 karakter kode undangan")}
+                    </span>
+                    <span className="code-count">{codeLength}/6</span>
+                  </div>
                 </div>
               ) : null}
-              <button className="btn btn--primary btn--lg" id="start-btn" type="submit" disabled={disabled}>
-                {busy ? "Menyiapkan tes... " : loadFailed === "network" ? "Muat ulang halaman" : "Mulai tes sekarang"}<Arrow />
-              </button>
-              <p className="micro">{startNote}</p>
-            </div>
-          </form>
-        </section>
-      </div>
+
+              <div className="consent-list">
+                <label className="check-item">
+                  <input type="checkbox" id="consent-terms" checked={consent.terms} readOnly onClick={(event) => { event.preventDefault(); onOpenLegal("terms", "terms"); }} />
+                  <span className="check-item__box" aria-hidden="true" />
+                  <span className="check-item__text">Saya sudah membaca dan menyetujui <a className="check-item__link" href="#syarat-dan-ketentuan" onClick={(event) => { event.preventDefault(); event.stopPropagation(); onOpenLegal("terms", "terms"); }}>Syarat dan Ketentuan</a> yang berlaku.</span>
+                </label>
+                <label className="check-item">
+                  <input type="checkbox" id="consent-privacy" checked={consent.privacy} readOnly onClick={(event) => { event.preventDefault(); onOpenLegal("privacy", "privacy"); }} />
+                  <span className="check-item__box" aria-hidden="true" />
+                  <span className="check-item__text">Saya sudah membaca dan menyetujui <a className="check-item__link" href="#kebijakan-privasi" onClick={(event) => { event.preventDefault(); event.stopPropagation(); onOpenLegal("privacy", "privacy"); }}>Kebijakan Privasi</a>, termasuk pengumpulan data yang dijelaskan di atas.</span>
+                </label>
+                <label className="check-item">
+                  <input type="checkbox" id="consent-honesty" checked={consent.honesty} onChange={(event) => onConsent({ ...consent, honesty: event.target.checked })} />
+                  <span className="check-item__box" aria-hidden="true" />
+                  <span className="check-item__text">Saya mengerjakan tes ini sendiri tanpa kamus, penerjemah, kecerdasan buatan, atau bantuan orang lain, dan saya memahami bahwa aktivitas di luar layar tes akan dicatat.</span>
+                </label>
+              </div>
+
+              <div className="console__footer">
+                <button type="submit" className="btn-start" id="start-btn" disabled={disabled}>
+                  <span>{submitText}</span>
+                  <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6" /></svg>
+                </button>
+                <p className="console__meta">{consoleMeta}</p>
+              </div>
+            </form>
+          </aside>
+        </div>
+      </main>
     </section>
   );
+}
+
+/* Pre-test and post-test invites share the placement layout; only the lead sentence differs. */
+function isPreLead(invite) {
+  if (invite.test === "pre") return "Tes ini mengukur titik awal kemampuan kamu sebelum program dimulai, agar tutor bisa melihat perkembanganmu dari awal.";
+  return "Tes ini menentukan apakah kamu sudah siap lanjut ke level berikutnya. Hasilnya tercatat di data kelas kamu.";
 }
 
 export function TestScreen({ attempt, index, answers, flagged, perMode, timeLeft, questionLeft, sectionMode, sectionSkill, sectionTotal, sectionPosition, sectionLeft, sectionQuestions, finishLabel, onSectionFinish, onChoose, onAnswerText, onPrev, onNext, onSkip, onFlag, onGoTo, onFinish, audioSection, audioPlayed, audioNote, onPlayAudio, onAudioEnded, audioRef, fsWarning, finishNote }) {

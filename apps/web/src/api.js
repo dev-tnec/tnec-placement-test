@@ -134,6 +134,10 @@ function sectionPlan(test) {
 
 function publicConfig({ test, questions, durationSeconds }, speakingBank = []) {
   const values = { total: questions.length, duration: spanText(durationSeconds), strikes: test.maxViolations, speakingSeconds: test.speakingSeconds };
+  const skillCounts = questions.reduce((acc, q) => {
+    if (q.skill) acc[q.skill] = (acc[q.skill] || 0) + 1;
+    return acc;
+  }, {});
   return {
     consentVersion: CONSENT_VERSION,
     open: test.open && questions.length > 0,
@@ -143,6 +147,7 @@ function publicConfig({ test, questions, durationSeconds }, speakingBank = []) {
     maxViolations: test.maxViolations,
     whatsapp: WHATSAPP,
     sectionPlan: sectionPlan(test),
+    skillCounts,
     // The questions themselves travel per attempt: the runner gets the picked set when the test
     // starts, so a mid-test change to the bank never changes what a student already saw.
     speaking: speakingOn(test) && speakingBank.some((q) => q.status === "aktif")
@@ -161,12 +166,14 @@ async function findInvite(env, token) {
   const row = await env.DB.prepare(
     `SELECT i.*, s.name AS student_name FROM invites i JOIN students s ON s.id = i.student_id WHERE i.token_hash = ?`,
   ).bind(await sha256Hex(token)).first();
-  if (!row) throw new HttpError(404, "Tautan tes ini tidak ditemukan. Minta tautan baru ke admin Titik Nol.");
-  if (row.used_at) throw new HttpError(410, "Kode undangan ini sudah pernah dipakai untuk mengirim jawaban, jadi tautannya tidak bisa dibuka lagi. Hubungi admin Titik Nol kalau kamu perlu mengulang.");
-  if (row.code_tries >= 3) throw new HttpError(423, "Kode sudah salah tiga kali, jadi undangan ini terkunci. Minta admin membuatkan undangan baru.");
-  if (row.expires_at < nowSeconds()) throw new HttpError(410, "Tautan ini sudah kedaluwarsa. Minta tautan baru ke admin Titik Nol.");
+  // The codes let the runner pick the right expired/used/invalid screen instead of guessing
+  // from the message text.
+  if (!row) throw new HttpError(404, "Tautan tes ini tidak ditemukan. Minta tautan baru ke admin Titik Nol.", { code: "invite_not_found" });
+  if (row.used_at) throw new HttpError(410, "Kode undangan ini sudah pernah dipakai untuk mengirim jawaban, jadi tautannya tidak bisa dibuka lagi. Hubungi admin Titik Nol kalau kamu perlu mengulang.", { code: "invite_used", test: TEST_NAMES[row.test_key] });
+  if (row.code_tries >= 3) throw new HttpError(423, "Kode sudah salah tiga kali, jadi undangan ini terkunci. Minta admin membuatkan undangan baru.", { code: "invite_locked", test: TEST_NAMES[row.test_key] });
+  if (row.expires_at < nowSeconds()) throw new HttpError(410, "Tautan ini sudah kedaluwarsa. Minta tautan baru ke admin Titik Nol.", { code: "invite_expired", test: TEST_NAMES[row.test_key] });
   if (row.opens_at && row.opens_at > nowSeconds()) {
-    throw new HttpError(423, `Tes ini baru bisa dibuka pada ${formatWib(row.opens_at)}. Buka kembali tautan ini lagi nanti.`);
+    throw new HttpError(423, `Tes ini baru bisa dibuka pada ${formatWib(row.opens_at)}. Buka kembali tautan ini lagi nanti.`, { code: "invite_not_open_yet", test: TEST_NAMES[row.test_key] });
   }
   return row;
 }
