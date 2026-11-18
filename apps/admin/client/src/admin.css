@@ -496,6 +496,16 @@ body.has-bulk .toasts { bottom: 88px; }
 .dialog__foot-end { display: flex; gap: 10px; margin-left: auto; }
 .dialog__text { font-size: 14px; line-height: 1.6; color: var(--text-secondary); }
 .opt-edit { display: flex; flex-direction: column; gap: 8px; margin-top: 4px; }
+.ans-edit { display: flex; flex-direction: column; gap: 8px; margin-bottom: 10px; }
+.ans-row { display: flex; align-items: center; gap: 10px; }
+.ans-row .input { flex: 1 1 auto; }
+.ans-num {
+  width: 32px; height: 32px; flex: none; display: inline-grid; place-items: center;
+  border: 1.5px solid var(--gray-200); border-radius: var(--radius-sm); background: var(--white);
+  font-size: 13px; font-weight: 700; color: var(--navy-900);
+}
+.qe-toolbar-row { display: flex; justify-content: flex-end; margin-top: 4px; }
+.qe-foot { display: flex; align-items: center; justify-content: flex-end; gap: 10px; padding-bottom: 32px; }
 .opt-row { display: flex; align-items: center; gap: 10px; }
 .opt-row .input { flex: 1 1 auto; }
 .key-label { position: relative; flex: none; }

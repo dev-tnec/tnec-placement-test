@@ -4,7 +4,7 @@
 import { useEffect, useState } from "react";
 import { dataReady, db, notify, reload, route, ui, useRoute, useVersion, TEST_KEYS, LOGIN } from "./store.js";
 import { clearBootstrapCache } from "./bootstrap-cache.js";
-import { isColdLead, leads, exportStudents, exportAttempts, TEST_META } from "./lib.js";
+import { isColdLead, leads, exportStudents, exportAttempts, TEST_META, questionNumber } from "./lib.js";
 import { Icon, PageHead, Empty } from "./ui.jsx";
 import { IconSprite } from "./icons.jsx";
 import { closeMenu } from "./menus.jsx"; // also registers the menu listeners
@@ -14,6 +14,7 @@ import { Ringkasan } from "./views/Ringkasan.jsx";
 import { SiswaList, SiswaDetail } from "./views/Siswa.jsx";
 import { Sertifikat } from "./views/Sertifikat.jsx";
 import { SessionDetail } from "./views/MockupSesi.jsx";
+import { QuestionEditor } from "./views/QuestionEditor.jsx";
 import { TestPage, AttemptDetail } from "./views/Test.jsx";
 import { ProgramKelas } from "./views/Program.jsx";
 import { DialogHost, ConfirmHost } from "./dialogs.jsx";
@@ -128,6 +129,11 @@ function currentView(parts, params) {
     const meta = TEST_META[parts[1]] || TEST_META.placement;
     const a = db.attempts.find((x) => x.id === parts[3]);
     return { view: <AttemptDetail testKey={TEST_KEYS.includes(parts[1]) ? parts[1] : "placement"} id={parts[3]} />, nav: meta.nav, title: `${meta.name} ${a ? a.short : ""}` };
+  }
+  if (parts[0] === "tes" && parts[2] === "soal" && parts[3]) {
+    const key = TEST_KEYS.includes(parts[1]) ? parts[1] : "placement";
+    const q = parts[3] !== "baru" ? db.tests[key].questions.find((x) => String(x.id) === parts[3]) : null;
+    return { view: <QuestionEditor testKey={key} id={parts[3]} />, nav: TEST_META[key].nav, title: parts[3] === "baru" ? "Tambah Soal" : q ? `Ubah Soal ${questionNumber(db.tests[key], q)}` : "Soal tidak ditemukan" };
   }
   if (parts[0] === "tes" && parts[1] === "ielts-mockup" && parts[2] === "sesi" && parts[3]) {
     return { view: <SessionDetail id={parts[3]} />, nav: TEST_META["ielts-mockup"].nav, title: "Sesi Mockup" };
