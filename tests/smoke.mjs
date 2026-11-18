@@ -28,7 +28,7 @@ import { createMailer, parseAddress } from "@tnec/core/mailer";
 import { buildInviteEmail } from "@tnec/core/email";
 import {
   parseRosterCsv, inviteWindow, formatWib, buildInviteWhatsApp, EMAIL_DAILY_LIMIT, MAX_IMPORT_ROWS,
-  MOCKUP_CODE_ALPHABET, mockupCode,
+  MOCKUP_CODE_ALPHABET, mockupCode, pickPackage,
 } from "@tnec/core/mockup-bulk";
 import { buildEnv } from "@tnec/core/env";
 import { announceSetup, createAdminHandler } from "../apps/admin/server.js";
@@ -650,6 +650,13 @@ for (let i = 0; i < 50; i += 1) {
   codes.add(code);
 }
 assert.ok(codes.size > 45, "50 generated codes are near-unique");
+
+// A session hands out one package from its set, so students in one wave can sit different packages.
+assert.equal(pickPackage([]), null);
+assert.equal(pickPackage(null), null);
+const packageSet = ["pkg_demo_a", "pkg_demo_b"];
+for (let i = 0; i < 30; i += 1) assert.ok(packageSet.includes(pickPackage(packageSet)), "the pick always comes from the set");
+assert.equal(new Set(Array.from({ length: 60 }, () => pickPackage(packageSet))).size, 2, "both packages come up over many students");
 
 const session = { windowMode: "terjadwal", entryGraceSeconds: 7200 };
 const scheduledWindow = inviteWindow(session, 1_800_028_800);

@@ -15,7 +15,7 @@ import {
 } from "@tnec/core/pendaftaran";
 import { sendWhatsApp, whatsappConfigured } from "@tnec/core/whatsapp";
 import { buildResultEmail, buildInviteEmail } from "@tnec/core/email";
-import { parseRosterCsv, inviteWindow, formatWib, EMAIL_DAILY_LIMIT, mockupCode } from "@tnec/core/mockup-bulk";
+import { parseRosterCsv, inviteWindow, formatWib, EMAIL_DAILY_LIMIT, mockupCode, pickPackage } from "@tnec/core/mockup-bulk";
 import { staticResponse, textResponse } from "@tnec/core/node-server";
 import { deliverInBackground, runInBackground } from "@tnec/core/delivery";
 import { drainInviteQueue, emailsSentRecently } from "./invite-queue.js";
@@ -377,9 +377,16 @@ async function bootstrap(request, env, user, url) {
     stmt(`SELECT id, attempt_id, status, needs_review, cefr_overall, ielts_overall, graded_at, created_at
             FROM speaking_submissions ORDER BY created_at DESC LIMIT 5000`),
     stmt("SELECT * FROM pendaftaran ORDER BY registered_at, id"),
+    stmt("SELECT session_id, package_id FROM mockup_session_packages"),
   ]), certificateData(env)]);
-  const [tests, questions, sections, packages, levels, students, attempts, sessions, emailUse, lastActs, enrolled, programs, durations, programTutors, tutors, periods, classes, s7, s30, speaking, pendaftaran] = res.map((r) => r.results);
+  const [tests, questions, sections, packages, levels, students, attempts, sessions, emailUse, lastActs, enrolled, programs, durations, programTutors, tutors, periods, classes, s7, s30, speaking, pendaftaran, sessionPkgs] = res.map((r) => r.results);
   const speakingByAttempt = new Map(speaking.map((s) => [s.attempt_id, s]));
+  const packagesBySession = new Map();
+  for (const row of sessionPkgs) {
+    const list = packagesBySession.get(row.session_id) ?? [];
+    list.push(row.package_id);
+    packagesBySession.set(row.session_id, list);
+  }
   const last = new Map(lastActs.map((r) => [r.student_id, r.last_at]));
   // Registrations per student, oldest to newest: they drive the registered filter and the count.
   const rowsByStudent = new Map();
@@ -433,7 +440,8 @@ async function bootstrap(request, env, user, url) {
     sessions: sessions.map((s) => ({
       id: s.id, name: s.name, windowMode: s.window_mode,
       rangeStart: ms(s.range_start), rangeEnd: ms(s.range_end), entryGraceSeconds: s.entry_grace_seconds,
-      programId: s.program_id, periodId: s.period_id, durationId: s.duration_id, packageId: s.package_id,
+      programId: s.program_id, periodId: s.period_id, durationId: s.duration_id,
+      packageIds: packagesBySession.get(s.id) || [],
       quota: s.quota, queuePaused: Boolean(s.queue_paused), status: s.status,
       createdBy: s.created_by || "", createdAt: ms(s.created_at),
       counts: { roster: s.roster, waSent: s.wa_sent, emailSent: s.email_sent, done: s.done },
@@ -927,15 +935,21 @@ const rangeDaySeconds = (value) => {
   return Number.isNaN(at) ? null : Math.floor(at / 1000);
 };
 
-function mapSessionRow(s) {
+function mapSessionRow(s, packageIds = []) {
   return {
     id: s.id, name: s.name, windowMode: s.window_mode,
     rangeStart: ms(s.range_start), rangeEnd: ms(s.range_end), entryGraceSeconds: s.entry_grace_seconds,
-    programId: s.program_id, periodId: s.period_id, durationId: s.duration_id, packageId: s.package_id,
+    programId: s.program_id, periodId: s.period_id, durationId: s.duration_id, packageIds,
     quota: s.quota, queuePaused: Boolean(s.queue_paused), status: s.status,
     createdBy: s.created_by || "", createdAt: ms(s.created_at),
     counts: { roster: s.roster ?? 0, waSent: s.wa_sent ?? 0, emailSent: s.email_sent ?? 0, done: s.done ?? 0 },
   };
+}
+
+/** The package set of a session, from the join table. */
+async function sessionPackageIds(env, sessionId) {
+  const rows = await env.DB.prepare("SELECT package_id FROM mockup_session_packages WHERE session_id = ?").bind(sessionId).all();
+  return rows.results.map((r) => r.package_id);
 }
 
 function sessionRow(env, id) {
@@ -963,12 +977,18 @@ async function saveMockupSession(request, env, user, url, id) {
   const programId = String(body.programId || "");
   const periodId = String(body.periodId || "");
   const durationId = body.durationId ? String(body.durationId) : null;
-  const packageId = String(body.packageId || "");
+  // A session carries one or more packages: every imported student gets one of them, so
+  // one wave can sit different packages. The old single packageId still arrives as a set.
+  const packageIds = [...new Set((Array.isArray(body.packageIds) ? body.packageIds : [body.packageId])
+    .map((value) => String(value || "").trim()).filter(Boolean))];
+  if (!packageIds.length) throw new HttpError(400, "Centang minimal satu paket soal.", { field: "packageIds" });
   await checkEnrollment(env, { programId, durationId, periodId, classId: null });
-  const pkg = await env.DB.prepare("SELECT id FROM question_packages WHERE id = ? AND test_key = 'ielts-mockup' AND is_active = 1").bind(packageId).first();
-  if (!pkg) throw new HttpError(400, "Paket soal tidak ditemukan atau tidak aktif.", { field: "packageId" });
-  const count = await env.DB.prepare("SELECT COUNT(*) AS n FROM questions WHERE package_id = ? AND status = 'aktif'").bind(packageId).first();
-  if (!count?.n) throw new HttpError(503, "Paket soal ini belum punya soal aktif.");
+  for (const packageId of packageIds) {
+    const pkg = await env.DB.prepare("SELECT id FROM question_packages WHERE id = ? AND test_key = 'ielts-mockup' AND is_active = 1").bind(packageId).first();
+    if (!pkg) throw new HttpError(400, `Paket soal ${packageId} tidak ditemukan atau tidak aktif.`, { field: "packageIds" });
+    const count = await env.DB.prepare("SELECT COUNT(*) AS n FROM questions WHERE package_id = ? AND status = 'aktif'").bind(packageId).first();
+    if (!count?.n) throw new HttpError(503, "Setiap paket di sesi ini harus punya soal aktif.");
+  }
   let quota = null;
   if (body.quota !== undefined && body.quota !== null && body.quota !== "") {
     quota = int(body.quota, { min: 1, max: 5000 });
@@ -979,21 +999,36 @@ async function saveMockupSession(request, env, user, url, id) {
     const row = await sessionRow(env, id);
     if (!row) throw new HttpError(404, "Sesi tidak ditemukan.");
     const roster = await env.DB.prepare("SELECT COUNT(*) AS n FROM invites WHERE session_id = ?").bind(id).first();
-    if (roster?.n && (row.program_id !== programId || row.period_id !== periodId || row.package_id !== packageId)) {
-      throw new HttpError(400, "Sesi ini sudah punya peserta, jadi program, periode, dan paketnya tidak bisa diubah.");
+    if (roster?.n && (row.program_id !== programId || row.period_id !== periodId)) {
+      throw new HttpError(400, "Sesi ini sudah punya peserta, jadi program dan periodenya tidak bisa diubah.");
+    }
+    if (roster?.n) {
+      // Participants keep the package on their invite, so a package some invite already
+      // uses must stay in the set. Adding more packages for the next import is allowed.
+      const used = await env.DB.prepare("SELECT DISTINCT package_id FROM invites WHERE session_id = ? AND package_id IS NOT NULL").bind(id).all();
+      const missing = used.results.map((r) => r.package_id).filter((pkg) => !packageIds.includes(pkg));
+      if (missing.length) throw new HttpError(400, "Peserta sesi ini sudah memakai paket itu, jadi paketnya harus tetap dicentang. Tambah paket baru boleh, hapus yang sudah dipakai tidak.", { field: "packageIds" });
     }
     const status = ["draft", "open", "closed", "cancelled"].includes(body.status) ? body.status : row.status;
-    await env.DB.prepare(`UPDATE mockup_sessions SET name = ?, window_mode = ?, range_start = ?, range_end = ?, entry_grace_seconds = ?,
-        program_id = ?, period_id = ?, duration_id = ?, package_id = ?, quota = ?, status = ?, updated_at = ? WHERE id = ?`)
-      .bind(name, windowMode, rangeStart, rangeEnd, windowMode === "fleksibel" ? row.entry_grace_seconds : entryGrace,
-        programId, periodId, durationId, packageId, quota, status, now, id).run();
+    await env.DB.batch([
+      env.DB.prepare(`UPDATE mockup_sessions SET name = ?, window_mode = ?, range_start = ?, range_end = ?, entry_grace_seconds = ?,
+          program_id = ?, period_id = ?, duration_id = ?, quota = ?, status = ?, updated_at = ? WHERE id = ?`)
+        .bind(name, windowMode, rangeStart, rangeEnd, windowMode === "fleksibel" ? row.entry_grace_seconds : entryGrace,
+          programId, periodId, durationId, quota, status, now, id),
+      env.DB.prepare(`DELETE FROM mockup_session_packages WHERE session_id = ? AND package_id NOT IN (${packageIds.map(() => "?").join(",")})`)
+        .bind(id, ...packageIds),
+      ...packageIds.map((pkg) => env.DB.prepare("INSERT INTO mockup_session_packages (session_id, package_id) VALUES (?, ?) ON CONFLICT DO NOTHING").bind(id, pkg)),
+    ]);
     return json({ ok: true, id });
   }
   const sessionId = newId("msn");
-  await env.DB.prepare(`INSERT INTO mockup_sessions (id, name, window_mode, range_start, range_end, entry_grace_seconds,
-      program_id, period_id, duration_id, package_id, quota, status, created_by, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'draft', ?, ?, ?)`)
-    .bind(sessionId, name, windowMode, rangeStart, rangeEnd, entryGrace, programId, periodId, durationId, packageId, quota, user.name, now, now).run();
+  await env.DB.batch([
+    env.DB.prepare(`INSERT INTO mockup_sessions (id, name, window_mode, range_start, range_end, entry_grace_seconds,
+        program_id, period_id, duration_id, quota, status, created_by, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'draft', ?, ?, ?)`)
+      .bind(sessionId, name, windowMode, rangeStart, rangeEnd, entryGrace, programId, periodId, durationId, quota, user.name, now, now),
+    ...packageIds.map((pkg) => env.DB.prepare("INSERT INTO mockup_session_packages (session_id, package_id) VALUES (?, ?)").bind(sessionId, pkg)),
+  ]);
   return json({ ok: true, id: sessionId });
 }
 
@@ -1066,6 +1101,9 @@ async function confirmSessionImport(request, env, user, url, id) {
     throw new HttpError(400, `Kuota sesi ${session.quota} peserta. Impor ini menambah ${fresh.length}, jadi melebihi kuota.`);
   }
   const now = nowSeconds();
+  // Each student gets one package from the session's set, so one wave can sit several.
+  const sessionPkgs = await sessionPackageIds(env, session.id);
+  if (!sessionPkgs.length) throw new HttpError(503, "Sesi ini belum punya paket soal.");
   const stmts = [];
   const usedCodes = new Set();
   let created = 0;
@@ -1103,7 +1141,7 @@ async function confirmSessionImport(request, env, user, url, id) {
     const inviteId = newId("inv");
     stmts.push(env.DB.prepare(`INSERT INTO invites (id, token_hash, student_id, test_key, code, package_id, session_id, opens_at, created_at, expires_at, created_by)
         VALUES (?, ?, ?, 'ielts-mockup', ?, ?, ?, ?, ?, ?, ?)`)
-      .bind(inviteId, await sha256Hex(token), studentId, code, session.package_id, session.id, row.opensAt, now, row.expiresAt, user.name));
+      .bind(inviteId, await sha256Hex(token), studentId, code, pickPackage(sessionPkgs), session.id, row.opensAt, now, row.expiresAt, user.name));
     stmts.push(env.DB.prepare(`INSERT INTO mockup_invite_queue (id, invite_id, email_status, wa_status, plain_token, created_at)
         VALUES (?, ?, ?, 'pending', ?, ?)`)
       .bind(newId("ivq"), inviteId, row.email ? "pending" : "dilewati", token, now));
@@ -1181,6 +1219,13 @@ async function moveInviteToSession(request, env, user, url, inviteId) {
     rangeEnd: target.range_end, entryGraceSeconds: target.entry_grace_seconds,
   }, scheduledAt);
   if (window.error) throw new HttpError(400, window.error);
+  // A moved invite keeps its package when the target session still offers it, and gets a
+  // fresh pick from the target's set otherwise.
+  const targetPkgs = await sessionPackageIds(env, target.id);
+  if (!targetPkgs.length) throw new HttpError(503, "Sesi tujuan belum punya paket soal.");
+  const movedPackage = invite.package_id && targetPkgs.includes(invite.package_id)
+    ? invite.package_id
+    : pickPackage(targetPkgs);
   let code = null;
   for (let i = 0; i < 20 && !code; i += 1) {
     const candidate = mockupCode();
@@ -1194,7 +1239,7 @@ async function moveInviteToSession(request, env, user, url, inviteId) {
   await env.DB.batch([
     env.DB.prepare(`INSERT INTO invites (id, token_hash, student_id, test_key, code, package_id, session_id, opens_at, created_at, expires_at, created_by)
         VALUES (?, ?, ?, 'ielts-mockup', ?, ?, ?, ?, ?, ?, ?)`)
-      .bind(newInviteId, await sha256Hex(token), invite.student_id, code, target.package_id, target.id, window.opensAt, now, window.expiresAt, user.name),
+      .bind(newInviteId, await sha256Hex(token), invite.student_id, code, movedPackage, target.id, window.opensAt, now, window.expiresAt, user.name),
     env.DB.prepare(`INSERT INTO mockup_invite_queue (id, invite_id, email_status, wa_status, plain_token, created_at)
         VALUES (?, ?, ?, 'pending', ?, ?)`)
       .bind(newId("ivq"), newInviteId, invite.email ? "pending" : "dilewati", token, now),
@@ -1244,7 +1289,7 @@ async function getSessionRoster(request, env, user, url, id) {
   const session = await sessionRow(env, id);
   if (!session) throw new HttpError(404, "Sesi tidak ditemukan.");
   const rows = await env.DB.prepare(
-    `SELECT i.id AS invite_id, i.code, i.opens_at, i.expires_at, i.used_at, i.attempt_id,
+    `SELECT i.id AS invite_id, i.code, i.package_id, i.opens_at, i.expires_at, i.used_at, i.attempt_id,
             s.id AS student_id, s.name, s.whatsapp, s.email,
             q.email_status, q.email_attempts, q.email_error, q.email_sent_at, q.wa_status, q.wa_attempts, q.wa_error, q.wa_sent_at, q.plain_token,
             a.status AS attempt_status, a.submitted_at
@@ -1258,10 +1303,10 @@ async function getSessionRoster(request, env, user, url, id) {
   const sent = await emailsSentRecently(env);
   return json({
     ok: true,
-    session: mapSessionRow(session),
+    session: mapSessionRow(session, await sessionPackageIds(env, id)),
     emailUsage: { sent, limit: EMAIL_DAILY_LIMIT },
     rows: rows.results.map((r) => ({
-      inviteId: r.invite_id, code: r.code, opensAt: ms(r.opens_at), expiresAt: ms(r.expires_at),
+      inviteId: r.invite_id, code: r.code, packageId: r.package_id || null, opensAt: ms(r.opens_at), expiresAt: ms(r.expires_at),
       studentId: r.student_id, name: r.name, wa: r.whatsapp, email: r.email || "",
       emailStatus: r.email_status, emailError: r.email_error || "", emailSentAt: ms(r.email_sent_at),
       waStatus: r.wa_status, waError: r.wa_error || "", waSentAt: ms(r.wa_sent_at),

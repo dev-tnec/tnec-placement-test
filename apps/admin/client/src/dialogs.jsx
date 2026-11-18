@@ -1472,6 +1472,17 @@ function SessionDialog({ id }) {
   const [programId, setProgramId] = useState(s?.programId || "prg_ielts_mockup");
   const packages = db.tests["ielts-mockup"].packages;
   const durations = db.programs.find((p) => p.id === programId)?.durations || [];
+  // One session carries one or more packages. Every imported student gets one of them,
+  // so a wave can sit different packages. New sessions start with the first package ticked.
+  const [picked, setPicked] = useState(() => new Set(s?.packageIds?.length ? s.packageIds : packages[0] ? [packages[0].id] : []));
+
+  function togglePackage(packageId, on) {
+    setPicked((set) => {
+      const next = new Set(set);
+      if (on) next.add(packageId); else next.delete(packageId);
+      return next;
+    });
+  }
 
   async function save(e) {
     e.preventDefault();
@@ -1486,11 +1497,11 @@ function SessionDialog({ id }) {
       programId,
       periodId: $("#ss-period").value || "",
       durationId: $("#ss-duration").value || null,
-      packageId: $("#ss-package").value || "",
+      packageIds: [...picked],
       quota: $("#ss-quota").value.trim() === "" ? null : Number($("#ss-quota").value),
     };
     if (!body.periodId) fail($("#ss-period"), "ss-period-err", "Periode wajib dipilih.");
-    if (!body.packageId) fail($("#ss-package"), "ss-package-err", "Paket soal wajib dipilih.");
+    if (!picked.size) fail(null, "ss-package-err", "Centang minimal satu paket soal.");
     if (mode === "fleksibel") {
       body.rangeStart = $("#ss-range-start").value;
       body.rangeEnd = $("#ss-range-end").value;
@@ -1515,7 +1526,7 @@ function SessionDialog({ id }) {
       else if (error.field === "rangeStart" || error.field === "rangeEnd") fieldError($("#ss-range-end"), "ss-range-err", error.message);
       else if (error.field === "entryGraceSeconds") fieldError($("#ss-grace"), "ss-grace-err", error.message);
       else if (error.field === "periodId") fieldError($("#ss-period"), "ss-period-err", error.message);
-      else if (error.field === "packageId") fieldError($("#ss-package"), "ss-package-err", error.message);
+      else if (error.field === "packageIds") fieldError(null, "ss-package-err", error.message);
       else if (error.field === "quota") fieldError($("#ss-quota"), "ss-quota-err", error.message);
       else fieldError(null, "ss-err", error.message);
     } finally {
@@ -1578,13 +1589,19 @@ function SessionDialog({ id }) {
                 <OptList list={[["", "Tanpa durasi"], ...durations.map((d) => [d.id, d.label])]} />
               </select>
             </div>
-            <div className="field">
-              <label className="label" htmlFor="ss-package">Paket soal</label>
-              <select className="select" id="ss-package" defaultValue={s?.packageId || ""}>
-                <OptList list={[["", "Pilih paket"], ...packages.map((p) => [p.id, p.name])]} />
-              </select>
+            <fieldset className="field span-all">
+              <legend className="label">Paket soal</legend>
+              <div className="check-grid" id="ss-packages">
+                {packages.map((p) => (
+                  <label key={p.id} className="check">
+                    <input type="checkbox" value={p.id} checked={picked.has(p.id)} onChange={(e) => togglePackage(p.id, e.target.checked)} />
+                    <span>{p.name}{p.active ? "" : <span className="cell-sub"> nonaktif</span>}</span>
+                  </label>
+                ))}
+              </div>
+              <p className="hint">Setiap peserta mendapat satu paket dari yang dicentang, dipilih acak saat impor, jadi satu gelombang bisa mengerjakan paket yang berbeda.</p>
               <p className="error" id="ss-package-err" hidden></p>
-            </div>
+            </fieldset>
             <div className="field">
               <label className="label" htmlFor="ss-quota">Kuota peserta</label>
               <input className="input tnum" id="ss-quota" type="number" min="1" defaultValue={s?.quota ?? ""} placeholder="Opsional" />

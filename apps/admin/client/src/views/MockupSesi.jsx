@@ -31,16 +31,24 @@ function windowText(s) {
   return `Terjadwal, tenggang ${Math.round(s.entryGraceSeconds / 60)} menit`;
 }
 
+/* The package names of a session's set. Students can sit different packages, so the roster
+   shows each invite's own package while this lists what the session offers. */
+function packageNames(ids) {
+  return (ids || []).map((id) => db.tests["ielts-mockup"].packages.find((p) => p.id === id)?.name || id).join(", ");
+}
+
+const packageName = (id) => (id ? db.tests["ielts-mockup"].packages.find((p) => p.id === id)?.name || id : "-");
+
 /* The roster follows the same CSV export as the other lists: what the table shows is what
    downloads, including both channel statuses. */
 function exportRoster(session, rows) {
   downloadCsv(`sesi-mockup-${session.name.replace(/[^\w-]+/g, "-").toLowerCase()}-${toDateInput(NOW)}.csv`, [
-    ["Nama", "WhatsApp", "Email", "Kode tes", "Jendela mulai", "Jendela akhir", "Status email", "Status WhatsApp", "Status tes", "Status pendaftaran"],
+    ["Nama", "WhatsApp", "Email", "Kode tes", "Paket", "Jendela mulai", "Jendela akhir", "Status email", "Status WhatsApp", "Status tes", "Status pendaftaran"],
     ...rows.map((r) => {
       const reg = db.pendaftaran.find((p) => p.studentId === r.studentId
         && p.programId === session.programId && p.periodId === session.periodId && p.status !== "batal");
       return [
-        r.name, fmtWa(r.wa), r.email, r.code,
+        r.name, fmtWa(r.wa), r.email, r.code, packageName(r.packageId),
         session.windowMode === "fleksibel" ? fmtDate(r.opensAt) : fmtDateTime(r.opensAt),
         session.windowMode === "fleksibel" ? fmtDate(r.expiresAt) : fmtDateTime(r.expiresAt),
         QUEUE_LABEL[r.emailStatus] || r.emailStatus, QUEUE_LABEL[r.waStatus] || r.waStatus,
@@ -76,7 +84,7 @@ export function SessionsTab() {
           <tr key={s.id} onClick={rowRun(() => { location.hash = `#/tes/ielts-mockup/sesi/${s.id}`; })}>
             <td><p className="q-prompt">{s.name}</p><span className="cell-sub">Dibuat {fmtDateTime(s.createdAt)}</span></td>
             <td className="nowrap">{windowText(s)}</td>
-            <td>{db.tests["ielts-mockup"].packages.find((p) => p.id === s.packageId)?.name || "-"}</td>
+            <td>{packageNames(s.packageIds) || "-"}</td>
             <td className="hide-sm">{programById(s.programId)?.name || "-"}<span className="cell-sub">{periodById(s.periodId) ? `Periode ${fmtDate(periodById(s.periodId).start)}` : ""}</span></td>
             <td className="hide-md tnum">{s.counts.roster}{s.quota ? ` dari ${s.quota}` : ""}</td>
             <td className="hide-sm tnum">WA {s.counts.waSent}, email {s.counts.emailSent}</td>
@@ -128,7 +136,7 @@ export function SessionDetail({ id }) {
   return <>
     <PageHead title={session.name}
       desc={<p className="page-desc">
-        {windowText(session)} &middot; {db.tests["ielts-mockup"].packages.find((p) => p.id === session.packageId)?.name || "-"} &middot; {programById(session.programId)?.name || "-"}
+        {windowText(session)} &middot; {packageNames(session.packageIds) || "-"} &middot; {programById(session.programId)?.name || "-"}
       </p>}
       actions={<>
         <button className="btn btn--quiet" type="button" disabled={!rows.length} onClick={() => exportRoster(session, rows)}><Icon name="download" />Ekspor CSV</button>
@@ -152,7 +160,7 @@ export function SessionDetail({ id }) {
       {rows.length ? <div className="table-wrap"><table className="table">
         <caption className="sr-only">Roster {session.name}</caption>
         <thead><tr>
-          <th scope="col">Siswa</th><th scope="col">Kode</th><th scope="col">Jendela tes</th>
+          <th scope="col">Siswa</th><th scope="col">Kode</th><th scope="col" className="hide-sm">Paket</th><th scope="col">Jendela tes</th>
           <th scope="col">Email</th><th scope="col">WhatsApp</th>
           <th scope="col" className="hide-lg">Pendaftaran</th>
           <th scope="col" className="hide-md">Tes</th>
@@ -166,6 +174,7 @@ export function SessionDetail({ id }) {
             <td><a className="q-prompt" href={`#/siswa/${r.studentId}`}>{r.name}</a>
               <span className="cell-sub">{fmtWa(r.wa)}{r.email ? `, ${r.email}` : ""}</span></td>
             <td className="nowrap tnum"><strong>{r.code}</strong></td>
+            <td className="hide-sm">{packageName(r.packageId)}</td>
             <td className="nowrap">{session.windowMode === "fleksibel"
               ? `${fmtDate(r.opensAt)} sampai ${fmtDate(r.expiresAt)}`
               : `${fmtDateTime(r.opensAt)} sampai ${fmtDateTime(r.expiresAt)}`}</td>

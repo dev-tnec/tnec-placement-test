@@ -24,7 +24,7 @@ Peserta mockup adalah siswa, bukan lead. Setiap peserta mendapat satu baris `pen
 
 ## 3. Istilah
 
-Sesi mockup adalah satu gelombang peserta berbayar, dengan satu program, satu periode, satu paket soal, satu mode jendela tes, dan satu roster. Roster adalah daftar siswa di sesi itu. Kode tes adalah kode 6 karakter yang diketik siswa di halaman undangan. Tautan undangan adalah tautan per siswa yang memuat token rahasia. Program mockup adalah program "IELTS Mockup" di katalog Program & Kelas yang dipakai untuk baris `pendaftaran`.
+Sesi mockup adalah satu gelombang peserta berbayar, dengan satu program, satu periode, satu mode jendela tes, satu set paket soal, dan satu roster. Roster adalah daftar siswa di sesi itu. Kode tes adalah kode 6 karakter yang diketik siswa di halaman undangan. Tautan undangan adalah tautan per siswa yang memuat token rahasia. Program mockup adalah program "IELTS Mockup" di katalog Program & Kelas yang dipakai untuk baris `pendaftaran`.
 
 ## 4. Model sesi
 
@@ -39,7 +39,7 @@ Satu sesi mewakili satu gelombang. Karena satu gelombang bisa membentang beberap
 | `program_id` | Program "IELTS Mockup" di katalog. Wajib, dipakai untuk `pendaftaran` |
 | `period_id` | Periode untuk pendaftaran, biasanya periode intake. Wajib, dipilih tim |
 | `duration_id` | Durasi program mockup "1 hari", dipakai untuk `pendaftaran` |
-| `package_id` | Paket soal, misalnya Paket Demo A. Wajib |
+| `package_id` di `mockup_session_packages` | Satu sesi menyimpan satu set paket soal, minimal satu. Setiap peserta tetap mendapat satu paket di undangannya, dipilih acak dari set ini saat impor, jadi satu gelombang bisa mengerjakan paket yang berbeda |
 | `quota` | Batas jumlah peserta, opsional |
 | `status` | `draft`, `open`, `closed`, `cancelled` |
 | `created_by`, `created_at`, `updated_at` | Jejak tim |
@@ -62,7 +62,7 @@ Sesi berstatus `draft` boleh diisi dan diubah. Status `open` berarti undangan su
 | Terjadwal | `nama`, `whatsapp`, `email`, `tanggal_tes`, `jam_tes` | Per siswa, dari berkas |
 | Fleksibel | `nama`, `whatsapp`, `email` | Sama untuk semua, dari rentang sesi |
 
-Kedua mode memakai dialog impor yang sama. Sesi dipilih atau dibuat dulu, lalu berkas diunggah. Mode sesi menentukan kolom wajib berkas: sesi terjadwal menuntut `tanggal_tes` dan `jam_tes` per baris, sesi fleksibel menolak kolom tanggal dan memakai rentang sesi. Paket soal selalu dari sesi, supaya satu gelombang memakai paket yang sama.
+Kedua mode memakai dialog impor yang sama. Sesi dipilih atau dibuat dulu, lalu berkas diunggah. Mode sesi menentukan kolom wajib berkas: sesi terjadwal menuntut `tanggal_tes` dan `jam_tes` per baris, sesi fleksibel menolak kolom tanggal dan memakai rentang sesi. Paket soal selalu dari set sesi: setiap peserta mendapat satu paket dari set itu, dipilih acak.
 
 ## 6. Format berkas
 
@@ -104,7 +104,7 @@ Setiap siswa mendapat satu undangan per sesi. Token undangan dibuat acak, hanya 
 
 Kode tes selalu dibuat dashboard: 6 karakter huruf besar dan angka, acak, unik, disimpan di `invites.code` dengan indeks unik yang sudah ada. Kode ini tidak berhubungan dengan kode pembayaran apa pun.
 
-Jendela tes dihitung sesuai mode sesi, seperti di bagian 4. Paket soal diambil dari sesi dan disimpan di undangan.
+Jendela tes dihitung sesuai mode sesi, seperti di bagian 4. Paket soal dipilih acak dari set sesi dan disimpan di undangan.
 
 Kalau siswa perlu dijadwalkan ulang, tim membuat undangan baru di sesi lain dan undangan lama yang belum dipakai dihapus atau ditandai diganti. Undangan yang sudah dipakai tidak dihapus, karena attempt dan hasilnya menunjuk ke undangan itu.
 
@@ -161,7 +161,7 @@ Migrasi baru `db/migrations/0015_mockup_sessions.sql`.
 
 | Tabel | Perubahan |
 |---|---|
-| `mockup_sessions` | Tabel baru: `id`, `name`, `window_mode`, `range_start`, `range_end`, `entry_grace_seconds`, `program_id`, `period_id`, `duration_id`, `package_id`, `quota`, `queue_paused`, `status`, `created_by`, `created_at`, `updated_at` |
+| `mockup_sessions` | Tabel baru: `id`, `name`, `window_mode`, `range_start`, `range_end`, `entry_grace_seconds`, `program_id`, `period_id`, `duration_id`, `quota`, `queue_paused`, `status`, `created_by`, `created_at`, `updated_at`. Paket soal tidak lagi satu kolom di sini, melainkan set di `mockup_session_packages` (satu baris per pasangan sesi dan paket) |
 | `invites` | Tambah `session_id` yang menunjuk ke `mockup_sessions`, nullable untuk pre-test dan post-test. Kode undangan dibuat oleh modul murni `mockupCode()` di `mockup-bulk.js`, yang sama untuk undangan tunggal dan impor massal, dan `tests/smoke.mjs` memeriksanya |
 | `mockup_invite_queue` | Tabel baru: `id`, `invite_id`, `email_status`, `email_attempts`, `email_error`, `email_sent_at`, `wa_status`, `wa_attempts`, `wa_error`, `wa_sent_at`, `plain_token`, `created_at` |
 | `programs`, `program_durations` | Seed program "IELTS Mockup" mode Online dan durasi "1 hari" tanpa harga |

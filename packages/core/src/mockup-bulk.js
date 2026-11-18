@@ -19,6 +19,14 @@ export function mockupCode() {
   return code;
 }
 
+/** One package from a session's set, so students in one wave can sit different packages.
+ *  The invite keeps the picked id, and grading follows the invite. Null when the set is empty;
+ *  the callers refuse the import before that can happen. */
+export function pickPackage(packageIds) {
+  if (!packageIds?.length) return null;
+  return packageIds[Math.floor(Math.random() * packageIds.length)];
+}
+
 export const MAX_IMPORT_ROWS = 500;
 
 const DAYS = ["Minggu", "Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu"];
