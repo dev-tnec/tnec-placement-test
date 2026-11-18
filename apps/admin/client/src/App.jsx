@@ -4,7 +4,7 @@
 import { useEffect, useState } from "react";
 import { dataReady, db, notify, reload, route, ui, useRoute, useVersion, TEST_KEYS, LOGIN } from "./store.js";
 import { clearBootstrapCache } from "./bootstrap-cache.js";
-import { isColdLead, leads, exportStudents, exportAttempts, TEST_META, questionNumber } from "./lib.js";
+import { isColdLead, leads, exportStudents, exportAttempts, exportAllAttempts, TEST_META, questionNumber } from "./lib.js";
 import { Icon, PageHead, Empty } from "./ui.jsx";
 import { IconSprite } from "./icons.jsx";
 import { closeMenu } from "./menus.jsx"; // also registers the menu listeners
@@ -93,10 +93,12 @@ function BulkBar() {
   const { parts } = route();
   let set = null, scope = null;
   if (parts[0] === "siswa" && !parts[1]) { scope = "students"; set = ui.students.selected; }
+  if (parts[0] === "submission") { scope = "attempts"; set = ui.allSubmissions.selected; }
   if (parts[0] === "tes" && parts[2] === "submission" && !parts[3] && TEST_KEYS.includes(parts[1])) { scope = "attempts"; set = ui.attempts[parts[1]].selected; }
   if (!set || !set.size) return null;
   const n = set.size;
   const clear = () => { set.clear(); notify(); };
+  const selectedAttempts = () => db.attempts.filter((a) => set.has(a.id));
   return (
     <div className="bulk" role="region" aria-label="Aksi untuk data terpilih">
       {scope === "students" ? <>
@@ -111,7 +113,7 @@ function BulkBar() {
       </> : <>
         <span className="bulk__count">{n} submission dipilih</span>
         <span className="bulk__actions">
-          <button className="btn btn--dark btn--sm" type="button" onClick={() => exportAttempts(db.attempts.filter((a) => set.has(a.id)))}>Ekspor</button>
+          <button className="btn btn--dark btn--sm" type="button" onClick={() => (parts[0] === "submission" ? exportAllAttempts(selectedAttempts()) : exportAttempts(selectedAttempts()))}>Ekspor</button>
           <button className="btn btn--dark btn--sm" type="button" onClick={() => deleteAttempts([...set], false)}>Hapus</button>
         </span>
         <button className="icon-btn icon-btn--dark" type="button" aria-label="Batalkan pilihan" onClick={clear}><Icon name="x" /></button>

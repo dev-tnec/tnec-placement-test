@@ -3,7 +3,7 @@
 // Each row opens the submission detail of its own test.
 
 import { db, notify, ui, useVersion, PAGE_SIZE, TEST_KEYS } from "../store.js";
-import { ATTEMPT_STATUS, TEST_META, fmtDateTime, studentById, classById, classLabel } from "../lib.js";
+import { ATTEMPT_STATUS, TEST_META, exportAllAttempts, fmtDateTime, studentById, classById, classLabel } from "../lib.js";
 import { AttemptStatus, Chip, Empty, Icon, OptList, PageHead, Pager, ResultCell, OutcomeCell, rowClick } from "../ui.jsx";
 import { BRANCHES, branchLabel } from "@tnec/core/branches";
 
@@ -38,13 +38,17 @@ export function AllSubmissions() {
   const pages = Math.max(1, Math.ceil(rows.length / PAGE_SIZE));
   f.page = Math.min(Math.max(1, f.page), pages);
   const pageRows = rows.slice((f.page - 1) * PAGE_SIZE, f.page * PAGE_SIZE);
+  const allOnPage = pageRows.length > 0 && pageRows.every((a) => f.selected.has(a.id));
+  const toggleRow = (id, checked) => { if (checked) f.selected.add(id); else f.selected.delete(id); notify(); };
+  const togglePage = (checked) => { pageRows.forEach((a) => { if (checked) f.selected.add(a.id); else f.selected.delete(a.id); }); notify(); };
   const countOf = (k) => (k === "all" ? base.length
     : k === "failed" ? base.filter((a) => a.status === "timeout" || a.status === "violation").length
       : base.filter((a) => a.status === k).length);
 
   return <>
     <PageHead title="Submission"
-      desc={<p className="page-desc"><span>Semua submission dari keempat tes. Klik satu baris untuk membuka jawaban dan detailnya di halaman tesnya.</span></p>} />
+      desc={<p className="page-desc"><span>Semua submission dari keempat tes. Klik satu baris untuk membuka jawaban dan detailnya di halaman tesnya.</span></p>}
+      actions={<button className="btn btn--quiet" type="button" onClick={() => exportAllAttempts(rows)}><Icon name="download" />Ekspor CSV</button>} />
     <section className="panel">
       <div className="toolbar">
         <div className="chips" role="group" aria-label="Saring status submission">
@@ -69,6 +73,7 @@ export function AllSubmissions() {
         <div className="table-wrap"><table className="table">
           <caption className="sr-only">Semua submission</caption>
           <thead><tr>
+            <th scope="col" className="is-check"><input type="checkbox" checked={allOnPage} aria-label="Pilih semua submission di halaman ini" onChange={(e) => togglePage(e.target.checked)} /></th>
             <th scope="col" className="hide-md">Tes</th><th scope="col">Peserta</th><th scope="col">Hasil</th>
             <th scope="col" className="hide-sm">Level, kelulusan, atau band</th><th scope="col" className="hide-lg">Waktu</th>
             <th scope="col">Status</th><th scope="col" className="is-action hide-xl"><span className="sr-only">Buka</span></th>
@@ -77,7 +82,8 @@ export function AllSubmissions() {
             const s = a.studentId ? studentById(a.studentId) : null;
             const href = `#/tes/${a.test}/submission/${a.id}`;
             return (
-              <tr key={a.id} onClick={rowClick(href)}>
+              <tr key={a.id} className={f.selected.has(a.id) ? "is-selected" : ""} onClick={rowClick(href)}>
+                <td className="is-check"><input type="checkbox" checked={f.selected.has(a.id)} aria-label={`Pilih submission ${s ? s.name : a.contactName || a.short}`} onChange={(e) => toggleRow(a.id, e.target.checked)} /></td>
                 <td className="hide-md"><span className="cell-main">{TEST_META[a.test]?.name || a.test}</span>
                   {s?.branch ? <span className="cell-sub">Cabang {branchLabel(s.branch)}</span> : null}</td>
                 <td>{s

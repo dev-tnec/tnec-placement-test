@@ -121,7 +121,7 @@ export const ui = {
   package: {},
   pendaftaran: { q: "", studentId: null },
   students: { q: "", stage: "all", level: "", program: "", period: "", tutor: "", branch: "", sort: "activity", dir: "desc", page: 1, selected: new Set() },
-  allSubmissions: { q: "", test: "", branch: "", status: "all", page: 1 },
+  allSubmissions: { q: "", test: "", branch: "", status: "all", page: 1, selected: new Set() },
   questions: { placement: { q: "", skill: "all" }, pre: { q: "", skill: "all" }, post: { q: "", skill: "all" }, "ielts-mockup": { q: "", skill: "all" } },
   attempts: { placement: attemptFilter("30"), pre: attemptFilter("all"), post: attemptFilter("all"), "ielts-mockup": attemptFilter("all") },
   classes: { period: "", program: "" },

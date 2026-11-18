@@ -56,8 +56,9 @@ function CheckIcon() {
   return <span className="check__box" aria-hidden="true" />;
 }
 
-/* Inline runs of a parsed passage: b, i, and u wrap each other, everything else is text. */
+/* Inline runs of a parsed passage: images, then b, i, and u wrap each other, everything else is text. */
 const runNodes = (runs) => runs.map((run, i) => {
+  if (run.image) return <img className="rt__image" src={run.image} alt={run.alt || ""} key={i} />;
   let node = run.text;
   if (run.b) node = <strong>{node}</strong>;
   if (run.i) node = <em>{node}</em>;
@@ -65,10 +66,19 @@ const runNodes = (runs) => runs.map((run, i) => {
   return <Fragment key={i}>{node}</Fragment>;
 });
 
-/* One parsed block: a paragraph, or a bullet or numbered list. */
+/* One parsed block: a paragraph, a quote, a table, or a bullet or numbered list. */
 function RichBlock({ block }) {
-  if (block.type === "p") {
-    return <p>{block.lines.map((runs, j) => <Fragment key={j}>{j > 0 ? <br /> : null}{runNodes(runs)}</Fragment>)}</p>;
+  if (block.type === "p" || block.type === "quote") {
+    const body = block.lines.map((runs, j) => <Fragment key={j}>{j > 0 ? <br /> : null}{runNodes(runs)}</Fragment>);
+    return block.type === "quote" ? <blockquote>{body}</blockquote> : <p>{body}</p>;
+  }
+  if (block.type === "table") {
+    return (
+      <table className="rt__table">
+        {block.header ? <thead><tr>{block.header.map((runs, i) => <th key={i}>{runNodes(runs)}</th>)}</tr></thead> : null}
+        <tbody>{block.rows.map((row, i) => <tr key={i}>{row.map((runs, j) => <td key={j}>{runNodes(runs)}</td>)}</tr>)}</tbody>
+      </table>
+    );
   }
   const List = block.type === "ol" ? "ol" : "ul";
   return <List>{block.items.map((runs, j) => <li key={j}>{runNodes(runs)}</li>)}</List>;

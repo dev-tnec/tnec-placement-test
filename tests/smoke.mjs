@@ -717,6 +717,30 @@ assert.deepEqual(parseRichText("Mixed\n- not every line marked")[0], { type: "p"
 assert.deepEqual(parseRichText("Unknown <x>tag</x> stays <b>text")[0].lines[0], [{ text: "Unknown <x>tag</x> stays <b>text" }], "unknown and unclosed tags stay literal");
 assert.deepEqual(parseRichText("   \n\n  "), [], "empty text parses to no blocks");
 
+const quote = parseRichText("> First quoted line\n> Second <b>bold</b> line");
+assert.equal(quote[0].type, "quote");
+assert.deepEqual(quote[0].lines[0], [{ text: "First quoted line" }]);
+assert.equal(quote[0].lines[1][1].b, true);
+
+const table = parseRichText("| Word | Meaning |\n| --- | --- |\n| presence | being <b>here</b> |\n| cue | signal |");
+assert.equal(table[0].type, "table");
+assert.deepEqual(table[0].header, [[{ text: "Word" }], [{ text: "Meaning" }]]);
+assert.equal(table[0].rows.length, 2);
+assert.deepEqual(table[0].rows[0], [[{ text: "presence" }], [{ text: "being " }, { text: "here", b: true }]]);
+const plainTable = parseRichText("| a | b |\n| c | d |");
+assert.equal(plainTable[0].header, null, "a table without a separator row has no header");
+assert.equal(plainTable[0].rows.length, 2);
+assert.equal(parseRichText("A pipe | in prose\nSecond line")[0].type, "p", "not every line carrying a pipe keeps the block a paragraph");
+assert.equal(parseRichText("Single | line")[0].type, "p", "a single line with a pipe is not a table");
+
+const withImage = parseRichText("Before ![Peta Dalton](/images/ielts-writing-dalton.png) after.");
+assert.deepEqual(withImage[0].lines[0], [
+  { text: "Before " },
+  { image: "/images/ielts-writing-dalton.png", alt: "Peta Dalton" },
+  { text: " after." },
+], "an image with a site path becomes an image run");
+assert.deepEqual(parseRichText("![Alt](https://example.com/x.png)")[0].lines[0], [{ text: "![Alt](https://example.com/x.png)" }], "an image with a foreign address stays literal, because the CSP blocks it anyway");
+
 assert.equal(BRANCHES.length, 4);
 assert.equal(branchKey("pare"), "pare");
 assert.equal(branchKey(" Online "), "online");

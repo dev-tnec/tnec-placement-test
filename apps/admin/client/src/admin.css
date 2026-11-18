@@ -514,10 +514,28 @@ body.has-bulk .toasts { bottom: 88px; }
 .rt ol { list-style: decimal outside; }
 .rt li::marker { color: var(--text-secondary); }
 .rt u { text-underline-offset: 3px; }
+.rt blockquote {
+  padding: 10px 14px;
+  border: 1px solid var(--gray-200);
+  border-radius: var(--radius-sm);
+  background: var(--surface-50);
+  color: var(--text-secondary);
+}
+.rt table { border-collapse: collapse; }
+.rt th, .rt td {
+  padding: 7px 11px;
+  border: 1px solid var(--gray-200);
+  font-size: 13px;
+  text-align: left;
+  vertical-align: top;
+}
+.rt th { background: var(--surface-50); font-weight: 700; color: var(--navy-900); }
+.rt__image { max-width: 100%; height: auto; border-radius: var(--radius-sm); }
 
 /* The formatting bar above a passage textarea. It rides on the textarea's top border. */
 .rt-toolbar {
-  display: flex; align-items: center; gap: 2px; width: fit-content;
+  display: flex; flex-wrap: wrap; align-items: center; gap: 2px; width: fit-content;
+  max-width: 100%;
   padding: 5px; border: 1px solid var(--gray-200); border-bottom: 0;
   border-radius: var(--radius-sm) var(--radius-sm) 0 0; background: var(--gray-50);
 }

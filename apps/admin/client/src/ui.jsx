@@ -140,6 +140,7 @@ export const Stat = ({ label, value, note }) => (
 /* ===================== Rich passage text ===================== */
 
 const runNodes = (runs) => runs.map((run, i) => {
+  if (run.image) return <img className="rt__image" src={run.image} alt={run.alt || ""} key={i} />;
   let node = run.text;
   if (run.b) node = <strong>{node}</strong>;
   if (run.i) node = <em>{node}</em>;
@@ -148,8 +149,17 @@ const runNodes = (runs) => runs.map((run, i) => {
 });
 
 function RichBlock({ block }) {
-  if (block.type === "p") {
-    return <p>{block.lines.map((runs, j) => <Fragment key={j}>{j > 0 ? <br /> : null}{runNodes(runs)}</Fragment>)}</p>;
+  if (block.type === "p" || block.type === "quote") {
+    const body = block.lines.map((runs, j) => <Fragment key={j}>{j > 0 ? <br /> : null}{runNodes(runs)}</Fragment>);
+    return block.type === "quote" ? <blockquote>{body}</blockquote> : <p>{body}</p>;
+  }
+  if (block.type === "table") {
+    return (
+      <table className="rt__table">
+        {block.header ? <thead><tr>{block.header.map((runs, i) => <th key={i}>{runNodes(runs)}</th>)}</tr></thead> : null}
+        <tbody>{block.rows.map((row, i) => <tr key={i}>{row.map((runs, j) => <td key={j}>{runNodes(runs)}</td>)}</tr>)}</tbody>
+      </table>
+    );
   }
   const List = block.type === "ol" ? "ol" : "ul";
   return <List>{block.items.map((runs, j) => <li key={j}>{runNodes(runs)}</li>)}</List>;
@@ -179,15 +189,30 @@ export function RichToolbar({ target }) {
     after(el);
   }
 
-  function list(kind) {
+  function insert(text) {
+    const el = area();
+    if (!el) return;
+    const at = el.selectionStart;
+    const lineStart = el.value.lastIndexOf("\n", at - 1) + 1;
+    // A block skeleton needs a blank line before it, so it never merges into the line above.
+    const full = (el.value.slice(lineStart, at).trim() ? "\n\n" : "") + text;
+    el.setRangeText(full, at, el.selectionEnd, "end");
+    el.selectionStart = el.selectionEnd = at + full.length;
+    after(el);
+  }
+
+  // Prefix or re-prefix every selected line: pressing the same button twice does not stack
+  // markers, because the old list, quote, or number marker is stripped first.
+  function mark(marker) {
     const el = area();
     if (!el) return;
     const from = el.value.lastIndexOf("\n", el.selectionStart - 1) + 1;
     const end = el.value.indexOf("\n", el.selectionEnd);
     const to = end === -1 ? el.value.length : end;
-    const marked = el.value.slice(from, to).split("\n").map((line, i) => {
-      const bare = line.replace(/^[-•]\s+/, "").replace(/^\d+[.)]\s+/, "");
-      return kind === "ul" ? `- ${bare}` : `${i + 1}. ${bare}`;
+    const lines = el.value.slice(from, to).split("\n");
+    const marked = lines.map((line, i) => {
+      const bare = line.replace(/^[-•]\s+/, "").replace(/^\d+[.)]\s+/, "").replace(/^>\s?/, "");
+      return marker === "- " ? `- ${bare}` : marker === "> " ? `> ${bare}` : `${i + 1}. ${bare}`;
     }).join("\n");
     el.setRangeText(marked, from, to, "preserve");
     el.selectionStart = from;
@@ -204,8 +229,12 @@ export function RichToolbar({ target }) {
       {btn("italic", "Miring", () => wrap("i"))}
       {btn("underline", "Garis bawah", () => wrap("u"))}
       <span className="rt-toolbar__sep" aria-hidden="true" />
-      {btn("list", "Daftar berbutir", () => list("ul"))}
-      {btn("list-ordered", "Daftar bernomor", () => list("ol"))}
+      {btn("list", "Daftar berbutir", () => mark("- "))}
+      {btn("list-ordered", "Daftar bernomor", () => mark("1. "))}
+      {btn("quote", "Kutipan", () => mark("> "))}
+      <span className="rt-toolbar__sep" aria-hidden="true" />
+      {btn("table", "Sisip tabel", () => insert("| Kolom 1 | Kolom 2 |\n| --- | --- |\n|  |  |"))}
+      {btn("image", "Sisip gambar", () => insert("![Keterangan gambar](/images/contoh.png)"))}
     </div>
   );
 }

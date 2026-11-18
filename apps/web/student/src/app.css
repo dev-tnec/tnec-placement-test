@@ -1131,6 +1131,26 @@ progress::-moz-progress-bar { background: var(--navy-900); border-radius: var(--
 .rt li::marker { color: var(--text-secondary); }
 .rt strong { font-weight: 700; }
 .rt u { text-underline-offset: 3px; }
+/* A quote is one even card, the same shape as a notice: pale fill and a uniform border,
+   never a colored stripe down one side. */
+.rt blockquote {
+  padding: 12px 16px;
+  border: 1px solid var(--gray-200);
+  border-radius: var(--radius-sm);
+  background: var(--surface-50);
+  color: var(--text-secondary);
+}
+.rt table { border-collapse: collapse; }
+.rt th,
+.rt td {
+  padding: 8px 12px;
+  border: 1px solid var(--gray-200);
+  font-size: var(--text-sm);
+  text-align: left;
+  vertical-align: top;
+}
+.rt th { background: var(--surface-50); font-weight: 700; color: var(--navy-900); }
+.rt__image { max-width: 100%; height: auto; border-radius: var(--radius-sm); }
 
 .prompt-canvas {
   position: relative;

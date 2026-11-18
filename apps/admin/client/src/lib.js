@@ -4,6 +4,7 @@
 import { db, NOW, ui, ME } from "./store.js";
 import { toast } from "./dom.js";
 import { certPeriodKey, formatCertNumber } from "./cert-number.js";
+import { branchLabel } from "@tnec/core/branches";
 
 export const MIN = 60 * 1000, HOUR = 60 * MIN, DAY = 24 * HOUR, WIB = 7 * HOUR;
 export const COLD_DAYS = 90;
@@ -339,6 +340,27 @@ export function exportAttempts(list) {
     const per = s ? periodById(s.periodId) : null;
     return [a.id, name, s ? s.email : "", s && programById(s.programId) ? programById(s.programId).name : "", per ? fmtDate(per.start) : "", s ? classLabel(classById(s.classId)) : "", fmtDateTime(a.startedAt), ATTEMPT_STATUS[a.status].label, nilaiOf(a) ?? "", ...(key === "post" ? [a.passed === null ? "" : a.passed ? "Lulus" : "Belum lulus", a.passScore ?? ""] : []), fmtClock(a.durationSec), a.violations];
   })]);
+  toast(`${list.length} baris submission diekspor ke CSV.`);
+}
+
+/* The all-tests Submission page exports one CSV in one shape, whatever mix of tests is in it. */
+export function exportAllAttempts(list) {
+  downloadCsv(`submission-semua-tes-${toDateInput(NOW)}.csv`, [
+    ["ID", "Nama", "Email", "WhatsApp", "Tes", "Cabang", "Dimulai", "Status", "Skor", "Nilai", "Band keseluruhan", "Level atau kelulusan", "Durasi", "Pelanggaran"],
+    ...list.map((a) => {
+      const s = a.studentId ? studentById(a.studentId) : null;
+      return [
+        a.id, s ? s.name : a.contactName, s ? s.email : "", s ? fmtWa(s.wa) : "",
+        TEST_META[a.test]?.name || a.test, s?.branch ? branchLabel(s.branch) : "",
+        fmtDateTime(a.startedAt), ATTEMPT_STATUS[a.status].label,
+        a.test === "placement" && a.score !== null ? `${a.score} / ${attemptTotal(a)}` : "",
+        a.test !== "placement" && a.test !== "ielts-mockup" && a.score !== null ? nilaiOf(a) : "",
+        a.test === "ielts-mockup" ? a.bands?.overall ?? "" : "",
+        a.test === "placement" ? levelLabel(a.levelKey) : a.test === "post" ? (a.passed === null ? "" : a.passed ? "Lulus" : "Belum lulus") : "",
+        fmtClock(a.durationSec), a.violations,
+      ];
+    }),
+  ]);
   toast(`${list.length} baris submission diekspor ke CSV.`);
 }
 
