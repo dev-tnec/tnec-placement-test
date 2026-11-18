@@ -68,6 +68,7 @@ export function DialogHost() {
     case "wa": return <WaDialog key={d.seq} studentId={d.studentId} opts={d.opts} />;
     case "session": return <SessionDialog key={d.seq} id={d.id} />;
     case "session-import": return <SessionImportDialog key={d.seq} sessionId={d.sessionId} />;
+    case "session-participant": return <SessionParticipantDialog key={d.seq} sessionId={d.sessionId} />;
     case "move-invite": return <MoveInviteDialog key={d.seq} inviteId={d.inviteId} name={d.name} fromSessionId={d.fromSessionId} />;
     case "test-send": return <TestSendDialog key={d.seq} sessionId={d.sessionId} />;
     case "form": return <FormDialog key={d.seq} spec={d.spec} />;
@@ -1631,6 +1632,7 @@ function SessionDialog({ id }) {
 }
 
 export function openSessionImport(sessionId) { openDialog({ kind: "session-import", sessionId }); }
+export function openSessionParticipant(sessionId) { openDialog({ kind: "session-participant", sessionId }); }
 
 function SessionImportDialog({ sessionId }) {
   const s = db.sessions.find((x) => x.id === sessionId);
@@ -1731,6 +1733,95 @@ function SessionImportDialog({ sessionId }) {
           </button>
         </FootEnd>
       </div>
+    </Modal>
+  );
+}
+
+/* One participant by hand. The fields are one CSV row sent to the same import confirm endpoint,
+   so the matching against existing students, the quota, the test window, the random package, and
+   the send queue all follow exactly the bulk import rules. */
+function SessionParticipantDialog({ sessionId }) {
+  const s = db.sessions.find((x) => x.id === sessionId);
+  const scheduled = s?.windowMode === "terjadwal";
+
+  async function add(e) {
+    e.preventDefault();
+    clearErrors(e.currentTarget);
+    const fail = makeFieldFail();
+    const name = $("#sp-name");
+    const wa = $("#sp-wa");
+    const date = $("#sp-date");
+    const time = $("#sp-time");
+    if (name.value.trim().length < 2) fail(name, "sp-name-err", "Nama peserta minimal 2 karakter.");
+    if (!wa.value.trim()) fail(wa, "sp-wa-err", "Nomor WhatsApp wajib diisi. Format 08, 628, atau +62.");
+    if (scheduled && !date.value) fail(date, "sp-sched-err", "Tanggal tes wajib diisi untuk sesi terjadwal.");
+    if (scheduled && !time.value) fail(time, "sp-sched-err", "Jam tes wajib diisi untuk sesi terjadwal.");
+    if (fail.first()) { fail.first().focus(); return; }
+    // The import parser takes quoted CSV, so a name with a comma or a quote survives intact.
+    const field = (v) => { const t = String(v ?? "").trim(); return /[",\r\n]/.test(t) ? `"${t.replace(/"/g, '""')}"` : t; };
+    const cols = scheduled ? "nama,whatsapp,email,tanggal_tes,jam_tes" : "nama,whatsapp,email";
+    const line = scheduled
+      ? [field(name.value), field(wa.value), field($("#sp-email").value), date.value, time.value]
+      : [field(name.value), field(wa.value), field($("#sp-email").value)];
+    const done = busy($("#sp-add"), "Menambahkan...");
+    try {
+      const r = await api(`/api/admin/mockup/sessions/${sessionId}/import/confirm`, {
+        method: "POST",
+        body: { csv: `${cols}\n${line.join(",")}\n` },
+      });
+      closeDialog("session-participant");
+      await reload();
+      toast(r.created
+        ? `${r.created} peserta ditambahkan${r.studentsNew ? `, ${r.studentsNew} siswa baru` : ""}. Tekan "Kirim semua" untuk mengirim undangannya.`
+        : "Peserta ini sudah punya undangan di sesi ini, jadi tidak ada yang ditambahkan.");
+    } catch (error) {
+      fieldError(null, "sp-err", error.message);
+    } finally {
+      done();
+    }
+  }
+
+  return (
+    <Modal id="dlg-participant" focus="#sp-name" onClose={closeDialog}>
+      <form className="dialog__form" onSubmit={add} noValidate>
+        <Head title="Tambah peserta" sub={s ? `${s.name}. ${scheduled ? "Sesi terjadwal: peserta ini membawa tanggal dan jam tesnya sendiri." : "Sesi fleksibel: peserta memakai rentang sesi."}` : ""} />
+        <div className="dialog__body">
+          <div className="field">
+            <label className="label" htmlFor="sp-name">Nama</label>
+            <input className="input" id="sp-name" type="text" maxLength="80" autoComplete="off" required />
+            <p className="error" id="sp-name-err" role="alert" hidden></p>
+          </div>
+          <div className="field">
+            <label className="label" htmlFor="sp-wa">Nomor WhatsApp</label>
+            <input className="input" id="sp-wa" type="tel" inputMode="tel" maxLength="20" placeholder="08xxxxxxxxxx" autoComplete="off" required />
+            <p className="hint">Menerima 08, 628, atau +62. Kalau nomor atau emailnya sudah terdaftar, data siswa itu dipakai ulang.</p>
+            <p className="error" id="sp-wa-err" role="alert" hidden></p>
+          </div>
+          <div className="field">
+            <label className="label" htmlFor="sp-email">Email (opsional)</label>
+            <input className="input" id="sp-email" type="email" maxLength="120" autoComplete="off" />
+          </div>
+          {scheduled ? <>
+            <div className="field">
+              <label className="label" htmlFor="sp-date">Tanggal tes</label>
+              <input className="input" id="sp-date" type="date" required />
+            </div>
+            <div className="field">
+              <label className="label" htmlFor="sp-time">Jam tes</label>
+              <input className="input" id="sp-time" type="time" required />
+              <p className="hint">Waktu WIB. Peserta bisa masuk sampai {Math.round((s?.entryGraceSeconds ?? 7200) / 3600)} jam setelah jam ini.</p>
+            </div>
+            <p className="error" id="sp-sched-err" role="alert" hidden></p>
+          </> : null}
+          <p className="error" id="sp-err" role="alert" hidden></p>
+        </div>
+        <div className="dialog__foot">
+          <FootEnd>
+            <button className="btn btn--quiet" type="button" onClick={closeDialog}>Batal</button>
+            <button className="btn btn--primary" type="submit" id="sp-add">Tambah peserta</button>
+          </FootEnd>
+        </div>
+      </form>
     </Modal>
   );
 }

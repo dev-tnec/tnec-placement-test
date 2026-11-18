@@ -6,7 +6,7 @@ import { useEffect, useState } from "react";
 import { api, db, mutate, useVersion, NOW } from "../store.js";
 import { fmtDate, fmtDateTime, fmtWa, programById, periodById, downloadCsv, toDateInput } from "../lib.js";
 import { Empty, Icon, PageHead, PendaftaranStatus, Status } from "../ui.jsx";
-import { openSessionEditor, openSessionImport, openMoveInvite, openTestSend } from "../dialogs.jsx";
+import { openSessionEditor, openSessionImport, openSessionParticipant, openMoveInvite, openTestSend } from "../dialogs.jsx";
 import { toast } from "../dom.js";
 
 const KIND = { draft: ["Draf", "ring"], open: ["Terbuka", "navy"], closed: ["Selesai", "ring"], cancelled: ["Dibatalkan", "ring"] };
@@ -146,6 +146,7 @@ export function SessionDetail({ id }) {
         <button className="btn btn--quiet" type="button" disabled={!rows.length} onClick={() => exportRoster(session, rows)}><Icon name="download" />Ekspor CSV</button>
         <button className="btn btn--quiet" type="button" onClick={() => openSessionEditor(session.id)}><Icon name="pencil" />Ubah sesi</button>
         <button className="btn btn--quiet" type="button" onClick={() => openTestSend(session.id)}><Icon name="send" />Pesan uji</button>
+        <button className="btn btn--quiet" type="button" disabled={session.status === "cancelled"} onClick={() => openSessionParticipant(session.id)}><Icon name="plus" />Tambah peserta</button>
         <button className="btn btn--secondary" type="button" disabled={busy || session.status === "cancelled"} onClick={() => act(`sessions/${session.id}/send`, {}, "Antrean pengiriman dimulai.")}><Icon name="send" />Kirim semua</button>
         <button className="btn btn--primary" type="button" disabled={session.status === "cancelled"} onClick={() => openSessionImport(session.id)}><Icon name="plus" />Impor peserta</button>
       </>} />
@@ -201,7 +202,7 @@ export function SessionDetail({ id }) {
           );
         })}</tbody>
       </table></div>
-        : <Empty title="Belum ada peserta." desc="Impor CSV peserta untuk mengisi sesi ini." />}
+        : <Empty title="Belum ada peserta." desc="Tambahkan satu peserta dengan Tambah peserta, atau impor CSV untuk satu gelombang sekaligus." />}
     </section>
   </>;
 }
