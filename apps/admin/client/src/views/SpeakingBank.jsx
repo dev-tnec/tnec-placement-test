@@ -10,21 +10,14 @@ import { $, busy, makeFieldFail, toast } from "../dom.js";
 export function SpeakingQuestionsTab() {
   useVersion();
   const rows = [...(db.speakingBank || [])].sort((a, b) => a.position - b.position);
-  const active = rows.filter((q) => q.status === "aktif").length;
-  const settings = db.tests.placement.settings;
 
   async function move(q, direction) {
     await mutate(() => api(`/api/admin/speaking-questions/${q.id}/${direction}`, { method: "POST" }));
   }
 
-  return <section className="panel">
-    <div className="toolbar toolbar--last">
-      <p className="toolbar__meta">
-        Setiap peserta mendapat {Math.min(settings.speakingCount ?? 1, active) || active} dari {active} pertanyaan aktif ini,
-        {settings.speakingRandomize ? " dipilih secara acak" : " diambil berurutan dari atas"}.
-        Soal nomor satu selalu dipakai kalau pengaturannya satu pertanyaan.
-      </p>
-    </div>
+  // Rendered inside the Soal & Jawaban panel, so it carries no panel or toolbar of its own:
+  // the pick rule is already in the panel toolbar above.
+  return <>
     {rows.length ? <div className="table-wrap"><table className="table">
       <caption className="sr-only">Bank pertanyaan speaking</caption>
       <thead><tr>
@@ -48,7 +41,7 @@ export function SpeakingQuestionsTab() {
       ))}</tbody>
     </table></div>
       : <Empty title="Bank speaking masih kosong." desc="Tambahkan pertanyaan pertama; peserta merekam satu jawaban untuk setiap pertanyaan yang dipilih." />}
-  </section>;
+  </>;
 }
 
 export function SpeakingQuestionEditor({ id }) {

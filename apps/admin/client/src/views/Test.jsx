@@ -47,10 +47,7 @@ export function TestPage({ testKey, tab }) {
   const own = db.attempts.filter((a) => a.test === testKey);
   const speakingBank = testKey === "ielts-mockup" && t.mockupSpeaking ? t.mockupSpeaking : null;
   const tabs = [["soal", "Soal & Jawaban", packageQuestions(t).length + (speakingBank ? speakingBank.total : 0)], ["submission", "Submission", own.length]];
-  if (testKey === "placement") {
-    tabs.push(["speaking", "Speaking", (db.speakingBank || []).length]);
-    tabs.push(["lead", "Lead", leads().length]);
-  }
+  if (testKey === "placement") tabs.push(["lead", "Lead", leads().length]);
   if (testKey === "ielts-mockup") {
     tabs.push(["bagian", "Bagian", packageSections(t).length]);
     tabs.push(["paket", "Paket", t.packages.length]);
@@ -58,10 +55,14 @@ export function TestPage({ testKey, tab }) {
   }
   tabs.push(["pengaturan", "Pengaturan", null]);
   if (!tabs.some((x) => x[0] === tab)) tab = "soal";
-  const speakingView = testKey === "ielts-mockup" && ui.questions[testKey]?.skill === "Speaking";
+  // The Speaking bank lives inside Soal & Jawaban as a skill chip, the same way the IELTS
+  // mockup shows its interview questions: Grammar, Vocabulary, and so on until Speaking.
+  const speakingView = ui.questions[testKey]?.skill === "Speaking"
+    && (testKey === "ielts-mockup" ? Boolean(t.mockupSpeaking) : testKey === "placement");
   const actions = tab === "soal" && !speakingView
     ? <button className="btn btn--primary" type="button" onClick={() => openQuestionEditor(null)}><Icon name="plus" />Tambah soal</button>
-    : tab === "speaking" ? <button className="btn btn--primary" type="button" onClick={() => { location.hash = "#/tes/placement/speaking/baru"; }}><Icon name="plus" />Tambah soal speaking</button>
+    : tab === "soal" && speakingView
+      ? <button className="btn btn--primary" type="button" onClick={() => { location.hash = "#/tes/placement/speaking/baru"; }}><Icon name="plus" />Tambah soal speaking</button>
     : tab === "submission" ? <button className="btn btn--quiet" type="button" onClick={() => exportAttempts(db.attempts.filter((a) => attemptMatches(a, ui.attempts[testKey], false)))}><Icon name="download" />Ekspor CSV</button>
       : tab === "bagian" ? <button className="btn btn--primary" type="button" onClick={() => openSectionEditor(null)}><Icon name="plus" />Tambah bagian</button>
         : tab === "paket" ? <button className="btn btn--primary" type="button" onClick={() => openPackageEditor(null)}><Icon name="plus" />Tambah paket</button>
@@ -76,7 +77,7 @@ export function TestPage({ testKey, tab }) {
         <a key={k} className="seg__item" href={`#/tes/${testKey}/${k}`} {...(k === tab ? { "aria-current": "page" } : {})}>{label}{n === null ? null : <> <span className="seg__n">{n}</span></>}</a>
       ))}
     </nav>
-    {tab === "soal" ? <QuestionsTab /> : tab === "submission" ? <SubmissionsTab /> : tab === "speaking" ? <SpeakingQuestionsTab /> : tab === "bagian" ? <SectionsTab /> : tab === "paket" ? <PackagesTab /> : tab === "sesi" ? <SessionsTab /> : tab === "lead" ? <LeadTab /> : <SettingsTab testKey={testKey} />}
+    {tab === "soal" ? <QuestionsTab /> : tab === "submission" ? <SubmissionsTab /> : tab === "bagian" ? <SectionsTab /> : tab === "paket" ? <PackagesTab /> : tab === "sesi" ? <SessionsTab /> : tab === "lead" ? <LeadTab /> : <SettingsTab testKey={testKey} />}
   </>;
 }
 
@@ -127,7 +128,10 @@ function QuestionsTab() {
   const stats = accuracyMap(ui.test, 30 * 86400000);
   const qs = packageQuestions(t);
   const speakPlan = t.mockupSpeaking;
-  const speakingView = Boolean(speakPlan) && f.skill === "Speaking";
+  // The placement speaking bank lives here as a chip beside Grammar, Vocabulary, and Reading,
+  // so the whole bank of the test sits on one tab. The IELTS interview plan is read-only.
+  const placementBank = ui.test === "placement" ? (db.speakingBank || []) : [];
+  const speakingView = f.skill === "Speaking" && (ui.test === "ielts-mockup" ? Boolean(speakPlan) : ui.test === "placement");
   const q = f.q.trim().toLowerCase();
   const rows = qs.filter((x) => (f.skill === "all" || x.skill === f.skill)
     && (!q || `${x.prompt} ${x.passage} ${Object.values(x.options).join(" ")}`.toLowerCase().includes(q)));
@@ -135,6 +139,7 @@ function QuestionsTab() {
   const skills = [...new Set(qs.map((x) => x.skill))];
   skills.forEach((k) => { counts[k] = qs.filter((x) => x.skill === k).length; });
   if (speakPlan) { skills.push("Speaking"); counts.Speaking = speakPlan.total; }
+  if (ui.test === "placement") { skills.push("Speaking"); counts.Speaking = placementBank.filter((x) => x.status === "aktif").length || placementBank.length; }
 
   return <div className="stack">
     {ui.test === "placement" ? <LevelMismatchNotice /> : null}
@@ -153,9 +158,13 @@ function QuestionsTab() {
             <Chip key={k} value={k} label={label} n={counts[k]} pressed={f.skill === k} onClick={(v) => { f.skill = v; notify(); }} />
           ))}
         </div>
-        <p className="toolbar__meta">{speakingView ? "18 pertanyaan wawancara tetap, dipakai semua paket." : "Urutan di tabel sama dengan urutan soal di tes."}</p>
+        <p className="toolbar__meta">{speakingView
+          ? (ui.test === "placement"
+            ? `Bank pertanyaan speaking. Peserta mendapat ${Math.min(t.settings.speakingCount ?? 1, (db.speakingBank || []).filter((x) => x.status === "aktif").length) || (db.speakingBank || []).filter((x) => x.status === "aktif").length} dari ${(db.speakingBank || []).filter((x) => x.status === "aktif").length} pertanyaan aktif,${t.settings.speakingRandomize ? " dipilih acak" : " berurutan dari atas"}. Jumlah dan pengacarannya diatur di Pengaturan.`
+            : "18 pertanyaan wawancara tetap, dipakai semua paket.")
+          : "Urutan di tabel sama dengan urutan soal di tes."}</p>
       </div>
-      {speakingView ? <SpeakingBank plan={speakPlan} /> : rows.length ? <div className="table-wrap"><table className="table">
+      {speakingView && ui.test === "placement" ? <SpeakingQuestionsTab /> : speakingView ? <SpeakingBank plan={speakPlan} /> : rows.length ? <div className="table-wrap"><table className="table">
         <caption className="sr-only">Bank soal {TEST_META[ui.test].name}</caption>
         <thead><tr>
           <th scope="col" className="is-no">No</th><th scope="col">Soal dan pilihan jawaban</th><th scope="col" className="hide-md">Skill</th>

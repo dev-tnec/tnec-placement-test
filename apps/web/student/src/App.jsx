@@ -970,14 +970,14 @@ export default function App() {
         });
         speakingCountRef.current += 1;
         clearRecording();
-        // More questions from the bank are waiting: the same mic check is done, so go straight
-        // to the next answer. The last question finishes the speaking part.
+        // More questions from the bank are waiting: the mic check is already done, so the next
+        // question starts ready to record. The button must stay on screen for every question.
         if (queue && queue.index + 1 < queue.list.length) {
           setPlacementSpeak({ list: queue.list, index: queue.index + 1 });
           setStage("answer");
-          setCanRecord(false);
+          setCanRecord(true);
           setNoteOverride("");
-          answerStartRef.current?.focus();
+          setTimeout(() => answerStartRef.current?.focus(), 0);
         } else {
           releaseMic();
           setScreen("details");
