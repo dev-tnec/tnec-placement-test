@@ -5,7 +5,7 @@ import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { HttpError, json, readJson, nowSeconds, normalizeWhatsapp, isEmail, text, multiline, int } from "@tnec/core/http";
-import { randomToken, sha256Hex, verifyPassword, hashPassword } from "@tnec/core/crypto";
+import { randomToken, sha256Hex, verifyPassword, hashPassword, DUMMY_USER } from "@tnec/core/crypto";
 import { TEST_KEYS, TEST_NAMES, mapTest, mapQuestion, mapSection, mapPackage, loadQuestions, loadLevels, publicLevel, attemptStatus, focusStrikes, addActivity, newId } from "@tnec/core/store";
 import { overallBand } from "@tnec/core/bands";
 import { gradeWritingTask, writingBand } from "@tnec/core/writing";
@@ -189,14 +189,25 @@ async function login(request, env) {
   if (!email || !password) throw new HttpError(400, "Isi email dan kata sandi.");
   const user = await env.DB.prepare("SELECT * FROM admin_users WHERE email = ?").bind(email).first();
   const now = nowSeconds();
-  if (!user || !user.active) throw new HttpError(401, "Email atau kata sandi salah.");
+  // Dummy verify for unknown or inactive emails so both 401 branches cost one KDF and
+  // response time never reveals which staff emails have accounts.
+  if (!user || !user.active) {
+    await verifyPassword(password, DUMMY_USER);
+    throw new HttpError(401, "Email atau kata sandi salah.");
+  }
   if (user.locked_until && user.locked_until > now) {
     throw new HttpError(429, `Akun ini terkunci sementara karena terlalu banyak percobaan masuk. Coba lagi dalam ${Math.ceil((user.locked_until - now) / 60)} menit.`);
   }
   if (!(await verifyPassword(password, user))) {
-    const failed = user.failed_logins + 1;
-    await env.DB.prepare("UPDATE admin_users SET failed_logins = ?, locked_until = ? WHERE id = ?")
-      .bind(failed >= LOCK_AFTER ? 0 : failed, failed >= LOCK_AFTER ? now + LOCK_SECONDS : null, user.id).run();
+    // The increment must be atomic in SQL: a JavaScript-side counter from a pre-read row
+    // collapses concurrent wrong passwords into about one failure per wave, so parallel
+    // guessing would never reach LOCK_AFTER.
+    const failed = await env.DB.prepare(
+      "UPDATE admin_users SET failed_logins = failed_logins + 1, locked_until = CASE WHEN failed_logins + 1 >= ? THEN ? ELSE locked_until END WHERE id = ? RETURNING failed_logins"
+    ).bind(LOCK_AFTER, now + LOCK_SECONDS, user.id).first();
+    if (failed.failed_logins >= LOCK_AFTER) {
+      await env.DB.prepare("UPDATE admin_users SET failed_logins = 0 WHERE id = ?").bind(user.id).run();
+    }
     throw new HttpError(401, "Email atau kata sandi salah.");
   }
   const token = randomToken(32);
@@ -250,7 +261,12 @@ async function setupFirstAdmin(request, env, ctx) {
   const id = `adm_${randomToken(9)}`;
   const now = nowSeconds();
   const token = randomToken(32);
+  // The setup serializes on a transaction-scoped advisory lock: under READ COMMITTED the
+  // WHERE NOT EXISTS probe alone cannot see an uncommitted competitor, so two concurrent
+  // setups would both create an admin (audit finding admin-auth/setup-race-double-admin).
+  // The lock is the pattern migrate.js already uses.
   const [created] = await env.DB.batch([
+    env.DB.prepare("SELECT pg_advisory_xact_lock(9401)"),
     env.DB.prepare(`INSERT INTO admin_users (id, email, name, role, password_hash, password_salt, password_iter, created_at)
                     SELECT ?, ?, ?, 'admin', ?, ?, ?::integer, ?::bigint WHERE NOT EXISTS (SELECT 1 FROM admin_users)`)
       .bind(id, email, name, hash, salt, iterations, now),
@@ -686,6 +702,16 @@ async function assertUnique(env, data, selfId) {
   }
 }
 
+/** The unique indexes on students.email and students.whatsapp are the last guard against two
+ *  concurrent creates passing assertUnique; map their violation to the same 409 the check
+ *  path already returns, instead of a bare 500 (audit finding admin-data/duplicate-email-race). */
+function duplicateStudentCatch(error) {
+  if (error && (error.code === "23505" || /students_email|students_whatsapp/i.test(String(error.message || "")))) {
+    throw new HttpError(409, "Email atau nomor ini sudah tercatat atas nama siswa lain.", { field: "email" });
+  }
+  throw error;
+}
+
 async function createStudent(request, env, user) {
   const body = await readJson(request);
   const data = readStudentInput(body, false);
@@ -702,7 +728,11 @@ async function createStudent(request, env, user) {
   if (data.classId) stmts.push(addActivity(env, id, "class", await classText(env, data.classId), user.name, null, now));
   const note = multiline(body.note, 2000);
   if (note) stmts.push(addActivity(env, id, "note", note, user.name, null, now));
-  await env.DB.batch(stmts);
+  try {
+    await env.DB.batch(stmts);
+  } catch (error) {
+    duplicateStudentCatch(error);
+  }
   return json({ ok: true, id });
 }
 
@@ -734,7 +764,11 @@ async function updateStudent(request, env, user, url, id) {
   if (detailKeys.some((k) => patch[k] !== undefined && patch[k] !== { name: s.name, wa: s.whatsapp, email: s.email, city: s.city, source: s.source, programId: s.program_id, durationId: s.duration_id }[k])) {
     stmts.push(addActivity(env, id, "system", "Memperbarui data siswa.", user.name, null, now));
   }
-  await env.DB.batch(stmts);
+  try {
+    await env.DB.batch(stmts);
+  } catch (error) {
+    duplicateStudentCatch(error);
+  }
   return json({ ok: true });
 }
 
@@ -807,7 +841,11 @@ async function createPendaftaran(request, env, user) {
   stmts.push(addActivity(env, studentId, "system",
     `Mendaftar ke program ${program.name} periode ${fmtDate(dateToSeconds(period.start_date))}.`, user.name, { pendaftaranId: id }, now));
   if (classId) stmts.push(addActivity(env, studentId, "class", await classText(env, classId), user.name, { pendaftaranId: id }, now));
-  await env.DB.batch(stmts);
+  try {
+    await env.DB.batch(stmts);
+  } catch (error) {
+    duplicateStudentCatch(error);
+  }
   return json({ ok: true, id, studentId });
 }
 
@@ -1151,61 +1189,67 @@ async function confirmSessionImport(request, env, user, url, id) {
   const bad = rows.filter((r) => r.errors.length || r.windowError);
   if (bad.length) throw new HttpError(400, `${bad.length} baris bermasalah. Baris ${bad[0].line}: ${bad[0].errors[0] || bad[0].windowError}`, { rows: bad });
   const fresh = rows.filter((r) => !r.inviteExisting);
-  const roster = await env.DB.prepare("SELECT COUNT(*) AS n FROM invites WHERE session_id = ?").bind(session.id).first();
-  if (session.quota && (roster?.n ?? 0) + fresh.length > session.quota) {
-    throw new HttpError(400, `Kuota sesi ${session.quota} peserta. Impor ini menambah ${fresh.length}, jadi melebihi kuota.`);
-  }
-  const now = nowSeconds();
-  // Each student gets one package from the session's set, so one wave can sit several.
+  // The quota check and the inserts run inside one transaction under a session-row lock, so
+  // two concurrent confirms serialize and the quota cannot be overshot by both passing the
+  // count check at once (audit finding admin-data/session-quota-race).
   const sessionPkgs = await sessionPackageIds(env, session.id);
   if (!sessionPkgs.length) throw new HttpError(503, "Sesi ini belum punya paket soal.");
-  const stmts = [];
-  const usedCodes = new Set();
-  let created = 0;
-  let studentsNew = 0;
-  let registrations = 0;
-  for (const row of fresh) {
-    let studentId = row.studentId;
-    if (!studentId) {
-      studentId = newId("stu");
-      studentsNew += 1;
-      stmts.push(env.DB.prepare(`INSERT INTO students (id, name, email, whatsapp, source, stage, created_at, updated_at)
-          VALUES (?, ?, ?, ?, 'IELTS Mockup', 'terdaftar', ?, ?)`)
-        .bind(studentId, row.name, row.email || null, row.wa, now, now));
-      stmts.push(addActivity(env, studentId, "system", `Ditambahkan lewat impor peserta mockup oleh ${user.name}.`, user.name, null, now));
+  const outcome = await env.DB.transaction(async (tx) => {
+    const locked = await tx.prepare("SELECT quota FROM mockup_sessions WHERE id = ? FOR UPDATE").bind(session.id).first();
+    const roster = await tx.prepare("SELECT COUNT(*) AS n FROM invites WHERE session_id = ?").bind(session.id).first();
+    if (locked?.quota && (roster?.n ?? 0) + fresh.length > locked.quota) {
+      throw new HttpError(400, `Kuota sesi ${locked.quota} peserta. Impor ini menambah ${fresh.length}, jadi melebihi kuota.`);
     }
-    if (!row.registrationExisting) {
-      registrations += 1;
-      const pdfId = newId("pdf");
-      stmts.push(env.DB.prepare(`INSERT INTO pendaftaran (id, student_id, program_id, duration_id, period_id, class_id, status, note, registered_at, registered_by)
-          VALUES (?, ?, ?, ?, ?, NULL, 'aktif', ?, ?, ?)`)
-        .bind(pdfId, studentId, session.program_id, session.duration_id, session.period_id, `Mockup ${session.name}`, now, user.name));
-      stmts.push(env.DB.prepare("UPDATE students SET program_id = ?, duration_id = ?, period_id = ?, stage = 'terdaftar', updated_at = ? WHERE id = ?")
-        .bind(session.program_id, session.duration_id, session.period_id, now, studentId));
+    const now = nowSeconds();
+    const stmts = [];
+    const usedCodes = new Set();
+    let created = 0;
+    let studentsNew = 0;
+    let registrations = 0;
+    for (const row of fresh) {
+      let studentId = row.studentId;
+      if (!studentId) {
+        studentId = newId("stu");
+        studentsNew += 1;
+        stmts.push(env.DB.prepare(`INSERT INTO students (id, name, email, whatsapp, source, stage, created_at, updated_at)
+            VALUES (?, ?, ?, ?, 'IELTS Mockup', 'terdaftar', ?, ?)`)
+          .bind(studentId, row.name, row.email || null, row.wa, now, now));
+        stmts.push(addActivity(env, studentId, "system", `Ditambahkan lewat impor peserta mockup oleh ${user.name}.`, user.name, null, now));
+      }
+      if (!row.registrationExisting) {
+        registrations += 1;
+        const pdfId = newId("pdf");
+        stmts.push(env.DB.prepare(`INSERT INTO pendaftaran (id, student_id, program_id, duration_id, period_id, class_id, status, note, registered_at, registered_by)
+            VALUES (?, ?, ?, ?, ?, NULL, 'aktif', ?, ?, ?)`)
+          .bind(pdfId, studentId, session.program_id, session.duration_id, session.period_id, `Mockup ${session.name}`, now, user.name));
+        stmts.push(env.DB.prepare("UPDATE students SET program_id = ?, duration_id = ?, period_id = ?, stage = 'terdaftar', updated_at = ? WHERE id = ?")
+          .bind(session.program_id, session.duration_id, session.period_id, now, studentId));
+      }
+      let code = null;
+      for (let i = 0; i < 20 && !code; i += 1) {
+        const candidate = mockupCode();
+        if (usedCodes.has(candidate)) continue;
+        if (await env.DB.prepare("SELECT 1 FROM invites WHERE code = ?").bind(candidate).first()) continue;
+        usedCodes.add(candidate);
+        code = candidate;
+      }
+      if (!code) throw new HttpError(500, "Kode undangan tidak bisa dibuat, coba lagi.");
+      const token = randomToken(24);
+      const inviteId = newId("inv");
+      stmts.push(env.DB.prepare(`INSERT INTO invites (id, token_hash, student_id, test_key, code, package_id, session_id, opens_at, created_at, expires_at, created_by)
+          VALUES (?, ?, ?, 'ielts-mockup', ?, ?, ?, ?, ?, ?, ?)`)
+        .bind(inviteId, await sha256Hex(token), studentId, code, pickPackage(sessionPkgs), session.id, row.opensAt, now, row.expiresAt, user.name));
+      stmts.push(env.DB.prepare(`INSERT INTO mockup_invite_queue (id, invite_id, email_status, wa_status, plain_token, created_at)
+          VALUES (?, ?, ?, 'pending', ?, ?)`)
+        .bind(newId("ivq"), inviteId, row.email ? "pending" : "dilewati", token, now));
+      stmts.push(addActivity(env, studentId, "system", `Undangan IELTS Mockup ${session.name} dibuat lewat impor massal oleh ${user.name}.`, user.name, { inviteId }, now));
+      created += 1;
     }
-    let code = null;
-    for (let i = 0; i < 20 && !code; i += 1) {
-      const candidate = mockupCode();
-      if (usedCodes.has(candidate)) continue;
-      if (await env.DB.prepare("SELECT 1 FROM invites WHERE code = ?").bind(candidate).first()) continue;
-      usedCodes.add(candidate);
-      code = candidate;
-    }
-    if (!code) throw new HttpError(500, "Kode undangan tidak bisa dibuat, coba lagi.");
-    const token = randomToken(24);
-    const inviteId = newId("inv");
-    stmts.push(env.DB.prepare(`INSERT INTO invites (id, token_hash, student_id, test_key, code, package_id, session_id, opens_at, created_at, expires_at, created_by)
-        VALUES (?, ?, ?, 'ielts-mockup', ?, ?, ?, ?, ?, ?, ?)`)
-      .bind(inviteId, await sha256Hex(token), studentId, code, pickPackage(sessionPkgs), session.id, row.opensAt, now, row.expiresAt, user.name));
-    stmts.push(env.DB.prepare(`INSERT INTO mockup_invite_queue (id, invite_id, email_status, wa_status, plain_token, created_at)
-        VALUES (?, ?, ?, 'pending', ?, ?)`)
-      .bind(newId("ivq"), inviteId, row.email ? "pending" : "dilewati", token, now));
-    stmts.push(addActivity(env, studentId, "system", `Undangan IELTS Mockup ${session.name} dibuat lewat impor massal oleh ${user.name}.`, user.name, { inviteId }, now));
-    created += 1;
-  }
-  stmts.push(env.DB.prepare("UPDATE mockup_sessions SET status = 'open', updated_at = ? WHERE id = ? AND status = 'draft'").bind(now, session.id));
-  await env.DB.batch(stmts);
-  return json({ ok: true, created, skipped: rows.length - fresh.length, studentsNew, registrations });
+    stmts.push(env.DB.prepare("UPDATE mockup_sessions SET status = 'open', updated_at = ? WHERE id = ? AND status = 'draft'").bind(now, session.id));
+    await tx.batch(stmts);
+    return { created, studentsNew, registrations };
+  });
+  return json({ ok: true, created: outcome.created, skipped: rows.length - fresh.length, studentsNew: outcome.studentsNew, registrations: outcome.registrations });
 }
 
 async function sendSessionQueue(request, env, user, url, id) {
@@ -1320,10 +1364,19 @@ async function testSendSessionMessage(request, env, user, url, id) {
   const name = text(body.name || user.name, 80);
   if (body.email) {
     if (!isEmail(String(body.email))) throw new HttpError(400, "Alamat email uji belum benar.", { field: "email" });
+    // A test send spends the same shared 24 hour Cloudflare quota as real invite emails, so
+    // refuse it when the quota is already spent; otherwise the queue believes it has headroom
+    // and real invites start failing (audit finding admin-data/testsend-quota-unaccounted).
+    const used = await emailsSentRecently(env);
+    if (used >= EMAIL_DAILY_LIMIT) throw new HttpError(429, `Jatah email 24 jam terakhir sudah habis (${used} dari ${EMAIL_DAILY_LIMIT}), jadi email uji tidak bisa dikirim. WhatsApp uji tetap bisa.`);
     const mail = buildInviteEmail({ name, sessionName: session.name, schedule, link, code, deadline });
     try {
       if (!env.SEND_EMAIL) throw new Error("Email belum diatur di server. Isi CLOUDFLARE_EMAIL_TOKEN di pengaturan server.");
       await env.SEND_EMAIL.send({ from: env.RESULT_FROM_EMAIL, to: String(body.email).toLowerCase(), subject: mail.subject, html: mail.html, text: mail.text });
+      // Count the test send against the same quota the queue reads, so the drain never
+      // believes it has headroom the test sends already spent.
+      await env.DB.prepare("INSERT INTO wa_messages (student_id, to_number, text, status, provider_message_id, error, created_at, created_by) VALUES (NULL, '', ?, 'email_test', NULL, NULL, ?, ?)")
+        .bind(`email uji: ${session.name}`, now, user.name).run();
     } catch (error) {
       throw new HttpError(502, `Email uji gagal terkirim: ${String(error.message || error).slice(0, 200)}`);
     }
@@ -1960,10 +2013,14 @@ function deviceLabel(ua) {
   return `${browser} di ${os}`;
 }
 
-/* Re-run the AI writing score for a submitted attempt, for example after the key was fixed. */
+/* Re-run the AI writing score for a submitted attempt, for example after the key was fixed.
+ * Submitted and not voided: the graded bands are final state, and a voided attempt's result
+ * must not be rewritten (audit hardening from wave 2). */
 async function regradeWriting(request, env, user, url, id) {
   const a = await getAttemptRow(env, id);
   if ((a.test_key || "placement") !== "ielts-mockup") throw new HttpError(400, "Penilaian writing hanya untuk IELTS Mockup.");
+  if (a.status !== "submitted") throw new HttpError(409, "Penilaian writing hanya untuk percobaan yang sudah dikirim.");
+  if (a.voided_at) throw new HttpError(409, "Hasil ini sudah dibatalkan, jadi penilaiannya tidak bisa diubah. Pulihkan dulu kalau masih dipakai.");
   const all = await loadQuestions(env, "ielts-mockup", { packageId: a.package_id || undefined });
   const byId = new Map(all.map((q) => [q.id, q]));
   const ids = a.question_ids ? JSON.parse(a.question_ids) : [];
@@ -1985,10 +2042,14 @@ async function regradeWriting(request, env, user, url, id) {
   return json({ ok: true, bands });
 }
 
-/* Re-queue the failed speaking answers. The web app's worker scores them again. */
+/* Re-queue the failed speaking answers. The web app's worker scores them again. Submitted and
+ * not voided: an in-progress attempt's queue is not re-armed from the dashboard, and a voided
+ * attempt's rows stay cold (audit hardening from wave 2). */
 async function retryMockupSpeaking(request, env, user, url, id) {
   const a = await getAttemptRow(env, id);
   if ((a.test_key || "placement") !== "ielts-mockup") throw new HttpError(400, "Penilaian speaking hanya untuk IELTS Mockup.");
+  if (a.status !== "submitted") throw new HttpError(409, "Penilaian ulang speaking hanya untuk percobaan yang sudah dikirim.");
+  if (a.voided_at) throw new HttpError(409, "Hasil ini sudah dibatalkan, jadi penilaiannya tidak bisa diulang. Pulihkan dulu kalau masih dipakai.");
   const count = await env.DB.prepare("SELECT COUNT(*) AS n FROM speaking_answers WHERE attempt_id = ?").bind(id).first();
   if (!count?.n) throw new HttpError(400, "Percobaan ini tidak punya jawaban speaking.");
   await env.DB.prepare("UPDATE speaking_answers SET status = 'pending', tries = 0, next_attempt_at = 0, lease_until = 0, error = NULL WHERE attempt_id = ? AND status = 'failed'").bind(id).run();
@@ -2024,6 +2085,11 @@ async function attemptAction(request, env, user, url, id, action) {
     return json({ ok: true });
   }
   if (a.test_key !== "placement" || a.status !== "submitted" || !a.email) throw new HttpError(400, "Email hasil hanya bisa dikirim ulang untuk placement test yang sudah punya kontak.");
+  // A voided result must never go out, and the manual send must not race the background
+  // delivery: the lease claim is the single-writer guard, so refuse while either holds.
+  if (a.voided_at) throw new HttpError(409, "Hasil ini sudah dibatalkan, jadi emailnya tidak bisa dikirim ulang. Pulihkan dulu kalau masih dipakai.");
+  if (a.delivery_lease_until && a.delivery_lease_until > now) throw new HttpError(409, "Pengiriman otomatis untuk hasil ini sedang berjalan. Tunggu sampai selesai sebelum mengirim ulang.");
+  if (a.email_status === "pending") throw new HttpError(409, "Email hasil ini masih menunggu pengiriman otomatis. Tunggu sampai selesai sebelum mengirim ulang.");
   if (!env.SEND_EMAIL) throw new HttpError(503, "Pengiriman email belum diatur di server ini.");
   const spRows = (await env.DB.prepare("SELECT status, cefr_overall, ielts_overall, scores, transcript FROM speaking_submissions WHERE attempt_id = ? ORDER BY position").bind(id).all()).results || [];
   const waitingRow = spRows.find((r) => !isFinalStatus(r.status));
@@ -2037,7 +2103,7 @@ async function attemptAction(request, env, user, url, id, action) {
     await env.DB.prepare("UPDATE attempts SET email_status = ? WHERE id = ?").bind(`failed: ${String(error).slice(0, 180)}`, id).run();
     throw new HttpError(502, "Email gagal dikirim. Periksa alamat email siswa lalu coba lagi.");
   }
-  const stmts = [env.DB.prepare("UPDATE attempts SET email_sent_at = ?, email_status = 'sent' WHERE id = ?").bind(now, id)];
+  const stmts = [env.DB.prepare("UPDATE attempts SET email_sent_at = ?, email_status = 'sent' WHERE id = ? AND (delivery_lease_until IS NULL OR delivery_lease_until < ?)").bind(now, id, now)];
   if (a.student_id) stmts.push(addActivity(env, a.student_id, "email", `Email hasil dikirim ulang ke ${a.email}.`, user.name, null, now));
   await env.DB.batch(stmts);
   return json({ ok: true, email: a.email });

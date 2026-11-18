@@ -112,12 +112,13 @@ function log(outcome, row, call, extra = "") {
 export async function gradeSubmission(env, id) {
   if (stopping || !speechaceConfigured(env)) return null;
   const now = nowSeconds();
+  const leaseUntil = now + LEASE_SECONDS;
   const row = await env.DB.prepare(
     `UPDATE speaking_submissions SET status = 'grading', lease_until = ?, tries = tries + 1
       WHERE id = ? AND status IN ('pending', 'grading') AND tries < ? AND audio IS NOT NULL
         AND (lease_until IS NULL OR lease_until < ?) AND (next_attempt_at IS NULL OR next_attempt_at <= ?)
-      RETURNING id, attempt_id, student_id, prompt, audio, audio_mime, tries`,
-  ).bind(now + LEASE_SECONDS, id, MAX_TRIES, now, now).first();
+      RETURNING id, attempt_id, student_id, prompt, audio, audio_mime, tries, lease_until`,
+  ).bind(leaseUntil, id, MAX_TRIES, now, now).first();
   if (!row) return checkLater(env, id);
 
   const test = await env.DB.prepare("SELECT speaking_dialect FROM tests WHERE key = 'placement'").first();
@@ -138,8 +139,8 @@ export async function gradeSubmission(env, id) {
       `UPDATE speaking_submissions SET status = 'graded', needs_review = ?, transcript = ?, cefr_overall = ?, ielts_overall = ?,
           scores = ?, provider_request_id = ?, provider_response = ?, error = NULL, lease_until = NULL, next_attempt_at = NULL,
           graded_at = ?, graded_by = NULL
-        WHERE id = ? AND status = 'grading' RETURNING attempt_id, student_id`,
-    ).bind(result.needsReview ? 1 : 0, result.transcript, result.cefr, result.ielts, JSON.stringify(result.scores), result.requestId || call.requestId, kept, at, id).first();
+        WHERE id = ? AND status = 'grading' AND lease_until = ? RETURNING attempt_id, student_id`,
+    ).bind(result.needsReview ? 1 : 0, result.transcript, result.cefr, result.ielts, JSON.stringify(result.scores), result.requestId || call.requestId, kept, at, id, row.lease_until).first();
     log("graded", row, call, ` cefr=${result.cefr || "-"} review=${result.needsReview ? 1 : 0}`);
     // A null here means the team graded or skipped it by hand while Speechace was answering.
     if (!saved) return null;
@@ -156,8 +157,8 @@ export async function gradeSubmission(env, id) {
   const saved = await env.DB.prepare(
     `UPDATE speaking_submissions SET status = ?, needs_review = ?, error = ?, next_attempt_at = ?, lease_until = NULL,
         provider_request_id = COALESCE(?, provider_request_id), provider_response = COALESCE(?, provider_response)
-      WHERE id = ? AND status = 'grading' RETURNING attempt_id, student_id`,
-  ).bind(next.status, next.needsReview, next.error, next.nextAttemptAt, call.requestId, kept, id).first();
+      WHERE id = ? AND status = 'grading' AND lease_until = ? RETURNING attempt_id, student_id`,
+  ).bind(next.status, next.needsReview, next.error, next.nextAttemptAt, call.requestId, kept, id, row.lease_until).first();
   log(next.status === "pending" ? "retry" : "failed", row, call, ` code=${failure.code}`);
   if (!saved) return null;
   if (next.status === "pending") {

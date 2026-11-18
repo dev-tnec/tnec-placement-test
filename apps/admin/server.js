@@ -63,7 +63,7 @@ if (isMain) {
     if (stopping) return;
     stopping = true;
     stopSpeakingWorker();
-    stopInviteQueueWorker();
+    await stopInviteQueueWorker();
     await closeServers([server]);
     await drainDeliveries();
     await env.DB.close().catch(() => {});

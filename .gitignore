@@ -9,3 +9,6 @@ dist/
 .DS_Store
 Thumbs.db
 admin.sql
+# Local session exports and preview artifacts: never commit them, the repository is public.
+*-setup.json
+tools/tmp-preview-email.html

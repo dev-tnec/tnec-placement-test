@@ -34,6 +34,12 @@ export async function hashPassword(password, saltHex, iterations = PBKDF2_ITERAT
   return { hash: toHex(bits), salt, iterations };
 }
 
+// A fixed PBKDF2 hash for the login's unknown-email path: verifyPassword accepts any object
+// with the three password columns, so both 401 branches cost one full KDF and response time
+// cannot reveal which staff emails have accounts. The hash and salt are public constants; their
+// only job is to cost the same 600,000 iterations as a real verify.
+export const DUMMY_USER = { password_hash: "b109f3bbbc244eb8244d17d777886f0f1a7158cd9c96357f4f7235566c6e98b7bd6b9f0f0a4c4c1fc7b3a1e2f0a2e0a80e1d6c9b8a7f6e5d4c3b2a19087654321fedcba", password_salt: "d9f1a3c5e7b9d1f3a5c7e9b1d3f5a7c9", password_iter: 600000 };
+
 export async function verifyPassword(password, user) {
   const { hash } = await hashPassword(password, user.password_salt, user.password_iter);
   return timingSafeEqual(hash, user.password_hash);

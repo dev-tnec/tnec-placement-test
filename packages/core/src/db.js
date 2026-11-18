@@ -130,6 +130,13 @@ export class Database {
     const tx = {
       query: (sql, params) => client.query(sql, params),
       prepare: (sql) => new Statement(tx, numberPlaceholders(sql)),
+      // One transaction's statements run sequentially on the same client; helpers like the
+      // session import pass whole statement lists here inside their work().
+      batch: async (statements) => {
+        const results = [];
+        for (const s of statements) results.push(toResult(await client.query(s.sql, s.params)));
+        return results;
+      },
     };
     try {
       await client.query("BEGIN");

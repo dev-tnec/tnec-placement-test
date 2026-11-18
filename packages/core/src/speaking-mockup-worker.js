@@ -82,7 +82,7 @@ export async function gradeAnswer(env, id) {
     `UPDATE speaking_answers SET status = 'grading', lease_until = ?, tries = tries + 1
       WHERE id = ? AND status IN ('pending', 'grading') AND tries < ? AND audio IS NOT NULL
         AND lease_until < ? AND next_attempt_at <= ?
-      RETURNING id, attempt_id, prompt, audio, audio_mime, tries`,
+      RETURNING id, attempt_id, prompt, audio, audio_mime, tries, lease_until`,
   ).bind(now + LEASE_SECONDS, id, MAX_TRIES, now, now).first();
   if (!row) return null;
 
@@ -110,8 +110,8 @@ export async function gradeAnswer(env, id) {
     await env.DB.prepare(
       `UPDATE speaking_answers SET status = ?, needs_review = ?, error = ?, next_attempt_at = ?,
           lease_until = 0, response = COALESCE(?, response)
-        WHERE id = ? AND status = 'grading'`,
-    ).bind(next.status, next.needsReview, next.error, next.nextAttemptAt, call?.raw ? call.raw.slice(0, RESPONSE_KEEP_BYTES) : null, id).run();
+        WHERE id = ? AND status = 'grading' AND lease_until = ?`,
+    ).bind(next.status, next.needsReview, next.error, next.nextAttemptAt, call?.raw ? call.raw.slice(0, RESPONSE_KEEP_BYTES) : null, id, row.lease_until).run();
     if (next.status === "pending") return { status: "pending" };
     await finalizeAttempt(env, row.attempt_id);
     return { status: "failed", error: next.error };
@@ -120,8 +120,8 @@ export async function gradeAnswer(env, id) {
   await env.DB.prepare(
     `UPDATE speaking_answers SET status = 'graded', needs_review = ?, transcript = ?, scores = ?, ielts_overall = ?,
         response = ?, error = NULL, lease_until = 0, next_attempt_at = 0, graded_at = ?
-      WHERE id = ? AND status = 'grading'`,
-  ).bind(mapped.needsReview ? 1 : 0, mapped.transcript, JSON.stringify(mapped.scores), mapped.ielts, null, at, id).run();
+      WHERE id = ? AND status = 'grading' AND lease_until = ?`,
+  ).bind(mapped.needsReview ? 1 : 0, mapped.transcript, JSON.stringify(mapped.scores), mapped.ielts, null, at, id, row.lease_until).run();
   await finalizeAttempt(env, row.attempt_id);
   return { status: "graded" };
 }

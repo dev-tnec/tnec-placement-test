@@ -37,6 +37,9 @@ const SUBMIT_GRACE_SECONDS = 15;
 const ATTEMPT_ID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 const CHOICES = new Set(["A", "B", "C", "D", "E", "F"]);
 const VIOLATION_TYPES = new Set(["fullscreen_exit", "tab_hidden", "window_blur", "copy_attempt", "shortcut_blocked"]);
+// The violation log keeps at most this many entries; each entry is about 20 bytes, so the cap
+// also bounds the RIGHT() slice in bytes well above the longest single 200-char entry.
+const VIOLATION_LOG_MAX = 50;
 
 export async function handlePublic(request, env, url = new URL(request.url)) {
   try {
@@ -298,10 +301,13 @@ async function logViolation(request, env, attemptId) {
   const entry = `${nowSeconds()}:${type};`.slice(0, 200);
   // The limit no longer ends anything on the server: the runner pauses the test behind a
   // continue-or-leave dialog, so the row must survive for the student to continue.
+  // The log keeps only the last VIOLATION_LOG_MAX entries: the anti-cheat feature needs at
+  // most max_violations strikes, and an uncapped append would let a scripted client bloat the
+  // TEXT column with a full-row rewrite per request.
   const row = await env.DB.prepare(
-    `UPDATE attempts SET violations = violations + 1, violation_log = COALESCE(violation_log, '') || ?
+    `UPDATE attempts SET violations = violations + 1, violation_log = RIGHT(COALESCE(violation_log, '') || ?, ?)
       WHERE id = ? AND status = 'in_progress' RETURNING violation_log, max_violations`,
-  ).bind(entry, attemptId).first();
+  ).bind(entry, VIOLATION_LOG_MAX * 32, attemptId).first();
   return json({ ok: true, counted: Boolean(row) });
 }
 
@@ -568,13 +574,18 @@ async function saveContact(request, env, attemptId) {
   // The sends run in the background (packages/core/src/delivery.js). A channel that already
   // delivered for this attempt keeps its status, so a repeated contact step never sends it twice;
   // the check sits in SQL so a send finishing at the same moment cannot be overwritten.
+  // A failed channel can be re-armed exactly once, by the retry that follows it: the re-arm
+  // count sits in the same row, so a loop of replays cannot burn the outbound channels
+  // indefinitely while the sends keep failing.
   const student = attempt.student_id ? { id: attempt.student_id, created: false } : await upsertStudentFromContact(env, { name, email, whatsapp, branch });
   // The private link to this result, sent by email and WhatsApp and used by the waiting screen.
   const resultToken = attempt.result_token || randomToken(24);
   const statements = [
     env.DB.prepare(`UPDATE attempts SET name = ?, email = ?, whatsapp = ?, student_id = ?, result_token = COALESCE(result_token, ?),
-        email_status = CASE WHEN email_sent_at IS NOT NULL THEN email_status ELSE ? END,
-        wa_status = CASE WHEN wa_sent_at IS NOT NULL THEN wa_status ELSE ? END
+        email_status = CASE WHEN email_sent_at IS NOT NULL THEN email_status WHEN email_rearms >= 1 THEN email_status ELSE ? END,
+        email_rearms = CASE WHEN email_sent_at IS NOT NULL THEN email_rearms WHEN email_rearms >= 1 THEN email_rearms ELSE email_rearms + 1 END,
+        wa_status = CASE WHEN wa_sent_at IS NOT NULL THEN wa_status WHEN wa_rearms >= 1 THEN wa_status ELSE ? END,
+        wa_rearms = CASE WHEN wa_sent_at IS NOT NULL THEN wa_rearms WHEN wa_rearms >= 1 THEN wa_rearms ELSE wa_rearms + 1 END
       WHERE id = ? RETURNING email_status, wa_status`)
       .bind(name, email, whatsapp, student.id, resultToken, env.SEND_EMAIL ? "pending" : EMAIL_SKIPPED, whatsappConfigured(env) ? "pending" : "skipped", attemptId),
   ];
@@ -700,7 +711,9 @@ async function uploadMockupSpeaking(request, env, attemptId, url) {
   if (!found) throw new HttpError(400, "Pertanyaan speaking tidak dikenal.");
   const mime = speakingType(request.headers.get("content-type") || "");
   if (!mime) throw new HttpError(415, "Format rekaman tidak dikenal. Coba rekam ulang dari browser ini.");
-  const duration = Number(request.headers.get("x-duration") || 0);
+  // Same clamp and minimum as the placement upload: an unclamped or sub-minimum duration must
+  // never reach the paid scoring queue, and a nonsense header must not become a stored value.
+  const duration = Math.min(120, Math.max(1, Math.round(Number(request.headers.get("x-duration") || 0)) || 1));
   const audio = await request.bytes();
   if (audio.length < SPEAKING_MIN_BYTES) throw new HttpError(400, "Rekaman kosong atau terlalu pendek. Coba rekam ulang.");
   if (audio.length > SPEAKING_MAX_BYTES) throw new HttpError(413, "Rekaman terlalu besar. Coba rekam ulang.");
@@ -712,10 +725,11 @@ async function uploadMockupSpeaking(request, env, attemptId, url) {
        audio = EXCLUDED.audio, audio_mime = EXCLUDED.audio_mime, audio_bytes = EXCLUDED.audio_bytes,
        duration_seconds = EXCLUDED.duration_seconds, status = 'pending', tries = 0, next_attempt_at = 0,
        lease_until = 0, error = NULL, scores = NULL, transcript = NULL, ielts_overall = NULL, needs_review = 0
-     WHERE speaking_answers.status IN ('pending', 'failed')
+     WHERE speaking_answers.status = 'pending' AND speaking_answers.tries = 0
+       AND (speaking_answers.lease_until IS NULL OR speaking_answers.lease_until < ?)
      RETURNING id`,
-  ).bind(attemptId, found.part.part, found.question.no, found.question.text, found.question.video, audio, mime, audio.length, duration, now).first();
-  if (!row) throw new HttpError(409, "Jawaban ini sudah dinilai, jadi rekamannya tidak bisa diganti.");
+  ).bind(attemptId, found.part.part, found.question.no, found.question.text, found.question.video, audio, mime, audio.length, duration, now, now).first();
+  if (!row) throw new HttpError(409, "Jawaban ini sudah masuk penilaian atau sudah dinilai, jadi rekamannya tidak bisa diganti.");
   runInBackground(() => gradeMockupAnswer(env, row.id));
   return json({ ok: true });
 }
@@ -727,6 +741,9 @@ async function getAttemptResult(env, attemptId) {
   const attempt = await getAttempt(env, attemptId);
   const testKey = attempt.test_key || "placement";
   if (!attempt.invite_id || !["pre", "post", "ielts-mockup"].includes(testKey)) throw new HttpError(404, "Hasil tidak ditemukan.");
+  // A voided result is cancelled: the team suppressed it, so it must not be readable by the
+  // attempt UUID either (audit hardening from wave 2).
+  if (attempt.voided_at) throw new HttpError(404, "Hasil tidak ditemukan.");
   if (attempt.status !== "submitted") return json({ ready: false });
   const meta = await inviteMeta(env, attempt);
 
