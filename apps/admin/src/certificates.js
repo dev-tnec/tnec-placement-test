@@ -361,9 +361,9 @@ const PDF_MAX_BYTES = 5 * 1024 * 1024;
 const BROWSER_PDF_API = "https://api.cloudflare.com/client/v4";
 const BROWSER_PDF_TIMEOUT = 45000;
 
-/** The template HTML with its own stylesheets and drawings inlined, because Browser Run renders
- *  the string without a base URL. Replacement functions keep a "$" in the CSS from being read
- *  as a pattern. */
+/** The template HTML with its own stylesheets inlined and its drawings turned into inline SVG,
+ *  because Browser Run renders the string without a base URL and Chrome rasterizes an <img> SVG
+ *  into a heavy image, which makes the PDF slow to open on a phone. */
 export async function certificatePdfHtml(templateKey, values) {
   const template = TEMPLATES[templateKey];
   if (!template) return null;
@@ -372,9 +372,17 @@ export async function certificatePdfHtml(templateKey, values) {
     const css = await readFile(resolve(CERT_DIR, match[1]), "utf8");
     html = html.replace(match[0], () => `<style>\n${css}\n</style>`);
   }
-  for (const match of [...html.matchAll(/src="([^"]+\.svg)"/g)]) {
-    const svg = await readFile(resolve(CERT_DIR, match[1]));
-    html = html.replace(match[0], () => `src="data:image/svg+xml;base64,${svg.toString("base64")}"`);
+  for (const match of [...html.matchAll(/<img([^>]*?)src="([^"]+\.svg)"([^>]*)>/g)]) {
+    const svg = await readFile(resolve(CERT_DIR, match[2]), "utf8");
+    const cls = ((match[1] + match[3]).match(/class="([^"]*)"/) || [])[1];
+    let inline = svg.replace(/<\?xml[^>]*\?>\s*/, "");
+    // Chrome turns any filtered shape into a heavy raster image (the top sweep alone became
+    // about 3 MB of pixels and made the PDF slow to open on a phone). The shadows are barely
+    // visible on paper, so the PDF drops the filters and keeps the shapes vector; the print
+    // page still carries them.
+    inline = inline.replace(/\s+filter="url\(#[^)]+\)"/g, "");
+    inline = inline.replace(/<svg([^>]*)>/, (_, attrs) => `<svg${attrs}${cls ? ` class="${cls}"` : ""} width="100%" height="100%">`);
+    html = html.replace(match[0], () => inline);
   }
   return html;
 }

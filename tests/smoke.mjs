@@ -561,8 +561,9 @@ const pdfHtml = await certificatePdfHtml("completion", {
   writing_nilai: "84", writing_grade: "B", mulai: "12 August 2026", selesai: "15 November 2026",
 });
 assert.equal(/<link rel="stylesheet"/.test(pdfHtml), false, "the PDF HTML carries no stylesheet link");
-assert.equal(/src="[^"]+\.svg"/.test(pdfHtml), false, "the PDF HTML carries no relative drawing");
-assert.ok(pdfHtml.includes("data:image/svg+xml;base64,"), "the drawing travels as a data URI");
+assert.equal(/<img[^>]+src="[^"]+\.svg"/.test(pdfHtml), false, "no SVG image tag is left");
+assert.ok(/<svg[^>]*class="bg"/.test(pdfHtml), "the drawing travels as inline SVG, which Chrome keeps vector");
+assert.equal(/filter="url\(#/.test(pdfHtml), false, "the PDF HTML drops SVG filters, which Chrome rasterizes into megabytes of pixels");
 assert.ok(pdfHtml.includes("@page { size: A4 portrait"), "the template's page size travels with the PDF HTML");
 assert.equal(await certificatePdfHtml("nope", {}), null, "an unknown template has no PDF HTML");
 
