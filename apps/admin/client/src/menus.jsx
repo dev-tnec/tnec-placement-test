@@ -125,6 +125,12 @@ export function contextMenu(kind, id) {
     const s = c.studentId ? db.students.find((x) => x.id === c.studentId) : null;
     const items = [{ label: c.revokedAt ? "Ubah data, sudah dibatalkan" : "Ubah data", icon: "pencil", disabled: Boolean(c.revokedAt), run: () => openCertDialog({ certId: c.id }) }];
     if (s && route().parts[0] !== "siswa") items.push({ label: "Buka profil siswa", icon: "user", run: () => { location.hash = `#/siswa/${s.id}`; } });
+    if (!c.revokedAt && s) {
+      items.push({ sep: true });
+      const noPdf = { label: c.pdf ? "Kirim ulang email" : "Kirim email, butuh PDF", icon: "mail", disabled: !c.pdf || !s.email, run: () => mutate(() => api(`/api/admin/certificates/${c.id}/send-email`, { method: "POST" }), c.pdf ? `Sertifikat ${c.number} dikirim ke email ${s.email}.` : "") };
+      const noWa = { label: c.waSentAt ? "Kirim ulang WhatsApp" : "Kirim WhatsApp", icon: "message", disabled: !c.pdf || !s.wa, run: () => mutate(() => api(`/api/admin/certificates/${c.id}/send-whatsapp`, { method: "POST" }), c.pdf ? `Sertifikat ${c.number} dikirim lewat WhatsApp.` : "") };
+      items.push(noPdf, noWa);
+    }
     items.push({ sep: true });
     items.push(c.revokedAt
       ? { label: "Pulihkan sertifikat", icon: "undo", run: () => mutate(() => api(`/api/admin/certificates/${c.id}/restore`, { method: "POST" }), `Sertifikat ${c.number} berlaku lagi.`) }

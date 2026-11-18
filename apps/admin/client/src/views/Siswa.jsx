@@ -351,7 +351,7 @@ export function SiswaDetail({ id }) {
           <button className="btn btn--quiet btn--sm" type="button" onClick={() => openCertDialog({ studentId: s.id })}><Icon name="award" cls="icon--sm" />Terbitkan sertifikat</button>
         </header>
         {certs.length ? <div className="table-wrap"><table className="table">
-          <thead><tr><th scope="col">Nomor</th><th scope="col">Jenis</th><th scope="col" className="hide-md">Tanggal terbit</th><th scope="col">Status</th><th scope="col" className="is-action"><span className="sr-only">Aksi</span></th></tr></thead>
+          <thead><tr><th scope="col">Nomor</th><th scope="col">Jenis</th><th scope="col" className="hide-md">Tanggal terbit</th><th scope="col" className="hide-lg">Terkirim</th><th scope="col">Status</th><th scope="col" className="is-action"><span className="sr-only">Aksi</span></th></tr></thead>
           <tbody>{certs.map((c) => <CertRow key={c.id} c={c} withRecipient={false} />)}</tbody>
         </table></div>
           : <Empty title="Belum ada sertifikat." desc={`Sertifikat yang terbit atas nama ${s.name.split(/\s+/)[0]} muncul di sini.`} />}

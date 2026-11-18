@@ -54,6 +54,68 @@
 .cert-bar a:focus-visible,
 .cert-bar__print:focus-visible { outline: none; box-shadow: 0 0 0 3px rgba(195, 207, 224, .55); }
 
+/* The send row of the bar: upload the printed PDF, then send it to the student. */
+.cert-send {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.cert-send__upload {
+  flex: none;
+  padding: 9px 18px;
+  border: 1px solid rgba(195, 207, 224, .55);
+  border-radius: 999px;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.cert-send__upload:hover,
+.cert-send__upload:focus-visible { border-color: #FFFFFF; }
+
+.cert-send__upload.is-busy { opacity: .55; cursor: wait; }
+
+.cert-send__state {
+  flex: none;
+  max-width: 340px;
+  margin: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: #C3CFE0;
+  font-size: 13px;
+}
+
+.cert-send__state.is-ok { color: #FFFFFF; }
+
+.cert-send__btn {
+  flex: none;
+  padding: 9px 18px;
+  border: 0;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, .14);
+  color: #FFFFFF;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.cert-send__btn:hover { background: rgba(255, 255, 255, .24); }
+
+.cert-send__btn:focus-visible { outline: none; box-shadow: 0 0 0 3px rgba(195, 207, 224, .55); }
+
+.cert-send__btn[disabled] { opacity: .55; cursor: default; }
+
+@media (max-width: 900px) {
+  .cert-send { flex-wrap: wrap; }
+  .cert-send__state { max-width: 100%; }
+  .cert-bar { flex-wrap: wrap; }
+}
+
 .cert-note {
   position: absolute;
   top: 62px;

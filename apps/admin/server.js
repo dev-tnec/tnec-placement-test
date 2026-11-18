@@ -14,8 +14,9 @@ import { startInviteQueueWorker, stopInviteQueueWorker } from "./src/invite-queu
 
 /** The mockup roster import sends a whole CSV in one JSON body. JSON escaping can nearly double
  *  the size (quotes and newlines expand to two characters each), so the transport cap is twice
- *  the 2 MB file cap from the PRD. */
+ *  the 2 MB file cap from the PRD. The certificate PDF upload sends the raw file bytes. */
 const IMPORT_ROUTES = /\/api\/admin\/mockup\/sessions\/[\w-]+\/import/;
+const PDF_UPLOAD_ROUTES = /\/api\/admin\/certificates\/[\w-]+\/pdf$/;
 
 export function createAdminHandler() {
   const handler = async (request, env, ctx) => {
@@ -23,7 +24,11 @@ export function createAdminHandler() {
     if (url.pathname.startsWith("/api/admin/")) return handleAdmin(request, env, url, ctx);
     return serveAdminPage(request, env, url);
   };
-  handler.bodyLimit = (method, pathname) => (method === "POST" && IMPORT_ROUTES.test(pathname) ? 4 * 1024 * 1024 : null);
+  handler.bodyLimit = (method, pathname) => {
+    if (method === "POST" && IMPORT_ROUTES.test(pathname)) return 4 * 1024 * 1024;
+    if (method === "POST" && PDF_UPLOAD_ROUTES.test(pathname)) return 6 * 1024 * 1024;
+    return null;
+  };
   return handler;
 }
 

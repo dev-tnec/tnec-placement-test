@@ -17,11 +17,15 @@ export function createMailer(env, fetchImpl = fetch) {
   const account = env.CLOUDFLARE_ACCOUNT_ID;
   if (!token || !account) return null;
   return {
-    async send({ from, to, subject, html, text }) {
+    async send({ from, to, subject, html, text, attachments }) {
       const response = await fetchImpl(`${API}/accounts/${account}/email/sending/send`, {
         method: "POST",
         headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-        body: JSON.stringify({ from: parseAddress(from), to, subject, html, text }),
+        body: JSON.stringify({
+          from: parseAddress(from), to, subject, html, text,
+          // Attachments are base64 in the JSON body, as the Email Sending API expects.
+          ...(attachments?.length ? { attachments: attachments.map((a) => ({ content: a.content, filename: a.filename, type: a.type || "application/pdf", disposition: "attachment" })) } : {}),
+        }),
         signal: AbortSignal.timeout(20_000),
       });
       let data = null;

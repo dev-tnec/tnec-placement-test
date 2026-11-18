@@ -25,6 +25,7 @@ import { mockupSpeakingPlan } from "@tnec/core/speaking-mockup";
 import {
   CERT_DIR, certificateData, certificatePage, saveCertificateType, deleteCertificateType,
   issueCertificate, updateCertificate, certificateAction,
+  uploadCertificatePdf, sendCertificateEmail, sendCertificateWhatsApp, certificatePdfByToken,
 } from "./certificates.js";
 
 const PUBLIC_DIR = resolve(dirname(fileURLToPath(import.meta.url)), "../public");
@@ -88,6 +89,13 @@ export async function serveAdminPage(request, env, url) {
   if (certAsset) {
     const file = await staticResponse(CERT_DIR, `/${certAsset[1]}`, { cacheControl: "private, max-age=300" });
     return withHeaders(file || textResponse(404, "File tidak ditemukan."), null);
+  }
+  // The uploaded certificate PDF behind its unguessable token, so AttCos can fetch it for the
+  // WhatsApp document send. No session: the token is the secret, like the result link.
+  const certFile = path.match(/^\/cert-file\/([A-Za-z0-9_-]{20,80})$/);
+  if (certFile) {
+    const file = await certificatePdfByToken(env, certFile[1]);
+    return withHeaders(file || textResponse(404, "File tidak ditemukan."), "no-store");
   }
   const user = await currentUser(request, env);
   // A printable certificate (crt_...) or a sample of a certificate type (ctp_...). The page sits
@@ -311,7 +319,8 @@ const ROUTES = [
   ["DELETE", /^\/api\/admin\/certificate-types\/([\w-]+)$/, deleteCertificateType],
   ["POST", /^\/api\/admin\/certificates$/, issueCertificate],
   ["PUT", /^\/api\/admin\/certificates\/([\w-]+)$/, updateCertificate],
-  ["POST", /^\/api\/admin\/certificates\/([\w-]+)\/(revoke|restore)$/, certificateAction],
+  ["POST", /^\/api\/admin\/certificates\/([\w-]+)\/pdf$/, uploadCertificatePdf],
+  ["POST", /^\/api\/admin\/certificates\/([\w-]+)\/(send-email|send-whatsapp|revoke|restore)$/, certificateSendOrAction],
   ["GET", /^\/api\/admin\/speaking\/([\w-]+)\/audio$/, speakingAudio],
   ["POST", /^\/api\/admin\/speaking\/([\w-]+)\/grade$/, gradeSpeaking],
   ["POST", /^\/api\/admin\/speaking\/([\w-]+)\/(retry|skip|reviewed)$/, speakingAction],
@@ -1807,6 +1816,14 @@ async function moveSpeakingQuestion(request, env, user, url, id, direction) {
     env.DB.prepare("UPDATE speaking_questions SET position = ?, updated_at = ? WHERE id = ?").bind(row.position, now, other.id),
   ]);
   return json({ ok: true });
+}
+
+/** The certificate routes fan out: the two sends are their own handlers, revoke and restore
+ *  keep the old action handler. */
+async function certificateSendOrAction(request, env, user, url, id, action) {
+  if (action === "send-email") return sendCertificateEmail(request, env, user, url, id);
+  if (action === "send-whatsapp") return sendCertificateWhatsApp(request, env, user, url, id);
+  return certificateAction(request, env, user, url, id, action);
 }
 
 async function getSpeakingRow(env, id) {

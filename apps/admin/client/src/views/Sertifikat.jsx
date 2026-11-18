@@ -30,6 +30,12 @@ export function CertRow({ c, withRecipient }) {
       </td> : null}
       <td className={withRecipient ? "hide-sm" : ""}>{certTypeName(c)}</td>
       <td className="hide-md nowrap">{fmtDate(c.issuedAt)}<span className="cell-sub">oleh {c.createdBy || "Sistem"}</span></td>
+      <td className="hide-lg">
+        {(c.emailSentAt || c.waSentAt) ? <>
+          {c.emailSentAt ? <span className="cell-sub">Email {fmtDate(c.emailSentAt)}</span> : null}
+          {c.waSentAt ? <span className="cell-sub">WhatsApp {fmtDate(c.waSentAt)}</span> : null}
+        </> : <span className="muted">Belum</span>}
+      </td>
       <td>
         {c.revokedAt ? <Status label="Dibatalkan" kind="ring" muted /> : <Status label="Berlaku" kind="navy" />}
         {c.revokedAt && c.revokeReason ? <span className="cell-sub">{c.revokeReason}</span> : null}
@@ -97,7 +103,7 @@ function CertsList() {
       : rows.length ? <>
         <div className="table-wrap"><table className="table">
           <caption className="sr-only">Daftar sertifikat yang terbit</caption>
-          <thead><tr><th scope="col">Nomor</th><th scope="col">Penerima</th><th scope="col" className="hide-sm">Jenis</th><th scope="col" className="hide-md">Tanggal terbit</th><th scope="col">Status</th><th scope="col" className="is-action"><span className="sr-only">Aksi</span></th></tr></thead>
+          <thead><tr><th scope="col">Nomor</th><th scope="col">Penerima</th><th scope="col" className="hide-sm">Jenis</th><th scope="col" className="hide-md">Tanggal terbit</th><th scope="col" className="hide-lg">Terkirim</th><th scope="col">Status</th><th scope="col" className="is-action"><span className="sr-only">Aksi</span></th></tr></thead>
           <tbody>{pageRows.map((c) => <CertRow key={c.id} c={c} withRecipient />)}</tbody>
         </table></div>
         <Pager page={f.page} total={rows.length} noun="sertifikat" onPage={onPage} />

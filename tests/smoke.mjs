@@ -150,6 +150,15 @@ try {
   await sendWhatsApp(env, { to: "+6281234567890", text: "Hasil", source: PLACEMENT_LEAD_SOURCE });
   assert.deepEqual(JSON.parse(calls.at(-1).init.body), { to: "6281234567890", channelId: env.ATTCOS_CHANNEL_ID, text: "Hasil", source: "Placement Test" }, "the result message names its lead source");
 
+  // A certificate goes out as a WhatsApp document with a fetchable link, per the AttCos API.
+  globalThis.fetch = reply(200, { success: true, data: { messageId: "doc_1", conversationId: "conv_1", channelId: env.ATTCOS_CHANNEL_ID } });
+  await sendWhatsApp(env, {
+    to: "6281234567890",
+    text: "Ini sertifikat kamu.",
+    media: { kind: "document", url: "https://tes.example.test/cert-file/abc123", filename: "sertifikat.pdf" },
+  });
+  assert.deepEqual(JSON.parse(calls.at(-1).init.body).media, { url: "https://tes.example.test/cert-file/abc123", kind: "document", filename: "sertifikat.pdf" }, "the document send carries the media object");
+
   globalThis.fetch = reply(422, { success: false, error: { code: "WINDOW_CLOSED", message: "window closed" } });
   const closed = await sendWhatsApp(env, { to: "6281234567890", text: "Halo" });
   assert.equal(closed.ok, false);
@@ -197,6 +206,16 @@ assert.equal(sent[0].init.headers.Authorization, "Bearer t");
 assert.deepEqual(JSON.parse(sent[0].init.body).from, { address: "placement@index-now.dev", name: "TNEC" });
 const failing = createMailer({ CLOUDFLARE_EMAIL_TOKEN: "t", CLOUDFLARE_ACCOUNT_ID: "acc" }, async () => new Response(JSON.stringify({ success: false, errors: [{ message: "domain not verified" }] }), { status: 403 }));
 await assert.rejects(() => failing.send({ from: "a@b.co", to: "c@d.co", subject: "s", text: "t" }), /domain not verified/);
+// A certificate email carries its PDF as a base64 attachment, exactly as the API expects.
+await mailer.send({
+  from: "TNEC <placement@index-now.dev>", to: "rani@example.com", subject: "Sertifikat", html: "<p>x</p>", text: "x",
+  attachments: [{ content: "JVBERi0=", filename: "sertifikat.pdf" }],
+});
+const withAttachment = JSON.parse(sent.at(-1).init.body);
+assert.equal(withAttachment.attachments.length, 1);
+assert.deepEqual(withAttachment.attachments[0], { content: "JVBERi0=", filename: "sertifikat.pdf", type: "application/pdf", disposition: "attachment" });
+await mailer.send({ from: "TNEC <placement@index-now.dev>", to: "rani@example.com", subject: "Tanpa lampiran", html: "<p>x</p>", text: "x" });
+assert.equal(JSON.parse(sent.at(-1).init.body).attachments, undefined, "a result email still carries no attachments");
 
 /* ---------- Hosted settings (no connection is opened) ---------- */
 const hosted = buildEnv({

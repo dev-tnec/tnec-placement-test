@@ -8,7 +8,9 @@ import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { HttpError, json, readJson, nowSeconds, text } from "@tnec/core/http";
 import { addActivity, newId } from "@tnec/core/store";
-import { escapeHtml } from "@tnec/core/email";
+import { escapeHtml, buildCertificateEmail } from "@tnec/core/email";
+import { randomToken } from "@tnec/core/crypto";
+import { sendWhatsApp, whatsappConfigured } from "@tnec/core/whatsapp";
 
 export const CERT_DIR = resolve(dirname(fileURLToPath(import.meta.url)), "../certificates");
 
@@ -145,7 +147,12 @@ export async function certificateData(env) {
   const [types, counters, issued] = (await env.DB.batch([
     env.DB.prepare("SELECT * FROM certificate_types ORDER BY created_at, name"),
     env.DB.prepare("SELECT * FROM certificate_counters"),
-    env.DB.prepare("SELECT * FROM certificates ORDER BY issued_at DESC, created_at DESC LIMIT 5000"),
+    // The PDF bytes never travel with the bootstrap; only the fact that they exist.
+    env.DB.prepare(`SELECT id, type_id, template, number, seq, period, student_id, recipient_name, issued_at, details,
+            created_at, created_by, revoked_at, revoked_by, revoke_reason,
+            (pdf IS NOT NULL) AS has_pdf, pdf_name, pdf_bytes, pdf_uploaded_at, pdf_uploaded_by,
+            email_sent_at, email_sent_by, wa_sent_at, wa_sent_by
+       FROM certificates ORDER BY issued_at DESC, created_at DESC LIMIT 5000`),
   ])).map((r) => r.results);
   return {
     templates: Object.entries(TEMPLATES).map(([key, t]) => ({ key, name: t.name, paper: t.paper, signer: t.signer, fields: t.fields })),
@@ -159,6 +166,9 @@ export async function certificateData(env) {
       issuedAt: c.issued_at * 1000, issuedOn: isoFromSeconds(c.issued_at), details: parseDetails(c.details),
       createdAt: c.created_at * 1000, createdBy: c.created_by || "",
       revokedAt: c.revoked_at ? c.revoked_at * 1000 : null, revokedBy: c.revoked_by || "", revokeReason: c.revoke_reason || "",
+      pdf: c.has_pdf ? { name: c.pdf_name || "sertifikat.pdf", bytes: c.pdf_bytes || 0, uploadedAt: c.pdf_uploaded_at ? c.pdf_uploaded_at * 1000 : null, uploadedBy: c.pdf_uploaded_by || "" } : null,
+      emailSentAt: c.email_sent_at ? c.email_sent_at * 1000 : null, emailSentBy: c.email_sent_by || "",
+      waSentAt: c.wa_sent_at ? c.wa_sent_at * 1000 : null, waSentBy: c.wa_sent_by || "",
     })),
   };
 }
@@ -340,34 +350,151 @@ export async function certificateAction(request, env, user, url, id, action) {
   return json({ ok: true });
 }
 
+/* ===================== Sending the certificate to the student ===================== */
+// The team prints the certificate to PDF with the print dialog, uploads that exact file here,
+// and then sends it on both channels. The WhatsApp send needs a URL AttCos can fetch, so the
+// row carries a random token and the admin app serves the file at /cert-file/<token>.
+
+const PDF_MAX_BYTES = 5 * 1024 * 1024;
+
+export async function uploadCertificatePdf(request, env, user, url, id) {
+  const c = await getCertificateRow(env, id);
+  if (c.revoked_at) throw new HttpError(409, "Sertifikat yang dibatalkan tidak bisa dikirim. Pulihkan dulu kalau masih dipakai.");
+  const pdf = Buffer.from(await request.bytes());
+  if (pdf.length < 4 || pdf.subarray(0, 4).toString("latin1") !== "%PDF") {
+    throw new HttpError(400, "Berkas ini bukan PDF. Simpan halaman cetaknya sebagai PDF dulu, lalu unggah berkas itu.");
+  }
+  if (pdf.length > PDF_MAX_BYTES) throw new HttpError(413, "PDF sertifikat maksimal 5 MB.");
+  const name = text(url.searchParams.get("name") || `${c.number.replace(/[^\w-]+/g, "-")}.pdf`, 120) || "sertifikat.pdf";
+  const now = nowSeconds();
+  // The token is minted once and kept, so earlier links stay valid when the file is replaced.
+  const token = c.pdf_token || randomToken(24);
+  await env.DB.prepare(`UPDATE certificates SET pdf = ?, pdf_name = ?, pdf_bytes = ?, pdf_token = ?, pdf_uploaded_at = ?, pdf_uploaded_by = ? WHERE id = ?`)
+    .bind(pdf, name, pdf.length, token, now, user.name, id).run();
+  return json({ ok: true, token, name, bytes: pdf.length });
+}
+
+/** Serves the uploaded PDF behind the unguessable token, for AttCos to fetch. No session. */
+export async function certificatePdfByToken(env, token) {
+  const c = await env.DB.prepare("SELECT pdf, pdf_name FROM certificates WHERE pdf_token = ?").bind(String(token || "")).first();
+  if (!c?.pdf) return null;
+  return new Response(c.pdf, {
+    status: 200,
+    headers: {
+      "Content-Type": "application/pdf",
+      "Content-Disposition": `inline; filename="${(c.pdf_name || "sertifikat.pdf").replace(/"/g, "")}"`,
+      "Cache-Control": "no-store",
+    },
+  });
+}
+
+async function studentOfCertificate(env, c) {
+  if (!c.student_id) throw new HttpError(409, "Sertifikat ini tidak terhubung ke siswa mana pun, jadi tidak ada tujuan pengiriman.");
+  const s = await env.DB.prepare("SELECT id, name, email, whatsapp FROM students WHERE id = ?").bind(c.student_id).first();
+  if (!s) throw new HttpError(409, "Data siswa penerima sudah dihapus, jadi sertifikat ini tidak bisa dikirim.");
+  return s;
+}
+
+function requirePdf(c) {
+  if (c.revoked_at) throw new HttpError(409, "Sertifikat yang dibatalkan tidak bisa dikirim. Pulihkan dulu kalau masih dipakai.");
+  if (!c.pdf) throw new HttpError(409, "Belum ada PDF di sertifikat ini. Buka halaman cetaknya, simpan PDF-nya, lalu unggah dari bilah atasnya.");
+}
+
+export async function sendCertificateEmail(request, env, user, url, id) {
+  const c = await getCertificateRow(env, id);
+  requirePdf(c);
+  const s = await studentOfCertificate(env, c);
+  if (!s.email) throw new HttpError(409, "Siswa ini belum punya alamat email. Lengkapi dulu di profilnya.");
+  if (!env.SEND_EMAIL) throw new HttpError(503, "Pengiriman email belum diatur di server ini.");
+  const type = await env.DB.prepare("SELECT name FROM certificate_types WHERE id = ?").bind(c.type_id).first();
+  const mail = buildCertificateEmail({ name: c.recipient_name, typeName: type?.name || "Sertifikat", number: c.number });
+  try {
+    await env.SEND_EMAIL.send({
+      from: env.RESULT_FROM_EMAIL || "Titik Nol English Course <placement@index-now.dev>",
+      to: s.email,
+      subject: mail.subject,
+      html: mail.html,
+      text: mail.text,
+      attachments: [{ content: c.pdf.toString("base64"), filename: c.pdf_name || "sertifikat.pdf" }],
+    });
+  } catch (error) {
+    throw new HttpError(502, `Email sertifikat gagal terkirim: ${String(error.message || error).slice(0, 160)}`);
+  }
+  const now = nowSeconds();
+  const statements = [
+    env.DB.prepare("UPDATE certificates SET email_sent_at = ?, email_sent_by = ? WHERE id = ?").bind(now, user.name, id),
+    addActivity(env, s.id, "sertifikat", `Mengirim sertifikat nomor ${c.number} ke email ${s.email}.`, user.name, { certificateId: id }, now),
+  ];
+  await env.DB.batch(statements);
+  return json({ ok: true, email: s.email });
+}
+
+export async function sendCertificateWhatsApp(request, env, user, url, id) {
+  const c = await getCertificateRow(env, id);
+  requirePdf(c);
+  const s = await studentOfCertificate(env, c);
+  if (!s.whatsapp) throw new HttpError(409, "Siswa ini belum punya nomor WhatsApp. Lengkapi dulu di profilnya.");
+  if (!whatsappConfigured(env)) throw new HttpError(503, "Integrasi WhatsApp belum diatur di server ini.");
+  // AttCos fetches the document from this public, unguessable link.
+  const fileUrl = `${url.origin}/cert-file/${c.pdf_token}`;
+  const first = String(c.recipient_name || s.name).trim().split(/\s+/)[0];
+  const message = `Halo ${first}, ini sertifikat kamu dari Titik Nol English Course. Filenya terlampir, silakan disimpan.`;
+  const result = await sendWhatsApp(env, {
+    to: s.whatsapp,
+    text: message,
+    media: { kind: "document", url: fileUrl, filename: c.pdf_name || "sertifikat.pdf" },
+  });
+  const now = nowSeconds();
+  const statements = [
+    env.DB.prepare("INSERT INTO wa_messages (student_id, to_number, text, status, provider_message_id, error, created_at, created_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?)")
+      .bind(s.id, s.whatsapp, message, result.status, result.messageId || null, result.error || null, now, user.name),
+  ];
+  if (result.ok) {
+    statements.push(env.DB.prepare("UPDATE certificates SET wa_sent_at = ?, wa_sent_by = ? WHERE id = ?").bind(now, user.name, id));
+    statements.push(addActivity(env, s.id, "sertifikat", `Mengirim sertifikat nomor ${c.number} lewat WhatsApp.`, user.name, { certificateId: id }, now));
+  } else {
+    statements.push(addActivity(env, s.id, "sertifikat", `Pengiriman WhatsApp sertifikat nomor ${c.number} gagal. ${result.error}`, user.name, { certificateId: id }, now));
+  }
+  await env.DB.batch(statements);
+  if (!result.ok) throw new HttpError(result.status === "skipped" ? 503 : 502, result.error);
+  return json({ ok: true });
+}
+
 /* ===================== Printable page ===================== */
 const PAGE_HEAD = `<meta name="robots" content="noindex, nofollow">
 <link rel="icon" href="/favicon.svg" type="image/svg+xml">
-<link rel="stylesheet" href="/admin/assets/certificate-page.css?v=1">
-<script src="/admin/assets/certificate-page.js?v=1" defer></script>`;
+<link rel="stylesheet" href="/admin/assets/certificate-page.css?v=2">
+<script src="/admin/assets/certificate-page.js?v=2" defer></script>`;
 
 function fillTemplate(html, values) {
   return html.replace(/\{\{(\w+)\}\}/g, (_, key) => escapeHtml(values[key] ?? ""));
 }
 
-function barHtml({ info, note, back }) {
+function barHtml({ info, note, back, send = null }) {
+  const sendHtml = send ? `
+  <div class="cert-send" data-cert-id="${send.id}" data-pdf="${send.hasPdf ? "1" : "0"}" data-email="${escapeHtml(send.email)}" data-whatsapp="${escapeHtml(send.whatsapp)}">
+    <label class="cert-send__upload"><input type="file" id="cert-pdf-input" accept="application/pdf,.pdf" hidden /> Unggah PDF</label>
+    <span class="cert-send__state" id="cert-pdf-state">${send.hasPdf ? `PDF tersimpan: ${escapeHtml(send.pdfName)}` : "Unggah PDF yang kamu simpan dari tombol cetak untuk bisa mengirim sertifikat ini."}</span>
+    <button class="cert-send__btn" type="button" id="cert-send-email" hidden>${send.emailSentAt ? "Kirim ulang email" : "Kirim email"}${send.email ? ` ke ${escapeHtml(send.email)}` : ""}</button>
+    <button class="cert-send__btn" type="button" id="cert-send-wa" hidden>Kirim WhatsApp${send.whatsapp ? ` ke ${escapeHtml(send.whatsapp)}` : ""}</button>
+  </div>` : "";
   return `<div class="cert-bar" role="region" aria-label="Aksi sertifikat">
   <a class="cert-bar__back" href="${back}">Kembali ke dasbor</a>
   <p class="cert-bar__info">${info}</p>
-  <button class="cert-bar__print" type="button" id="cert-print">Cetak atau simpan PDF</button>
+  <button class="cert-bar__print" type="button" id="cert-print">Cetak atau simpan PDF</button>${sendHtml}
 </div>
 <p class="cert-note">${note}</p>`;
 }
 
 /** Builds the certificate page from its template. Every value is escaped before it goes in. */
-export async function renderCertificateHtml({ templateKey, values, title, info, note, back, revoked = false }) {
+export async function renderCertificateHtml({ templateKey, values, title, info, note, back, revoked = false, send = null }) {
   const template = TEMPLATES[templateKey];
   if (!template) return null;
   let html = fillTemplate(await readFile(resolve(CERT_DIR, template.file), "utf8"), values);
   // Replacement functions keep a "$" in a name or number from being read as a pattern.
   html = html.replace(/<title>[\s\S]*?<\/title>/, () => `<title>${escapeHtml(title)}</title>`);
   html = html.replace("</head>", () => `${PAGE_HEAD}\n</head>`);
-  html = html.replace(/<body[^>]*>/, () => `<body class="cert-view${revoked ? " is-revoked" : ""}">\n${barHtml({ info, note, back })}`);
+  html = html.replace(/<body[^>]*>/, () => `<body class="cert-view${revoked ? " is-revoked" : ""}">\n${barHtml({ info, note, back, send })}`);
   if (revoked) html = html.replace(/<div class="sheet[^"]*">/, (open) => `${open}\n  <div class="cert-void" aria-hidden="true">DIBATALKAN</div>`);
   return html;
 }
@@ -402,6 +529,18 @@ export async function certificatePage(env, id) {
   if (!template) return null;
   const details = parseDetails(c.details);
   const revoked = Boolean(c.revoked_at);
+  // The send controls appear only on a real, valid certificate with a student to send to.
+  const student = !revoked && c.student_id
+    ? await env.DB.prepare("SELECT email, whatsapp FROM students WHERE id = ?").bind(c.student_id).first()
+    : null;
+  const send = student ? {
+    id: c.id,
+    hasPdf: Boolean(c.pdf),
+    pdfName: c.pdf_name || "sertifikat.pdf",
+    email: student.email || "",
+    whatsapp: student.whatsapp ? `0${String(student.whatsapp).replace(/^62/, "")}` : "",
+    emailSentAt: Boolean(c.email_sent_at),
+  } : null;
   return renderCertificateHtml({
     templateKey: c.template,
     values: {
@@ -416,5 +555,6 @@ export async function certificatePage(env, id) {
       : "Di jendela cetak, pilih ukuran A4, margin None, dan nyalakan Background graphics supaya warnanya ikut tercetak.",
     back: c.student_id ? `/admin/#/siswa/${encodeURIComponent(c.student_id)}` : "/admin/#/sertifikat",
     revoked,
+    send,
   });
 }

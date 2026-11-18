@@ -28,7 +28,7 @@ export function whatsappConfigured(env) {
 // card. Only the automatic placement result sends it; dashboard messages leave it out.
 export const PLACEMENT_LEAD_SOURCE = "Placement Test";
 
-export async function sendWhatsApp(env, { to, text, source, timeoutMs = TIMEOUT_MS }) {
+export async function sendWhatsApp(env, { to, text, source, media, timeoutMs = TIMEOUT_MS }) {
   if (!whatsappConfigured(env)) {
     return { ok: false, status: "skipped", error: "Integrasi WhatsApp belum diatur. Isi ATTCOS_API_KEY dan ATTCOS_CHANNEL_ID di pengaturan server." };
   }
@@ -47,6 +47,7 @@ export async function sendWhatsApp(env, { to, text, source, timeoutMs = TIMEOUT_
         to: String(to).replace(/^\+/, ""),
         channelId: env.ATTCOS_CHANNEL_ID,
         text,
+        ...(media ? { media: { url: media.url, kind: media.kind || "document", filename: media.filename || null } } : {}),
         ...(source ? { source: String(source).slice(0, 80) } : {}),
       }),
       signal: controller.signal,
