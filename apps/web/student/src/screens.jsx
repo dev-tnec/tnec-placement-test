@@ -330,7 +330,7 @@ export function Intro({ config, invite, consent, onConsent, code, onCode, codeEr
     ? `${invite.packageName || "Paket"} - Kandidat: ${invite.firstName}`
     : isInvite
       ? `${invite.testName} - Kandidat: ${invite.firstName}`
-      : "Placement Test";
+      : "";
   const eyebrow = isIelts ? "Simulasi IELTS Resmi TNEC" : isInvite ? invite.testName : "Placement Test";
 
   const title = sectionsMode
@@ -439,7 +439,7 @@ export function Intro({ config, invite, consent, onConsent, code, onCode, codeEr
             <img className="brand-logo" src="/assets/logo-titik-nol-white.png" alt="Titik Nol English Course" width="136" height="23" />
             <span className="session-pill">
               <span className="session-pill__badge">{badge}</span>
-              <span>{sessionLabel}</span>
+              {sessionLabel ? <span>{sessionLabel}</span> : null}
             </span>
           </div>
           <div className="hero__main">
