@@ -1,7 +1,7 @@
 // Legal copy and public config. Bump CONSENT_VERSION whenever the text changes,
 // so every stored consent record points to the exact version the user saw.
 
-export const CONSENT_VERSION = "2026-11-22";
+export const CONSENT_VERSION = "2026-11-24";
 export const WHATSAPP = "6282333143544";
 // Fills the {{total}}, {{duration}}, {{strikes}}, and {{speakingSeconds}} tokens with the live test
 // settings, so the legal text always matches what the dashboard has configured.
@@ -15,7 +15,7 @@ export const CAMPUS_ADDRESS =
 
 export const TERMS = {
   title: "Syarat dan Ketentuan",
-  updated: "17 November 2026",
+  updated: "18 November 2026",
   sections: [
     {
       heading: "1. Tentang tes ini",
@@ -29,7 +29,7 @@ export const TERMS = {
     {
       heading: "2. Aturan pengerjaan",
       paragraphs: [
-        "Tes berjalan dalam mode layar penuh. Kalau kamu keluar dari mode itu, berpindah tab, membuka aplikasi lain, atau memindahkan fokus dari jendela tes, aktivitas tersebut dicatat sebagai pelanggaran. Pada pelanggaran ke-{{strikes}}, tes berhenti dan jawaban kamu tidak dikirim.",
+        "Tes berjalan dalam mode layar penuh. Kalau kamu keluar dari mode itu, berpindah tab, membuka aplikasi lain, atau memindahkan fokus dari jendela tes, aktivitas tersebut dicatat sebagai pelanggaran. Pada pelanggaran ke-{{strikes}}, tesnya berhenti dulu sampai kamu memilih lanjut atau keluar, dan waktu terus berjalan selama layar itu terbuka.",
         "Kerjakan tes ini sendiri tanpa bantuan kamus, aplikasi penerjemah, kecerdasan buatan, atau orang lain.",
         "Waktu terus berjalan ketika jendela tes kehilangan fokus, dan waktu tidak bisa dijeda.",
       ],

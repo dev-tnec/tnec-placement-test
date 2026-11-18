@@ -299,7 +299,7 @@ export function Intro({ config, invite, consent, onConsent, code, onCode, codeEr
               <ol className="test-rules__list">
                 <li><span className="test-rules__num" aria-hidden="true">1</span><p>{ruleTime}</p></li>
                 <li><span className="test-rules__num" aria-hidden="true">2</span><p>Saat tes dimulai, layar akan otomatis masuk ke mode penuh. Selama tes berlangsung, kamu tidak bisa mengecilkan layar, berpindah tab, atau membuka aplikasi lain.</p></li>
-                <li><span className="test-rules__num" aria-hidden="true">3</span><p>Setiap kali kamu keluar dari layar penuh atau berpindah tab, kejadian itu kami catat dan kamu mendapat peringatan. Kalau pelanggaran sudah mencapai {strikes} kali, percobaan ini gagal dan jawaban kamu tidak dikirim.</p></li>
+                <li><span className="test-rules__num" aria-hidden="true">3</span><p>Setiap kali kamu keluar dari layar penuh atau berpindah tab, kejadian itu kami catat dan kamu mendapat peringatan. Kalau pelanggaran sudah mencapai {strikes} kali, tesnya berhenti dulu dan kamu memilih lanjut atau keluar; jawaban kamu tetap tersimpan kalau kamu memilih lanjut.</p></li>
                 <li><span className="test-rules__num" aria-hidden="true">4</span><p>Kerjakan tes ini sendiri tanpa bantuan kamus, penerjemah, kecerdasan buatan, atau orang lain, supaya hasilnya benar-benar menggambarkan kemampuan kamu.</p></li>
               </ol>
             </div>
@@ -799,10 +799,10 @@ function FailureConfirm({ step, onConfirm, onCancel }) {
       <p className="dialog__note">
         {retry
           ? "Sesi ini berakhir dan semua jawaban yang sudah kamu isi hilang. Kamu akan mulai tes baru dari soal pertama dengan waktu yang penuh."
-          : "Sesi ini berakhir dan jawaban kamu tidak disimpan. Kamu akan kembali ke halaman awal, dan bisa memulai tes baru dari sana."}
+          : "Sesi ini berakhir dan jawaban kamu tidak disimpan. Kamu akan keluar dari halaman tes, dan bisa memulai tes baru dari sana."}
       </p>
       <div className="dialog__actions dialog__actions--stack">
-        <button className="btn btn--primary btn--block" type="button" onClick={onConfirm}>{retry ? "Ya, mulai tes baru" : "Ya, keluar ke halaman awal"}</button>
+        <button className="btn btn--primary btn--block" type="button" onClick={onConfirm}>{retry ? "Ya, mulai tes baru" : "Ya, keluar dari halaman tes"}</button>
         <button className="btn btn--secondary btn--block" type="button" onClick={onCancel}>Batal</button>
       </div>
     </>
@@ -827,22 +827,22 @@ export function Dialogs({ dialogs, strikes, maxStrikes, answered, total, duratio
         </span>
         <h2 className="dialog__title" id="violation-title">Fokus tes kamu terputus</h2>
         <p className="dialog__text">Kamu terdeteksi keluar dari layar penuh atau berpindah dari jendela tes, dan kejadian ini sudah kami catat. Ini adalah pelanggaran fokus yang ke-<strong id="violation-count">{strikes}</strong> dari {maxStrikes}.</p>
-        <p className="dialog__note">Waktu tes tetap berjalan selama peringatan ini ditampilkan. Pada pelanggaran ke-{maxStrikes}, percobaan ini gagal.</p>
+        <p className="dialog__note">Waktu tes tetap berjalan selama peringatan ini ditampilkan. Pada pelanggaran ke-{maxStrikes}, tesnya berhenti dulu dan kamu memilih lanjut atau keluar.</p>
         <button className="btn btn--primary btn--block" id="violation-close" type="button" onClick={onViolationClose}>Kembali ke layar penuh</button>
       </Dialog>
 
-      <Dialog id="end-dialog" open={dialogs.end} onClose={() => { setFailStep(null); onClose("end"); }} preventCancel labelledBy="end-title">
-        <span className="dialog__icon dialog__icon--danger" aria-hidden="true">
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="9" /><path d="M9 9l6 6M15 9l-6 6" /></svg>
+      <Dialog id="limit-dialog" open={dialogs.limit} onClose={() => { setFailStep(null); onClose("limit"); }} preventCancel labelledBy="limit-title">
+        <span className="dialog__icon dialog__icon--warning" aria-hidden="true">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 3 2 21h20L12 3Z" /><path d="M12 10v5M12 18h.01" /></svg>
         </span>
-        <h2 className="dialog__title" id="end-title">Percobaan ini gagal</h2>
-        <p className="dialog__text">Kamu sudah {maxStrikes} kali keluar dari layar tes, jadi percobaan ini gagal dan jawaban kamu tidak dikirim. Kalau ingin mendapatkan hasil, kamu perlu mengerjakan tes dari awal lagi.</p>
+        <h2 className="dialog__title" id="limit-title">Batas pelanggaran tercapai</h2>
+        <p className="dialog__text">Kamu sudah {maxStrikes} kali keluar dari layar tes, jadi tesnya berhenti dulu. Jawaban kamu masih tersimpan, tetapi waktu terus berjalan selama layar ini terbuka. Pilih lanjut untuk kembali mengerjakan, atau keluar kalau kamu ingin berhenti di sini.</p>
         {failStep ? (
-          <FailureConfirm step={failStep} onConfirm={() => failConfirmed("end")} onCancel={() => setFailStep(null)} />
+          <FailureConfirm step={failStep} onConfirm={() => failConfirmed("limit")} onCancel={() => setFailStep(null)} />
         ) : (
           <div className="dialog__actions dialog__actions--stack">
-            <button className="btn btn--primary btn--block" id="end-retry" type="button" onClick={() => setFailStep("retry")}>Mulai tes baru</button>
-            <button className="btn btn--secondary btn--block" id="end-back" type="button" onClick={() => setFailStep("back")}>Keluar ke halaman awal</button>
+            <button className="btn btn--primary btn--block" id="limit-continue" type="button" onClick={onViolationClose}>Lanjutkan tes</button>
+            <button className="btn btn--secondary btn--block" id="limit-exit" type="button" onClick={() => setFailStep("exit")}>Keluar dari halaman tes</button>
           </div>
         )}
       </Dialog>
@@ -867,7 +867,7 @@ export function Dialogs({ dialogs, strikes, maxStrikes, answered, total, duratio
         ) : (
           <div className="dialog__actions dialog__actions--stack">
             <button className="btn btn--primary btn--block" id="timeup-retry" type="button" onClick={() => setFailStep("retry")}>Mulai tes baru</button>
-            <button className="btn btn--secondary btn--block" id="timeup-back" type="button" onClick={() => setFailStep("back")}>Keluar ke halaman awal</button>
+            <button className="btn btn--secondary btn--block" id="timeup-back" type="button" onClick={() => setFailStep("exit")}>Keluar dari halaman tes</button>
           </div>
         )}
       </Dialog>

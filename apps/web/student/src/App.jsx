@@ -31,7 +31,7 @@ export default function App() {
   const [ending, setEnding] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [submitting, setSubmitting] = useState(false);
-  const [dialogs, setDialogs] = useState({ violation: false, end: false, submit: false, timeup: false });
+  const [dialogs, setDialogs] = useState({ violation: false, limit: false, submit: false, timeup: false });
   const [legal, setLegal] = useState(null);
   const [toast, setToast] = useState(null);
   const [live, setLive] = useState("");
@@ -321,7 +321,7 @@ export default function App() {
     setAudioNote("");
     setContact({ name: "", email: "", whatsapp: "", branch: "" });
     setContactErrors({});
-    setDialogs({ violation: false, end: false, submit: false, timeup: false });
+    setDialogs({ violation: false, limit: false, submit: false, timeup: false });
     setLegal(null);
     setScreen("test");
   }
@@ -653,8 +653,9 @@ export default function App() {
     strikesRef.current = count;
     setStrikes(count);
     if (count >= maxStrikesRef.current) {
-      setEnding(true);
-      setDialogs((current) => ({ ...current, violation: false, end: true }));
+      // The limit pauses the test behind a choice, it does not end it: the student keeps the
+      // answers by continuing, or leaves the test page after a confirmation.
+      setDialogs((current) => ({ ...current, violation: false, limit: true }));
       return;
     }
     setDialogs((current) => ({ ...current, violation: true }));
@@ -663,7 +664,7 @@ export default function App() {
 
   async function reenterFullscreen() {
     await requestFullscreen();
-    setDialogs((current) => ({ ...current, violation: false }));
+    setDialogs((current) => ({ ...current, violation: false, limit: false }));
   }
 
   function onKeydown(event) {
@@ -725,7 +726,7 @@ export default function App() {
   /* ---------- Retry and back ---------- */
 
   async function retry(failed) {
-    setDialogs({ violation: false, end: false, submit: false, timeup: false });
+    setDialogs({ violation: false, limit: false, submit: false, timeup: false });
     setEnding(false);
     await requestFullscreen();
     try {
@@ -738,7 +739,12 @@ export default function App() {
   }
 
   async function backToStart() {
-    setDialogs({ violation: false, end: false, submit: false, timeup: false });
+    setDialogs({ violation: false, limit: false, submit: false, timeup: false });
+    // The student already confirmed the exit inside the dialog, so the browser's own
+    // leave-site nag must not fire on top of it. Ending goes through state, because the
+    // ref-sync effect rewrites the ref from state on the next commit.
+    setEnding(true);
+    endingRef.current = true;
     await exitFullscreen();
     window.location.reload();
   }

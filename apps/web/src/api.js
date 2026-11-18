@@ -4,7 +4,7 @@
 import { HttpError, json, readJson, nowSeconds, normalizeWhatsapp, isEmail } from "@tnec/core/http";
 import {
   TEST_NAMES, PER_MODE_GRACE_SECONDS, loadTest, loadQuestions, loadSections, loadLevels, levelFor, publicLevel, programCards,
-  focusStrikes, addActivity, upsertStudentFromContact, newId,
+  addActivity, upsertStudentFromContact, newId,
 } from "@tnec/core/store";
 import { normalizeTextAnswer, bandForRaw, overallBand } from "@tnec/core/bands";
 import { gradeWritingTask, writingBand } from "@tnec/core/writing";
@@ -279,16 +279,12 @@ async function logViolation(request, env, attemptId) {
   const type = String(body?.type || "");
   if (!VIOLATION_TYPES.has(type)) throw new HttpError(400, "Jenis pelanggaran tidak dikenal.");
   const entry = `${nowSeconds()}:${type};`.slice(0, 200);
+  // The limit no longer ends anything on the server: the runner pauses the test behind a
+  // continue-or-leave dialog, so the row must survive for the student to continue.
   const row = await env.DB.prepare(
     `UPDATE attempts SET violations = violations + 1, violation_log = COALESCE(violation_log, '') || ?
       WHERE id = ? AND status = 'in_progress' RETURNING violation_log, max_violations`,
   ).bind(entry, attemptId).first();
-  // The last strike ends the attempt without submitting, and such attempts must not sit in the
-  // database as "Tanpa nama, Pelanggaran". Deleting the row removes its answers and recording too.
-  if (row && focusStrikes(row.violation_log) >= (row.max_violations || 3)) {
-    await env.DB.prepare("DELETE FROM attempts WHERE id = ? AND status = 'in_progress'").bind(attemptId).run();
-    return json({ ok: true, counted: true, ended: true });
-  }
   return json({ ok: true, counted: Boolean(row) });
 }
 
@@ -387,9 +383,6 @@ async function submitAttempt(request, env, attemptId) {
   }
 
   const now = nowSeconds();
-  if (focusStrikes(attempt.violation_log) >= (attempt.max_violations || 3)) {
-    throw new HttpError(409, "Percobaan ini sudah gagal karena batas pelanggaran tercapai, jadi jawabannya tidak bisa dikirim.");
-  }
   if (now > attempt.expires_at + SUBMIT_GRACE_SECONDS) {
     throw new HttpError(409, "Waktu pengerjaan sudah habis, jadi jawaban tidak bisa dikirim. Mulai percobaan baru untuk mendapatkan hasil.");
   }
