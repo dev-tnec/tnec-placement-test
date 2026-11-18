@@ -396,7 +396,8 @@ assert.equal(SPEAKING_MAX_BYTES, 3 * 1024 * 1024);
 assert.equal(speakingType("audio/webm;codecs=opus"), "audio/webm");
 assert.equal(speakingType("Audio/MP4"), "audio/mp4");
 assert.equal(speakingType("audio/x-wav"), "audio/wav");
-assert.equal(speakingType("audio/mpeg"), null, "mp3 is refused, the recorder never produces it");
+assert.equal(speakingType("audio/mpeg"), "audio/mpeg", "mp3 is accepted for the aura-2 voice of the E2E tool");
+assert.equal(speakingType("audio/MP3"), "audio/mpeg", "the mp3 alias resolves");
 assert.deepEqual(retryDelays({ SPEAKING_RETRY_SECONDS: "5, 10" }), [5, 10]);
 assert.deepEqual(retryDelays({}), [60, 300]);
 

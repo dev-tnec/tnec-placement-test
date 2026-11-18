@@ -20,9 +20,10 @@ import { MAX_TRIES, DEFAULT_RETRY_SECONDS, mapSpeechaceResult, classifyFailure, 
 
 export const SPEAKING_MAX_BYTES = 3 * 1024 * 1024;
 export const AUDIO_RETENTION_DAYS = 30;
-// Browsers record webm or ogg (Opus) or mp4 (AAC). Speechace reads all of them, and wav too.
-export const SPEAKING_TYPES = { "audio/webm": "webm", "audio/ogg": "ogg", "audio/mp4": "m4a", "audio/wav": "wav" };
-const TYPE_ALIASES = { "audio/x-wav": "audio/wav", "audio/wave": "audio/wav", "audio/x-m4a": "audio/mp4", "audio/m4a": "audio/mp4" };
+// Browsers record webm or ogg (Opus) or mp4 (AAC). Speechace reads all of them, wav, and mp3;
+// mp3 matters for the mockup E2E tool, which speaks with @cf/deepgram/aura-2-en on Workers AI.
+export const SPEAKING_TYPES = { "audio/webm": "webm", "audio/ogg": "ogg", "audio/mp4": "m4a", "audio/wav": "wav", "audio/mpeg": "mp3" };
+const TYPE_ALIASES = { "audio/x-wav": "audio/wav", "audio/wave": "audio/wav", "audio/x-m4a": "audio/mp4", "audio/m4a": "audio/mp4", "audio/mp3": "audio/mpeg" };
 export const DEFAULT_SPEECHACE_BASE = "https://api2.speechace.com";
 
 const LEASE_SECONDS = 120;

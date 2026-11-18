@@ -182,13 +182,29 @@ function wavSeconds(buf) {
   return byteRate ? Math.max(1, Math.round(dataSize / byteRate)) : null;
 }
 
+/* aura-2 answers with constant bitrate MP3, so the first frame header carries the bitrate
+   that turns the file size into a duration. The header is informational, but keep it honest. */
+function mp3Seconds(buf) {
+  for (let i = 0; i < Math.min(buf.length - 4, 2048); i += 1) {
+    if (buf[i] !== 0xff || (buf[i + 1] & 0xe0) !== 0xe0) continue;
+    const version = (buf[i + 1] >> 3) & 0x03;
+    const bitrateIndex = (buf[i + 2] >> 4) & 0x0f;
+    if (!bitrateIndex || bitrateIndex === 0x0f) continue;
+    const table = version === 3 ? [0, 32, 40, 48, 56, 64, 80, 96, 112, 128, 160, 192, 224, 256, 320] : [0, 8, 16, 24, 32, 40, 48, 56, 64, 80, 96, 112, 128, 144, 160];
+    const bitrate = table[bitrateIndex] * 1000;
+    if (!bitrate) continue;
+    return Math.max(1, Math.round(((buf.length - i) * 8) / bitrate));
+  }
+  return null;
+}
+
 const voiceDir = mkdtempSync(join(tmpdir(), "tnec-tts-"));
 let voiceMode = "unset";
 
 async function cloudflareVoice(text) {
   const accountId = process.env.CLOUDFLARE_ACCOUNT_ID;
-  const token = process.env.CLOUDFLARE_AI_TOKEN || process.env.CLOUDFLARE_EMAIL_TOKEN;
-  if (!accountId || !token) return { error: "no credentials" };
+  const token = process.env.CLOUDFLARE_AI_TOKEN;
+  if (!accountId || !token) return { error: "no CLOUDFLARE_AI_TOKEN in the env" };
   const res = await fetch(`https://api.cloudflare.com/client/v4/accounts/${accountId}/ai/run/@cf/deepgram/aura-2-en`, {
     method: "POST",
     headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
@@ -205,7 +221,8 @@ async function cloudflareVoice(text) {
     if (!b64) return { error: "the response carried no audio" };
     audio = Buffer.from(b64, "base64");
   }
-  if (wavSeconds(audio)) return { wav: audio };
+  if (wavSeconds(audio)) return { clip: { bytes: audio, mime: "audio/wav" } };
+  if (mp3Seconds(audio)) return { clip: { bytes: audio, mime: "audio/mpeg" } };
   return { error: `unsupported audio format (${audio.subarray(0, 4).toString("hex")})` };
 }
 
@@ -230,7 +247,7 @@ function windowsVoiceBatch(texts) {
     timeout: 10 * 60 * 1000,
   });
   if (run.status !== 0) return { error: `the Windows voice failed: ${String(run.stderr || run.stdout || run.error || "").slice(0, 400)}` };
-  return { wavs: texts.map((_, i) => readFileSync(join(voiceDir, `${i}.wav`))) };
+  return { clips: texts.map((_, i) => ({ bytes: readFileSync(join(voiceDir, `${i}.wav`)), mime: "audio/wav" })) };
 }
 
 const plan18 = mockupSpeakingPlan();
@@ -246,21 +263,20 @@ if (!first.error) {
   ok("the Cloudflare voice works");
 } else {
   console.log(`  ..  Cloudflare voice unavailable (${first.error}); falling back to the local Windows voice.`);
-  console.log("      Set CLOUDFLARE_AI_TOKEN with Workers AI permission in the env file to use aura-2.");
   voiceMode = "Windows System.Speech";
 }
 const audio = [];
 if (voiceMode === "@cf/deepgram/aura-2-en") {
-  audio.push(first.wav);
+  audio.push(first.clip);
   for (let i = 1; i < spokenTexts.length; i += 1) {
     const one = await cloudflareVoice(spokenTexts[i]);
     if (one.error) fail(`the Cloudflare voice failed on answer ${i + 1}`, one.error);
-    audio.push(one.wav);
+    audio.push(one.clip);
   }
 } else {
   const batch = windowsVoiceBatch(spokenTexts);
   if (batch.error) fail(batch.error);
-  audio.push(...batch.wavs);
+  audio.push(...batch.clips);
 }
 check(audio.length === 18, `18 answers spoken with ${voiceMode}`);
 
@@ -268,13 +284,13 @@ let spoken = 0;
 let at = 0;
 for (const part of plan18.parts) {
   for (const q of part.questions) {
-    const wav = audio[at];
-    const seconds = wavSeconds(wav);
-    if (!seconds) fail(`answer ${at + 1} is not a valid WAV`);
+    const clip = audio[at];
+    const seconds = clip.mime === "audio/wav" ? wavSeconds(clip.bytes) : mp3Seconds(clip.bytes);
+    if (!seconds) fail(`answer ${at + 1} has no readable duration`);
     const up = await fetchRetry(`${base}/api/attempts/${attemptId}/speaking-answer?part=${part.part}&prompt=${q.no}`, {
       method: "POST",
-      headers: { "Content-Type": "audio/wav", "x-duration": String(seconds) },
-      body: wav,
+      headers: { "Content-Type": clip.mime, "x-duration": String(seconds) },
+      body: clip.bytes,
     });
     let data = null;
     try { data = await up.json(); } catch { data = null; }
@@ -283,7 +299,7 @@ for (const part of plan18.parts) {
     at += 1;
   }
 }
-check(true, `18 speaking answers uploaded, Speechace queue started`);
+check(true, `18 speaking answers uploaded as ${audio[0].mime}, Speechace queue started`);
 
 /* ---------- 5. Submit and the final bands ---------- */
 
