@@ -790,9 +790,35 @@ export function Dialog({ id, open, onClose, preventCancel = false, labelledBy, b
   return <dialog className="dialog" id={id} ref={ref} aria-labelledby={labelledBy}><div className={bodyClass}>{children}</div></dialog>;
 }
 
+/* The failed-attempt flow is two steps: the choice, then a confirmation that names the
+   consequence, so nobody loses their answers by clicking something that looked harmless. */
+function FailureConfirm({ step, onConfirm, onCancel }) {
+  const retry = step === "retry";
+  return (
+    <>
+      <p className="dialog__note">
+        {retry
+          ? "Sesi ini berakhir dan semua jawaban yang sudah kamu isi hilang. Kamu akan mulai tes baru dari soal pertama dengan waktu yang penuh."
+          : "Sesi ini berakhir dan jawaban kamu tidak disimpan. Kamu akan kembali ke halaman awal, dan bisa memulai tes baru dari sana."}
+      </p>
+      <div className="dialog__actions dialog__actions--stack">
+        <button className="btn btn--primary btn--block" type="button" onClick={onConfirm}>{retry ? "Ya, mulai tes baru" : "Ya, keluar ke halaman awal"}</button>
+        <button className="btn btn--secondary btn--block" type="button" onClick={onCancel}>Batal</button>
+      </div>
+    </>
+  );
+}
+
 export function Dialogs({ dialogs, strikes, maxStrikes, answered, total, duration, legal, onClose, onViolationClose, onRetry, onBack, onConfirmSubmit, onLegalConfirm, onLegalClose }) {
   const legalTitleRef = useRef(null);
   const doc = legal?.doc;
+  const [failStep, setFailStep] = useState(null);
+  const failConfirmed = (kind) => {
+    const step = failStep;
+    setFailStep(null);
+    if (step === "retry") onRetry(kind);
+    else onBack();
+  };
   return (
     <>
       <Dialog id="violation-dialog" open={dialogs.violation} onClose={() => onClose("violation")} preventCancel labelledBy="violation-title">
@@ -805,16 +831,20 @@ export function Dialogs({ dialogs, strikes, maxStrikes, answered, total, duratio
         <button className="btn btn--primary btn--block" id="violation-close" type="button" onClick={onViolationClose}>Kembali ke layar penuh</button>
       </Dialog>
 
-      <Dialog id="end-dialog" open={dialogs.end} onClose={() => onClose("end")} preventCancel labelledBy="end-title">
+      <Dialog id="end-dialog" open={dialogs.end} onClose={() => { setFailStep(null); onClose("end"); }} preventCancel labelledBy="end-title">
         <span className="dialog__icon dialog__icon--danger" aria-hidden="true">
           <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="9" /><path d="M9 9l6 6M15 9l-6 6" /></svg>
         </span>
         <h2 className="dialog__title" id="end-title">Percobaan ini gagal</h2>
-        <p className="dialog__text">Kamu sudah {maxStrikes} kali keluar dari layar tes, jadi percobaan ini gagal dan jawaban kamu tidak dikirim. Kalau ingin mendapatkan hasil, kamu perlu mengulang tes dari awal.</p>
-        <div className="dialog__actions dialog__actions--stack">
-          <button className="btn btn--primary btn--block" id="end-retry" type="button" onClick={() => onRetry("end")}>Ulangi tes</button>
-          <button className="btn btn--secondary btn--block" id="end-back" type="button" onClick={onBack}>Kembali ke awal</button>
-        </div>
+        <p className="dialog__text">Kamu sudah {maxStrikes} kali keluar dari layar tes, jadi percobaan ini gagal dan jawaban kamu tidak dikirim. Kalau ingin mendapatkan hasil, kamu perlu mengerjakan tes dari awal lagi.</p>
+        {failStep ? (
+          <FailureConfirm step={failStep} onConfirm={() => failConfirmed("end")} onCancel={() => setFailStep(null)} />
+        ) : (
+          <div className="dialog__actions dialog__actions--stack">
+            <button className="btn btn--primary btn--block" id="end-retry" type="button" onClick={() => setFailStep("retry")}>Mulai tes baru</button>
+            <button className="btn btn--secondary btn--block" id="end-back" type="button" onClick={() => setFailStep("back")}>Keluar ke halaman awal</button>
+          </div>
+        )}
       </Dialog>
 
       <Dialog id="submit-dialog" open={dialogs.submit} onClose={() => onClose("submit")} labelledBy="submit-title">
@@ -826,16 +856,20 @@ export function Dialogs({ dialogs, strikes, maxStrikes, answered, total, duratio
         </div>
       </Dialog>
 
-      <Dialog id="timeup-dialog" open={dialogs.timeup} onClose={() => onClose("timeup")} preventCancel labelledBy="timeup-title">
+      <Dialog id="timeup-dialog" open={dialogs.timeup} onClose={() => { setFailStep(null); onClose("timeup"); }} preventCancel labelledBy="timeup-title">
         <span className="dialog__icon dialog__icon--warning" aria-hidden="true">
           <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="13" r="8" /><path d="M12 9v4l2.5 2.5M9 2h6" /></svg>
         </span>
         <h2 className="dialog__title" id="timeup-title">Waktu pengerjaan habis</h2>
-        <p className="dialog__text">Waktu {duration} sudah habis, jadi percobaan ini gagal dan jawaban kamu tidak dikirim. Kalau ingin mendapatkan hasil, kamu perlu mengulang tes dari awal dengan waktu yang baru.</p>
-        <div className="dialog__actions dialog__actions--stack">
-          <button className="btn btn--primary btn--block" id="timeup-retry" type="button" onClick={() => onRetry("timeup")}>Ulangi tes</button>
-          <button className="btn btn--secondary btn--block" id="timeup-back" type="button" onClick={onBack}>Kembali ke awal</button>
-        </div>
+        <p className="dialog__text">Waktu {duration} sudah habis, jadi percobaan ini gagal dan jawaban kamu tidak dikirim. Kalau ingin mendapatkan hasil, kamu perlu mengerjakan tes dari awal lagi dengan waktu yang baru.</p>
+        {failStep ? (
+          <FailureConfirm step={failStep} onConfirm={() => failConfirmed("timeup")} onCancel={() => setFailStep(null)} />
+        ) : (
+          <div className="dialog__actions dialog__actions--stack">
+            <button className="btn btn--primary btn--block" id="timeup-retry" type="button" onClick={() => setFailStep("retry")}>Mulai tes baru</button>
+            <button className="btn btn--secondary btn--block" id="timeup-back" type="button" onClick={() => setFailStep("back")}>Keluar ke halaman awal</button>
+          </div>
+        )}
       </Dialog>
 
       <Dialog id="legal-dialog" open={Boolean(legal)} onClose={onLegalClose} preventCancel={Boolean(legal?.box)} labelledBy="legal-title" bodyClass="dialog__body dialog__body--scroll" initialFocusRef={legalTitleRef}>

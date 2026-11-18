@@ -290,9 +290,9 @@ The wave is the ElevenLabs UI LiveWaveform component, ported one to one into `ap
 
 The test runs in fullscreen. In Chrome, Edge, and Opera the Esc key is locked while it runs, so a quick press does nothing and leaving fullscreen takes holding Esc for 2 seconds; the browser shows its own hint for that, so the page adds no copy. Three focus events are treated as violations: leaving fullscreen, hiding the tab, and blurring the window while the tab is visible. A fourth category (blocked copy, cut, paste, context menu, and developer shortcuts) is logged to the server but does not count toward the three strikes.
 
-On the first and second strike, a modal blocks the test with the count and one action: return to fullscreen. The timer keeps running behind it, and the copy says so. On the third strike, the test stops without submitting. A dialog says the attempt failed and offers to retry or return to the start.
+On the first and second strike, a modal blocks the test with the count and one action: return to fullscreen. The timer keeps running behind it, and the copy says so. On the third strike, the test stops without submitting. A dialog says the attempt failed and offers two clearly different actions: "Mulai tes baru" and "Keluar ke halaman awal". Either choice opens a confirmation step first, which warns that the session ends and the answers are gone, with a Ya button to proceed and Batal back to the choice. Nothing destructive runs from the first click.
 
-When the timer reaches zero, the test also stops without submitting. The same failed-attempt dialog pattern applies, with a retry and a return to start action.
+When the timer reaches zero, the test also stops without submitting. The same two-step failed-attempt dialog applies.
 
 The copy must stay factual. Do not claim the test cannot be cheated. The honest claim is that focus loss is recorded and repeated violations end the test. A second device is outside what a browser can detect.
 

@@ -375,8 +375,9 @@ export default function App() {
   function answerText(questionId, value) {
     setAnswers((current) => {
       const next = { ...current };
-      const trimmed = value.trim();
-      if (trimmed) next[questionId] = trimmed;
+      // The raw text is stored as typed: trimming here would strip the space after every
+      // word, because this value flows straight back into the controlled input.
+      if (value.trim()) next[questionId] = value;
       else delete next[questionId];
       return next;
     });
