@@ -156,7 +156,7 @@ function bandReport(result) {
     });
   }
 
-  const weakest = [...graded].sort((a, b) => Number(a.value) - Number(b.value)).slice(0, 2);
+  const weakest = graded.toSorted((a, b) => Number(a.value) - Number(b.value)).slice(0, 2);
   const plan = weakest.map((skill) => ({ title: `Naikkan ${skill.name}`, text: SKILL_ADVICE[skill.name] }));
   const hasWriting = groups.some((group) => group.title.startsWith("Task"));
   const hasSpeaking = groups.some((group) => group.title === "Speaking interview");

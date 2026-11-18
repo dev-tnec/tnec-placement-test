@@ -73,7 +73,7 @@ export function SiswaList() {
   };
   const reset = () => { Object.assign(f, { q: "", stage: "all", level: "", program: "", period: "", tutor: "", branch: "", page: 1 }); notify(); };
 
-  const recent = [...db.pendaftaran].sort((a, b) => b.registeredAt - a.registeredAt).slice(0, 8);
+  const recent = db.pendaftaran.toSorted((a, b) => b.registeredAt - a.registeredAt).slice(0, 8);
 
   return <>
     <PageHead title="Database Siswa"

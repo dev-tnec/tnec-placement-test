@@ -160,7 +160,7 @@ export const classById = (id) => db.classes.find((c) => c.id === id);
 export const classLabel = (c) => (c ? `${c.tutor} / ${c.code}` : "");
 export const classesFor = (programId, periodId) => db.classes.filter((c) => c.programId === programId && c.periodId === periodId);
 export const studentsInClass = (c) => db.students.filter((s) => s.classId === c.id);
-export const periodsSorted = () => [...db.periods].sort((a, b) => a.start - b.start);
+export const periodsSorted = () => db.periods.toSorted((a, b) => a.start - b.start);
 export function endOf(s) { const p = periodById(s.periodId), d = durationOf(s); return p && d ? p.start + d.days * DAY : null; }
 export function periodState(p) {
   if (p.start > NOW) return { key: "soon", label: "Akan datang", dot: "blue" };

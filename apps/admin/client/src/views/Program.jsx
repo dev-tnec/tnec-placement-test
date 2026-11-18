@@ -63,7 +63,7 @@ function PeriodTab() {
     </div></header>
     <div className="table-wrap"><table className="table">
       <thead><tr><th scope="col">Periode</th><th scope="col">Status</th><th scope="col" className="is-num">Kelas</th><th scope="col" className="is-num">Siswa terdaftar</th><th scope="col" className="is-action"><span className="sr-only">Aksi</span></th></tr></thead>
-      <tbody>{[...db.periods].sort((a, b) => a.start - b.start).reverse().map((p) => {
+      <tbody>{db.periods.toSorted((a, b) => b.start - a.start).map((p) => {
         const st = periodState(p);
         const n = enrolledIn((s) => s.periodId === p.id);
         return (

@@ -64,7 +64,7 @@ function exportRoster(session, rows) {
 
 export function SessionsTab() {
   useVersion();
-  const rows = [...db.sessions].sort((a, b) => b.createdAt - a.createdAt);
+  const rows = db.sessions.toSorted((a, b) => b.createdAt - a.createdAt);
 
   return <div className="stack">
     <section className="panel">

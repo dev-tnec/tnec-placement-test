@@ -9,7 +9,7 @@ import { $, busy, makeFieldFail, toast } from "../dom.js";
 
 export function SpeakingQuestionsTab() {
   useVersion();
-  const rows = [...(db.speakingBank || [])].sort((a, b) => a.position - b.position);
+  const rows = (db.speakingBank || []).toSorted((a, b) => a.position - b.position);
 
   async function move(q, direction) {
     await mutate(() => api(`/api/admin/speaking-questions/${q.id}/${direction}`, { method: "POST" }));
