@@ -19,7 +19,7 @@ export let dataReady = false;
 
 export const db = {
   tests: {}, levels: [], programs: [], tutors: [], tutorIds: new Map(), periods: [], classes: [],
-  students: [], attempts: [], enrolledAt: [], pendaftaran: [], sessions: [], emailUsage: { sent: 0, limit: 200 }, publicUrl: location.origin,
+  students: [], attempts: [], enrolledAt: [], pendaftaran: [], sessions: [], speakingBank: [], emailUsage: { sent: 0, limit: 200 }, publicUrl: location.origin,
   whatsapp: { configured: false },
   certs: { templates: [], types: [], issued: [] },
   speaking: { configured: false, waiting: 0, review: 0, failed: 0, manual: 0, graded30: 0, avgSeconds: null, failedLastHour: 0 },
@@ -95,6 +95,7 @@ function applyBootstrap(data, cached = false) {
   db.emailUsage = data.emailUsage || db.emailUsage;
   db.speaking = data.speaking || db.speaking;
   db.speakingCefr = data.speakingCefr || [];
+  db.speakingBank = data.speakingBank || [];
   db.jenjang = data.jenjang || [];
   db.tahuDari = data.tahuDari || [];
   for (const entry of studentDetails.values()) entry.stale = true;
@@ -166,9 +167,9 @@ export function studentFeed(id) {
 export function withDetail(a) {
   if (!a) return a;
   const d = loadDetail(attemptDetails, a.id, `/api/admin/attempts/${a.id}`,
-    (raw) => ({ answers: raw.answers, log: raw.log, device: raw.device, country: raw.country, consent: raw.consent, speaking: raw.speaking || null, speakingAnswers: raw.speakingAnswers || [] }),
+    (raw) => ({ answers: raw.answers, log: raw.log, device: raw.device, country: raw.country, consent: raw.consent, speaking: raw.speaking || null, speakingSubmissions: raw.speakingSubmissions || [], speakingAnswers: raw.speakingAnswers || [] }),
     () => route().parts[3] === a.id);
-  return d ? { ...a, ...d, loading: false } : { ...a, answers: null, log: null, consent: "", loading: true, speaking: a.speaking || null };
+  return d ? { ...a, ...d, loading: false } : { ...a, answers: null, log: null, consent: "", speakingSubmissions: [], loading: true, speaking: a.speaking || null };
 }
 /* Paint the last payload right away on a reload; the App still fetches a fresh copy in the
    background. A payload with an unexpected shape is dropped rather than breaking the shell. */

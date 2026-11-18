@@ -571,7 +571,10 @@ export function SpeakingScreen({ stage, mockup, speaking, recording, speakError,
   const part = mockup?.plan?.parts[mockup.pi];
   const question = part?.questions[mockup.qi];
   const prompt = isMockup ? question?.text || "" : speaking?.prompt || "";
-  const stepMeta = isMockup ? `Part ${part?.part || 1} · Pertanyaan ${(mockup?.qi || 0) + 1} dari ${part?.questions.length || 1}` : "Langkah 2 dari 2";
+  const stepMeta = isMockup
+    ? `Part ${part?.part || 1} · Pertanyaan ${(mockup?.qi || 0) + 1} dari ${part?.questions.length || 1}`
+    : speaking?.total > 1 ? `Pertanyaan ${(speaking?.index ?? 0) + 1} dari ${speaking.total}`
+      : "Langkah 2 dari 2";
   const checkLead = isMockup
     ? "Rekam sebentar saja, lalu dengarkan hasilnya. Kalau suara kamu terdengar jelas, kamu siap menjawab pertanyaan dari examiner."
     : "Rekam sebentar saja, lalu dengarkan hasilnya. Kalau suara kamu terdengar jelas, kamu siap menjawab pertanyaan speaking.";

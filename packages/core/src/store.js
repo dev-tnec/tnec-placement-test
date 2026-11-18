@@ -32,6 +32,8 @@ export function mapTest(row) {
     speakingSeconds: row.speaking_seconds ?? 45,
     speakingMinSeconds: row.speaking_min_seconds ?? 15,
     speakingPrompt: row.speaking_prompt || "",
+    speakingCount: row.speaking_count ?? 1,
+    speakingRandomize: Boolean(row.speaking_randomize),
     speakingDialect: row.speaking_dialect || "en-us",
     updatedAt: row.updated_at,
     updatedBy: row.updated_by,

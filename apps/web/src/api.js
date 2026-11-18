@@ -13,11 +13,12 @@ import { whatsappConfigured } from "@tnec/core/whatsapp";
 import { deliverInBackground, runInBackground, EMAIL_SKIPPED } from "@tnec/core/delivery";
 import { sha256Hex, randomToken } from "@tnec/core/crypto";
 import { SPEAKING_MAX_BYTES, speakingType, speechaceConfigured, gradeInBackground, purgeExpiredAttempts } from "@tnec/core/speaking";
-import { isFinalStatus, speakingFacts } from "@tnec/core/speaking-result";
+import { isFinalStatus, speakingFacts, aggregateSpeakingFacts } from "@tnec/core/speaking-result";
 import { mockupSpeakingPlan, mockupSpeakingQuestion, MOCKUP_SPEAKING_TOTAL } from "@tnec/core/speaking-mockup";
 import { gradeAnswer as gradeMockupAnswer } from "@tnec/core/speaking-mockup-worker";
 import { formatWib } from "@tnec/core/mockup-bulk";
 import { branchKey } from "@tnec/core/branches";
+import { pickSpeakingQuestions } from "@tnec/core/speaking-bank";
 
 const PUBLIC_BODY_LIMIT = 16 * 1024;
 // Two writing essays need more room than the other JSON bodies.
@@ -70,7 +71,7 @@ async function handleApi(request, env, url) {
     if (action === "submit") return submitAttempt(request, env, attemptId);
     if (action === "audio-played") return markAudioPlayed(request, env, attemptId);
     if (action === "speaking-answer") return uploadMockupSpeaking(request, env, attemptId, url);
-    if (action === "speaking") return uploadSpeaking(request, env, attemptId);
+    if (action === "speaking") return uploadSpeaking(request, env, attemptId, url);
     if (action === "speaking-skip") return skipSpeaking(request, env, attemptId);
     return saveContact(request, env, attemptId);
   }
@@ -106,8 +107,14 @@ async function resolvePackage(env, testKey, requestedId) {
   return row ? row.id : null;
 }
 
-// Speaking runs on the placement test only, and only with a question to answer.
-const speakingOn = (test) => test.key === "placement" && test.speakingEnabled && Boolean(test.speakingPrompt);
+// Speaking runs on the placement test only, and only when the bank has a question to ask.
+const speakingOn = (test) => test.key === "placement" && test.speakingEnabled;
+
+/** The placement speaking bank, position order. */
+async function loadSpeakingBank(env) {
+  const { results } = await env.DB.prepare("SELECT id, position, prompt, status FROM speaking_questions ORDER BY position, id").all();
+  return results;
+}
 
 // The IELTS mockup uses four section timers: Listening, Reading, Writing, and the speaking
 // interview. The values live on the test row so the dashboard can change them.
@@ -122,7 +129,7 @@ function sectionPlan(test) {
   ];
 }
 
-function publicConfig({ test, questions, durationSeconds }) {
+function publicConfig({ test, questions, durationSeconds }, speakingBank = []) {
   const values = { total: questions.length, duration: spanText(durationSeconds), strikes: test.maxViolations, speakingSeconds: test.speakingSeconds };
   return {
     consentVersion: CONSENT_VERSION,
@@ -133,8 +140,10 @@ function publicConfig({ test, questions, durationSeconds }) {
     maxViolations: test.maxViolations,
     whatsapp: WHATSAPP,
     sectionPlan: sectionPlan(test),
-    speaking: speakingOn(test)
-      ? { enabled: true, seconds: test.speakingSeconds, minSeconds: test.speakingMinSeconds, prompt: test.speakingPrompt }
+    // The questions themselves travel per attempt: the runner gets the picked set when the test
+    // starts, so a mid-test change to the bank never changes what a student already saw.
+    speaking: speakingOn(test) && speakingBank.some((q) => q.status === "aktif")
+      ? { enabled: true, seconds: test.speakingSeconds, minSeconds: test.speakingMinSeconds }
       : { enabled: false },
     terms: fillLegal(TERMS, values),
     privacy: fillLegal(PRIVACY, values),
@@ -142,7 +151,7 @@ function publicConfig({ test, questions, durationSeconds }) {
 }
 
 async function getConfig(env) {
-  return json(publicConfig(await liveTest(env, "placement")));
+  return json(publicConfig(await liveTest(env, "placement"), await loadSpeakingBank(env)));
 }
 
 async function findInvite(env, token) {
@@ -164,7 +173,7 @@ async function getInvite(env, token) {
   const pkg = invite.package_id ? await env.DB.prepare("SELECT name FROM question_packages WHERE id = ?").bind(invite.package_id).first() : null;
   const live = await liveTest(env, invite.test_key, invite.package_id || null);
   return json({
-    ...publicConfig(live),
+    ...publicConfig(live, await loadSpeakingBank(env)),
     invite: {
       test: invite.test_key,
       testName: TEST_NAMES[invite.test_key],
@@ -205,6 +214,12 @@ async function createAttempt(request, env) {
   if (!test.open) throw new HttpError(423, "Tes ini sedang ditutup sementara. Silakan coba lagi nanti atau hubungi admin Titik Nol.");
   if (!questions.length) throw new HttpError(423, "Tes ini belum punya soal aktif. Hubungi admin Titik Nol.");
 
+  // The placement speaking questions are picked now and stored on the attempt, so grading and
+  // the team always see the same questions the student saw, whatever happens to the bank later.
+  const speakingQuestions = testKey === "placement" && test.speakingEnabled
+    ? pickSpeakingQuestions(await loadSpeakingBank(env), { count: test.speakingCount, randomize: test.speakingRandomize })
+    : [];
+
   const now = nowSeconds();
   const id = crypto.randomUUID();
   const perMode = test.timeMode === "per";
@@ -213,13 +228,14 @@ async function createAttempt(request, env) {
   await env.DB.prepare(
     `INSERT INTO attempts
        (id, started_at, expires_at, total, consent_version, consent_at, user_agent, country,
-        test_key, student_id, question_ids, time_mode, limit_seconds, max_violations, pass_score, invite_id, package_id)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        test_key, student_id, question_ids, time_mode, limit_seconds, max_violations, pass_score, invite_id, package_id, speaking_questions)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   ).bind(
     id, now, expiresAt, questions.length, CONSENT_VERSION, now,
     (request.headers.get("user-agent") || "").slice(0, 300), (request.headers.get("cf-ipcountry") || "").slice(0, 2) || null,
     testKey, invite ? invite.student_id : null, JSON.stringify(questions.map((q) => q.id)), test.timeMode,
     durationSeconds, test.maxViolations, testKey === "post" ? test.passScore ?? 70 : null, invite ? invite.id : null, packageId,
+    speakingQuestions.length ? JSON.stringify(speakingQuestions.map((q) => ({ position: q.position, prompt: q.prompt }))) : null,
   ).run();
 
   // Somebody is testing again, so attempts whose time ran out long ago are cleaned up now.
@@ -234,6 +250,7 @@ async function createAttempt(request, env) {
     autoSubmit: test.autoSubmit,
     sectionPlan: sectionPlan(test),
     mockupSpeaking: test.key === "ielts-mockup" && test.speakingEnabled ? mockupSpeakingPlan() : null,
+    speakingQuestions: speakingQuestions.map((q) => ({ position: q.position, prompt: q.prompt })),
     sections: sections.map((s) => ({ id: s.id, title: s.title, skill: s.skill, part: s.part, passage: s.passage, audio: s.audio, image: s.image })),
     questions: questions.map((q) => ({
       id: q.id,
@@ -569,15 +586,18 @@ async function saveContact(request, env, attemptId) {
 
   // Read the recording only after the channels are saved as waiting. Grading saves its result
   // before it starts the delivery, so whichever of the two finishes last sends the result.
-  const speaking = await env.DB.prepare("UPDATE speaking_submissions SET student_id = ? WHERE attempt_id = ? RETURNING status")
-    .bind(student.id, attemptId).first();
-  if (!speaking || isFinalStatus(speaking.status)) deliverInBackground(env, attemptId);
+  // One attempt now carries one row per speaking question, so every row must be final.
+  const speakingRows = await env.DB.prepare("UPDATE speaking_submissions SET student_id = ? WHERE attempt_id = ? RETURNING status")
+    .bind(student.id, attemptId).all();
+  const rows = speakingRows.results || [];
+  const waiting = rows.find((r) => !isFinalStatus(r.status)) || null;
+  if (!rows.length || !waiting) deliverInBackground(env, attemptId);
   const delivery = { email: channelState(channels.email_status), whatsapp: channelState(channels.wa_status) };
 
-  // With a recording, the full result goes out by email and WhatsApp after it is scored, and the
+  // With a recording waiting, the full result goes out by email and WhatsApp after it is scored, and the
   // page only says so. A student who skipped speaking sees the result right away, as before.
-  if (speaking && speaking.status !== "skipped") {
-    return json({ delivery, result: null, speaking: { status: speaking.status }, resultToken, name });
+  if (waiting) {
+    return json({ delivery, result: null, speaking: { status: waiting.status }, resultToken, name });
   }
   return json({
     delivery,
@@ -607,7 +627,7 @@ async function speakingAttempt(env, attemptId) {
  * raw audio. While a stored recording has not been picked up for scoring, a repeated upload
  * replaces it, so a retry after a dropped connection is safe; after that it is refused.
  */
-async function uploadSpeaking(request, env, attemptId) {
+async function uploadSpeaking(request, env, attemptId, url) {
   const mime = speakingType(request.headers.get("content-type"));
   if (!mime) throw new HttpError(415, "Format rekaman ini tidak didukung. Rekam ulang dengan Chrome, Edge, Firefox, atau Safari versi terbaru.");
   const audio = await request.bytes();
@@ -621,10 +641,29 @@ async function uploadSpeaking(request, env, attemptId) {
   }
   const test = await loadTest(env, "placement");
   if (!speakingOn(test)) throw new HttpError(409, "Bagian speaking sedang tidak dipakai. Lanjutkan dengan mengisi data kamu.", { code: "speaking_off" });
+
+  // The question being answered is one of the ones picked for this attempt. Attempts from before
+  // the bank carry no pick, so they keep the old single question at position 1.
+  const picked = JSON.parse(attempt.speaking_questions || "[]");
+  let position;
+  let prompt;
+  if (picked.length) {
+    position = Number(url.searchParams.get("position"));
+    const question = picked.find((q) => q.position === position);
+    if (!question) throw new HttpError(400, "Pertanyaan speaking ini tidak termasuk pada percobaan kamu.", { code: "speaking_question" });
+    prompt = question.prompt;
+  } else {
+    position = 1;
+    prompt = test.speakingPrompt || "";
+  }
+
+  // The duration is the gate, with no slack: anything shorter than the minimum is refused and
+  // the student records the answer again. A missing or unreadable duration never passes.
   const declared = Number(request.headers.get("x-duration"));
   const duration = Number.isFinite(declared) && declared > 0 ? Math.min(120, Math.max(1, Math.round(declared))) : null;
-  if (duration !== null && duration < test.speakingMinSeconds - 1) {
-    throw new HttpError(400, `Rekaman kamu terlalu pendek. Jawab minimal ${test.speakingMinSeconds} detik, lalu rekam ulang.`, { code: "speaking_short" });
+  if (duration === null || duration < test.speakingMinSeconds) {
+    const counted = duration === null ? "durasi rekaman tidak terbaca" : `rekaman kamu ${duration} detik`;
+    throw new HttpError(400, `Rekaman terlalu pendek: ${counted}, minimal ${test.speakingMinSeconds} detik. Rekam ulang jawaban kamu.`, { code: "speaking_short" });
   }
 
   // Without a Speechace key on this server the recording goes straight to the team's queue.
@@ -632,16 +671,16 @@ async function uploadSpeaking(request, env, attemptId) {
   const status = ready ? "pending" : "failed";
   const error = ready ? null : "Kunci Speechace belum diisi di server, jadi rekaman ini menunggu dinilai tim.";
   const saved = await env.DB.prepare(
-    `INSERT INTO speaking_submissions (id, attempt_id, student_id, prompt, audio, audio_mime, audio_bytes, duration_seconds, status, needs_review, error, created_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-     ON CONFLICT (attempt_id) DO UPDATE SET prompt = EXCLUDED.prompt, audio = EXCLUDED.audio, audio_mime = EXCLUDED.audio_mime,
+    `INSERT INTO speaking_submissions (id, attempt_id, student_id, position, prompt, audio, audio_mime, audio_bytes, duration_seconds, status, needs_review, error, created_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+     ON CONFLICT (attempt_id, position) DO UPDATE SET prompt = EXCLUDED.prompt, audio = EXCLUDED.audio, audio_mime = EXCLUDED.audio_mime,
          audio_bytes = EXCLUDED.audio_bytes, duration_seconds = EXCLUDED.duration_seconds, status = EXCLUDED.status,
          needs_review = EXCLUDED.needs_review, error = EXCLUDED.error, created_at = EXCLUDED.created_at
        WHERE speaking_submissions.status = 'pending' AND speaking_submissions.tries = 0
          AND (speaking_submissions.lease_until IS NULL OR speaking_submissions.lease_until < ?)
      RETURNING id, status`,
-  ).bind(newId("spk"), attemptId, attempt.student_id, test.speakingPrompt, audio, mime, audio.length, duration, status, ready ? 0 : 1, error, now, now).first();
-  if (!saved) throw new HttpError(409, "Rekaman untuk tes ini sudah terkirim.", { code: "speaking_done" });
+  ).bind(newId("spk"), attemptId, attempt.student_id, position, prompt, audio, mime, audio.length, duration, status, ready ? 0 : 1, error, now, now).first();
+  if (!saved) throw new HttpError(409, "Rekaman untuk pertanyaan ini sudah terkirim.", { code: "speaking_done" });
   if (saved.status === "pending") gradeInBackground(env, saved.id);
   return json({ ok: true, status: saved.status === "failed" ? "pending" : saved.status });
 }
@@ -715,12 +754,13 @@ async function skipSpeaking(request, env, attemptId) {
   const body = await readJson(request, PUBLIC_BODY_LIMIT);
   const reason = SKIP_REASONS[body?.reason] ? body.reason : "mic";
   const placementAttempt = await speakingAttempt(env, attemptId);
-  const test = await loadTest(env, "placement");
   const now = nowSeconds();
+  // Position 0 is the skip marker: it never collides with a question answer, and the reader
+  // side treats a final marker like any other finished row.
   await env.DB.prepare(
-    `INSERT INTO speaking_submissions (id, attempt_id, student_id, prompt, status, error, scores, graded_at, created_at)
-     VALUES (?, ?, ?, ?, 'skipped', ?, ?, ?, ?) ON CONFLICT (attempt_id) DO NOTHING`,
-  ).bind(newId("spk"), attemptId, placementAttempt.student_id, test.speakingPrompt || "", SKIP_REASONS[reason], JSON.stringify({ source: "student", reason }), now, now).run();
+    `INSERT INTO speaking_submissions (id, attempt_id, student_id, position, prompt, status, error, scores, graded_at, created_at)
+     VALUES (?, ?, ?, 0, ?, 'skipped', ?, ?, ?, ?) ON CONFLICT (attempt_id, position) DO NOTHING`,
+  ).bind(newId("spk"), attemptId, placementAttempt.student_id, "", SKIP_REASONS[reason], JSON.stringify({ source: "student", reason }), now, now).run();
   return json({ ok: true });
 }
 
@@ -740,14 +780,15 @@ async function getResultLink(env, token) {
     throw new HttpError(410, "Hasil tautan ini belum siap. Buka kembali tautannya setelah tes selesai.");
   }
 
-  const speaking = await env.DB.prepare(
-    "SELECT status, cefr_overall, ielts_overall, scores, transcript FROM speaking_submissions WHERE attempt_id = ?",
-  ).bind(attempt.id).first();
+  const speakingRows = await env.DB.prepare(
+    "SELECT status, cefr_overall, ielts_overall, scores, transcript FROM speaking_submissions WHERE attempt_id = ? ORDER BY position",
+  ).bind(attempt.id).all();
+  const rows = speakingRows.results || [];
   const levels = await loadLevels(env);
   const level = levels.find((l) => l.key === attempt.level_key) || levelFor(levels, attempt.score ?? 0);
   const next = levels[levels.indexOf(level) + 1] || null;
 
-  if (speaking && !isFinalStatus(speaking.status)) {
+  if (rows.some((r) => !isFinalStatus(r.status))) {
     return json({ ready: false, name: attempt.name || "" });
   }
   return json({
@@ -759,7 +800,7 @@ async function getResultLink(env, token) {
       level: publicLevel(level),
       timedOut: Boolean(attempt.timed_out),
       violations: attempt.violations,
-      speaking: speakingFacts(speaking),
+      speaking: aggregateSpeakingFacts(rows),
       date: attempt.submitted_at || attempt.started_at,
       code: resultCode(attempt),
       whatsapp: WHATSAPP,

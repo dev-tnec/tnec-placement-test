@@ -20,7 +20,7 @@ import { staticResponse, textResponse } from "@tnec/core/node-server";
 import { deliverInBackground, runInBackground } from "@tnec/core/delivery";
 import { drainInviteQueue, emailsSentRecently } from "./invite-queue.js";
 import { gradeInBackground, speechaceConfigured } from "@tnec/core/speaking";
-import { ASPECTS, MANUAL_CEFR, isFinalStatus, speakingFacts } from "@tnec/core/speaking-result";
+import { ASPECTS, MANUAL_CEFR, isFinalStatus, speakingFacts, aggregateSpeakingFacts } from "@tnec/core/speaking-result";
 import { mockupSpeakingPlan } from "@tnec/core/speaking-mockup";
 import {
   CERT_DIR, certificateData, certificatePage, saveCertificateType, deleteCertificateType,
@@ -289,6 +289,10 @@ const ROUTES = [
   ["POST", /^\/api\/admin\/attempts\/([0-9a-f-]{36})\/writing-grade$/, regradeWriting],
   ["POST", /^\/api\/admin\/attempts\/([0-9a-f-]{36})\/speaking-retry$/, retryMockupSpeaking],
   ["GET", /^\/api\/admin\/speaking-answers\/(\d+)\/audio$/, getSpeakingAnswerAudio],
+  ["POST", /^\/api\/admin\/speaking-questions$/, saveSpeakingQuestion],
+  ["PUT", /^\/api\/admin\/speaking-questions\/(\d+)$/, saveSpeakingQuestion],
+  ["DELETE", /^\/api\/admin\/speaking-questions\/(\d+)$/, deleteSpeakingQuestion],
+  ["POST", /^\/api\/admin\/speaking-questions\/(\d+)\/(up|down)$/, moveSpeakingQuestion],
   ["DELETE", /^\/api\/admin\/attempts\/([0-9a-f-]{36})$/, deleteAttempt],
   ["POST", /^\/api\/admin\/attempts\/bulk-delete$/, bulkDeleteAttempts],
   ["POST", /^\/api\/admin\/programs$/, saveProgram],
@@ -378,9 +382,18 @@ async function bootstrap(request, env, user, url) {
             FROM speaking_submissions ORDER BY created_at DESC LIMIT 5000`),
     stmt("SELECT * FROM pendaftaran ORDER BY registered_at, id"),
     stmt("SELECT session_id, package_id FROM mockup_session_packages"),
+    stmt("SELECT id, position, prompt, status FROM speaking_questions ORDER BY position, id"),
   ]), certificateData(env)]);
-  const [tests, questions, sections, packages, levels, students, attempts, sessions, emailUse, lastActs, enrolled, programs, durations, programTutors, tutors, periods, classes, s7, s30, speaking, pendaftaran, sessionPkgs] = res.map((r) => r.results);
-  const speakingByAttempt = new Map(speaking.map((s) => [s.attempt_id, s]));
+  const [tests, questions, sections, packages, levels, students, attempts, sessions, emailUse, lastActs, enrolled, programs, durations, programTutors, tutors, periods, classes, s7, s30, speaking, pendaftaran, sessionPkgs, speakingBank] = res.map((r) => r.results);
+  // One placement attempt now carries one row per speaking question, so the brief the submission
+  // lists read is a merge: the working status wins, the review flag is any, and the scores are
+  // the mean of what has been graded so far. The merge itself lives next to speakingBrief.
+  const speakingByAttempt = new Map();
+  for (const row of speaking) {
+    const list = speakingByAttempt.get(row.attempt_id) ?? [];
+    list.push(row);
+    speakingByAttempt.set(row.attempt_id, list);
+  }
   const packagesBySession = new Map();
   for (const row of sessionPkgs) {
     const list = packagesBySession.get(row.session_id) ?? [];
@@ -448,6 +461,7 @@ async function bootstrap(request, env, user, url) {
     })),
     emailUsage: { sent: emailUse[0]?.sent ?? 0, limit: EMAIL_DAILY_LIMIT },
     attempts: attempts.map((a) => mapAttempt(a, now, speakingByAttempt.get(a.id))),
+    speakingBank: speakingBank.map((q) => ({ id: q.id, position: q.position, prompt: q.prompt, status: q.status })),
     speaking: speakingSummary(env, speaking, now),
     enrolledAt: enrolled.map((r) => ms(r.at)),
     catalog: {
@@ -482,8 +496,34 @@ function speakingSummary(env, rows, now) {
 
 const speakingBrief = (s) => (s ? {
   id: s.id, status: s.status, needsReview: Boolean(s.needs_review), cefr: s.cefr_overall || null,
-  ielts: s.ielts_overall ?? null, gradedAt: ms(s.graded_at), createdAt: ms(s.created_at),
-} : null);
+  ielts: s.ielts_overall ?? null, gradedAt: ms(s.graded_at), createdAt: ms(s.created_at),} : null);
+
+/* One placement attempt carries one speaking row per question. The brief the lists read is a
+   merge of those rows: the working status wins, the review flag is any of them, and the scores
+   are the mean of what has been graded so far. */
+const CEFR_STEPS = ["A0", "A1", "A2", "B1", "B1+", "B2", "B2+", "C1", "C1+", "C2"];
+function mergeSpeakingRows(rows) {
+  const byStatus = (status) => rows.some((r) => r.status === status);
+  const ieltsList = rows.map((r) => Number(r.ielts_overall)).filter(Number.isFinite);
+  const cefrList = rows.map((r) => CEFR_STEPS.indexOf(String(r.cefr_overall || "").toUpperCase())).filter((v) => v >= 0);
+  return {
+    id: rows[0].id,
+    attempt_id: rows[0].attempt_id,
+    status: byStatus("grading") ? "grading"
+      : byStatus("pending") ? "pending"
+        : byStatus("failed") ? "failed"
+          : byStatus("manual") ? "manual"
+            : byStatus("graded") ? "graded"
+              : byStatus("skipped") ? "skipped"
+                : rows[0].status,
+    needs_review: rows.some((r) => r.status === "failed" || (r.status === "graded" && r.needs_review)) ? 1 : 0,
+    cefr_overall: cefrList.length ? CEFR_STEPS[Math.round((cefrList.reduce((a, b) => a + b, 0) / cefrList.length) * 2) / 2] : null,
+    ielts_overall: ieltsList.length ? Math.round((ieltsList.reduce((a, b) => a + b, 0) / ieltsList.length) * 2) / 2 : null,
+    graded_at: rows.reduce((top, r) => Math.max(top, r.graded_at || 0), 0) || null,
+    created_at: rows.reduce((low, r) => Math.min(low, r.created_at || Infinity), Infinity),
+    recordings: rows.filter((r) => r.status !== "skipped").length,
+  };
+}
 
 function mapAttempt(a, now, speaking = null) {
   const status = attemptStatus(a, now);
@@ -508,7 +548,7 @@ function mapAttempt(a, now, speaking = null) {
     bands: a.bands ? JSON.parse(a.bands) : null, audioPlayedAt: ms(a.audio_played_at), packageId: a.package_id || null,
     writingStatus: a.writing_status || null, writingError: a.writing_error || "",
     speakingStatus: a.speaking_status || null, speakingError: a.speaking_error || "",
-    speaking: speakingBrief(speaking),
+    speaking: speakingBrief(Array.isArray(speaking) ? mergeSpeakingRows(speaking) : speaking),
   };
 }
 
@@ -1355,16 +1395,18 @@ async function updateTestSettings(request, env, user, url, key) {
   }
   readSpeakingSettings(body, key, next);
   await env.DB.prepare(`UPDATE tests SET time_mode = ?, total_seconds = ?, per_default = ?, listening_seconds = ?, reading_seconds = ?, writing_seconds = ?, speaking_block_seconds = ?, is_open = ?, max_violations = ?, pass_score = ?,
-      speaking_enabled = ?, speaking_seconds = ?, speaking_min_seconds = ?, speaking_prompt = ?, speaking_dialect = ?, auto_submit = ?, audio_url = ?, updated_at = ?, updated_by = ? WHERE key = ?`)
+      speaking_enabled = ?, speaking_seconds = ?, speaking_min_seconds = ?, speaking_prompt = ?, speaking_dialect = ?, speaking_count = ?, speaking_randomize = ?, auto_submit = ?, audio_url = ?, updated_at = ?, updated_by = ? WHERE key = ?`)
     .bind(next.time_mode, next.total_seconds, next.per_default, next.listening_seconds ?? null, next.reading_seconds ?? null, next.writing_seconds ?? null, next.speaking_block_seconds ?? null, next.is_open, next.max_violations, next.pass_score,
       next.speaking_enabled, next.speaking_seconds, next.speaking_min_seconds, next.speaking_prompt, next.speaking_dialect,
+      next.speaking_count ?? 1, next.speaking_randomize ?? 0,
       next.auto_submit ?? 0, next.audio_url ?? null, nowSeconds(), user.name, key).run();
   return json({ ok: true });
 }
 
-/* The Speaking part of Placement Test, Pengaturan. The PRD keeps it to the placement test for now. */
+/* The Speaking part of Placement Test, Pengaturan. The questions live in the Speaking tab; the
+   prompt column stays only so attempts from before the bank keep their single question. */
 function readSpeakingSettings(body, key, next) {
-  const keys = ["speakingEnabled", "speakingSeconds", "speakingMinSeconds", "speakingPrompt", "speakingDialect"];
+  const keys = ["speakingEnabled", "speakingSeconds", "speakingMinSeconds", "speakingPrompt", "speakingDialect", "speakingCount", "speakingRandomize"];
   if (!keys.some((k) => body[k] !== undefined)) return;
   if (key !== "placement") throw new HttpError(400, "Bagian speaking baru tersedia untuk placement test.");
   if (body.speakingPrompt !== undefined) {
@@ -1386,9 +1428,14 @@ function readSpeakingSettings(body, key, next) {
     if (!["en-us", "en-gb"].includes(body.speakingDialect)) throw new HttpError(400, "Pilih aksen penilaian en-US atau en-GB.", { field: "speakingDialect" });
     next.speaking_dialect = body.speakingDialect;
   }
+  if (body.speakingCount !== undefined) {
+    const v = int(body.speakingCount, { min: 1, max: 50 });
+    if (v === null) throw new HttpError(400, "Jumlah pertanyaan speaking harus angka 1 sampai 50.", { field: "speakingCount" });
+    next.speaking_count = v;
+  }
+  if (body.speakingRandomize !== undefined) next.speaking_randomize = body.speakingRandomize ? 1 : 0;
   if (body.speakingEnabled !== undefined) next.speaking_enabled = body.speakingEnabled ? 1 : 0;
   if (next.speaking_min_seconds >= next.speaking_seconds) throw new HttpError(400, "Durasi minimal harus lebih pendek dari durasi maksimal.", { field: "speakingMinSeconds" });
-  if (next.speaking_enabled && !next.speaking_prompt) throw new HttpError(400, "Tulis pertanyaannya dulu sebelum menyalakan bagian speaking.", { field: "speakingPrompt" });
 }
 
 function readQuestionInput(body) {
@@ -1676,14 +1723,17 @@ async function getAttemptDetail(request, env, user, url, id) {
   if (a.email_sent_at) log.push({ at: ms(a.email_sent_at), type: "email_sent" });
   else if (String(a.email_status || "").startsWith("failed")) log.push({ at: ms(a.submitted_at) + 60000, type: "email_failed" });
   if (a.voided_at) log.push({ at: ms(a.voided_at), type: "voided", by: a.voided_by });
-  const sp = await env.DB.prepare(
-    `SELECT id, status, needs_review, prompt, transcript, cefr_overall, ielts_overall, scores, error, tries, next_attempt_at,
+  // The placement speaking carries one row per question now. The summary keeps the old `speaking`
+  // shape (a merge), and `speakingSubmissions` lists every recording in question order.
+  const spRows = (await env.DB.prepare(
+    `SELECT id, status, needs_review, position, prompt, transcript, cefr_overall, ielts_overall, scores, error, tries, next_attempt_at,
             provider_request_id, graded_at, graded_by, created_at, duration_seconds, audio_bytes, audio_mime, (audio IS NOT NULL) AS has_audio
-       FROM speaking_submissions WHERE attempt_id = ?`,
-  ).bind(id).first();
-  const speaking = sp ? speakingDetail(sp) : null;
-  if (speaking) {
-    const studentSkip = sp.status === "skipped" && speaking.scores.source === "student";
+       FROM speaking_submissions WHERE attempt_id = ? ORDER BY position, created_at`,
+  ).bind(id).all()).results || [];
+  const speaking = spRows.length ? speakingDetail(mergeSpeakingRows(spRows)) : null;
+  const speakingSubmissions = spRows.map((row) => ({ ...speakingDetail(row), position: row.position }));
+  for (const sp of spRows) {
+    const studentSkip = sp.status === "skipped" && parseJson(sp.scores).source === "student";
     log.push({ at: ms(sp.created_at), type: studentSkip ? "speaking_student_skip" : "speaking_uploaded" });
     if (sp.graded_at && !studentSkip) log.push({ at: ms(sp.graded_at), type: `speaking_${sp.status}`, by: sp.graded_by || "" });
   }
@@ -1693,7 +1743,7 @@ async function getAttemptDetail(request, env, user, url, id) {
   ).bind(id).all();
   const speakingAnswers = speakingRows.map((r) => ({ ...r, scores: parseJson(r.scores), needs_review: Boolean(r.needs_review) }));
   log.sort((x, y) => x.at - y.at);
-  return json({ id: a.id, answers, log, device: deviceLabel(a.user_agent), country: a.country || "", consent: a.consent_version, speaking, speakingAnswers });
+  return json({ id: a.id, answers, log, device: deviceLabel(a.user_agent), country: a.country || "", consent: a.consent_version, speaking, speakingSubmissions, speakingAnswers });
 }
 
 function speakingDetail(sp) {
@@ -1705,7 +1755,60 @@ function speakingDetail(sp) {
   };
 }
 
-/* ===================== Speaking ===================== */
+/* ===================== The placement speaking bank ===================== */
+
+function readSpeakingQuestionInput(body) {
+  const prompt = String(body.prompt ?? "").replace(/\s+/g, " ").trim();
+  if (prompt.length < 5) throw new HttpError(400, "Pertanyaan speaking minimal 5 karakter.", { field: "prompt" });
+  if (prompt.length > 300) throw new HttpError(400, "Pertanyaan speaking maksimal 300 karakter.", { field: "prompt" });
+  const status = body.status === "draf" ? "draf" : "aktif";
+  return { prompt, status };
+}
+
+async function saveSpeakingQuestion(request, env, user, url, id = null) {
+  const body = await readJson(request);
+  const { prompt, status } = readSpeakingQuestionInput(body);
+  const now = nowSeconds();
+  if (id) {
+    const row = await env.DB.prepare("SELECT id FROM speaking_questions WHERE id = ?").bind(Number(id)).first();
+    if (!row) throw new HttpError(404, "Pertanyaan speaking tidak ditemukan.");
+    await env.DB.prepare("UPDATE speaking_questions SET prompt = ?, status = ?, updated_at = ? WHERE id = ?")
+      .bind(prompt, status, now, Number(id)).run();
+    return json({ ok: true, id: Number(id) });
+  }
+  const max = await env.DB.prepare("SELECT COALESCE(MAX(position), 0) AS p FROM speaking_questions").first();
+  const saved = await env.DB.prepare(
+    "INSERT INTO speaking_questions (position, prompt, status, created_at, updated_at) VALUES (?, ?, ?, ?, ?) RETURNING id",
+  ).bind((max?.p ?? 0) + 1, prompt, status, now, now).first();
+  return json({ ok: true, id: saved.id });
+}
+
+async function deleteSpeakingQuestion(request, env, user, url, id) {
+  const now = nowSeconds();
+  const gone = await env.DB.prepare("DELETE FROM speaking_questions WHERE id = ? RETURNING position").bind(Number(id)).first();
+  if (!gone) throw new HttpError(404, "Pertanyaan speaking tidak ditemukan.");
+  // The attempts keep the questions they were built with, so deleting a bank question never
+  // touches a result that already went out. The rest of the bank closes the gap.
+  await env.DB.prepare("UPDATE speaking_questions SET position = position - 1, updated_at = ? WHERE position > ?")
+    .bind(now, gone.position).run();
+  return json({ ok: true });
+}
+
+async function moveSpeakingQuestion(request, env, user, url, id, direction) {
+  const row = await env.DB.prepare("SELECT id, position FROM speaking_questions WHERE id = ?").bind(Number(id)).first();
+  if (!row) throw new HttpError(404, "Pertanyaan speaking tidak ditemukan.");
+  const other = await env.DB.prepare(
+    `SELECT id, position FROM speaking_questions WHERE position ${direction === "up" ? "< ? ORDER BY position DESC" : "> ? ORDER BY position ASC"} LIMIT 1`,
+  ).bind(row.position).first();
+  if (!other) return json({ ok: true });
+  const now = nowSeconds();
+  await env.DB.batch([
+    env.DB.prepare("UPDATE speaking_questions SET position = ?, updated_at = ? WHERE id = ?").bind(other.position, now, row.id),
+    env.DB.prepare("UPDATE speaking_questions SET position = ?, updated_at = ? WHERE id = ?").bind(row.position, now, other.id),
+  ]);
+  return json({ ok: true });
+}
+
 async function getSpeakingRow(env, id) {
   const row = await env.DB.prepare("SELECT id, attempt_id, student_id, status, needs_review, scores, (audio IS NOT NULL) AS has_audio FROM speaking_submissions WHERE id = ?").bind(id).first();
   if (!row) throw new HttpError(404, "Rekaman speaking tidak ditemukan.");
@@ -1899,11 +2002,12 @@ async function attemptAction(request, env, user, url, id, action) {
   }
   if (a.test_key !== "placement" || a.status !== "submitted" || !a.email) throw new HttpError(400, "Email hasil hanya bisa dikirim ulang untuk placement test yang sudah punya kontak.");
   if (!env.SEND_EMAIL) throw new HttpError(503, "Pengiriman email belum diatur di server ini.");
-  const sp = await env.DB.prepare("SELECT status, cefr_overall, ielts_overall, scores, transcript FROM speaking_submissions WHERE attempt_id = ?").bind(id).first();
-  if (sp && !isFinalStatus(sp.status)) throw new HttpError(409, "Speaking belum selesai dinilai, jadi email hasil belum bisa dikirim. Email terkirim otomatis setelah penilaian selesai.");
+  const spRows = (await env.DB.prepare("SELECT status, cefr_overall, ielts_overall, scores, transcript FROM speaking_submissions WHERE attempt_id = ? ORDER BY position").bind(id).all()).results || [];
+  const waitingRow = spRows.find((r) => !isFinalStatus(r.status));
+  if (waitingRow) throw new HttpError(409, "Speaking belum selesai dinilai, jadi email hasil belum bisa dikirim. Email terkirim otomatis setelah penilaian selesai.");
   const levels = await loadLevels(env);
   const level = levels.find((l) => l.key === a.level_key) || levels[0];
-  const { subject, html, text: plain } = buildResultEmail({ name: a.name, email: a.email, score: a.score, total: a.total, level: publicLevel(level), speaking: speakingFacts(sp) });
+  const { subject, html, text: plain } = buildResultEmail({ name: a.name, email: a.email, score: a.score, total: a.total, level: publicLevel(level), speaking: aggregateSpeakingFacts(spRows) });
   try {
     await env.SEND_EMAIL.send({ from: env.RESULT_FROM_EMAIL || "Titik Nol English Course <placement@index-now.dev>", to: a.email, subject, html, text: plain });
   } catch (error) {

@@ -187,3 +187,64 @@ export function aspectLine(aspect) {
   if (aspect.score !== null && aspect.score !== undefined) return `${aspect.label} ${Math.round(aspect.score)}${aspect.cefr ? ` (${aspect.cefr})` : ""}`;
   return `${aspect.label} ${aspect.cefr}`;
 }
+
+/* ---------- Several recordings per attempt ---------- */
+
+// CEFR levels as numbers so several answers can be averaged, with the plus steps Speechace uses.
+const CEFR_ORDER = ["A0", "A1", "A2", "B1", "B1+", "B2", "B2+", "C1", "C1+", "C2"];
+const cefrNumber = (level) => {
+  const at = CEFR_ORDER.indexOf(String(level || "").trim().toUpperCase());
+  return at < 0 ? null : at / 2;
+};
+const meanOf = (values) => {
+  const list = values.filter((v) => v !== null && v !== undefined && Number.isFinite(v));
+  return list.length ? list.reduce((sum, v) => sum + v, 0) / list.length : null;
+};
+const halfStep = (v) => (v === null ? null : Math.round(v * 2) / 2);
+const asCefr = (v) => {
+  const at = halfStep(v);
+  return at === null ? null : CEFR_ORDER[Math.round(at * 2)] ?? null;
+};
+
+/**
+ * The speaking facts of a whole attempt with several recordings: one fact set per graded or
+ * hand-graded answer, merged into the one shape the email, the WhatsApp, and the result page
+ * read. Bands and scores are means rounded to the nearest half step, the transcript carries
+ * every answer in question order, and a warning on any answer marks the attempt. Answers the
+ * team skipped are not scored, so they stay out of the mean; when nothing was scored this
+ * returns null, exactly like a single skipped recording.
+ */
+export function aggregateSpeakingFacts(rows) {
+  const facts = (Array.isArray(rows) ? rows : []).map((row) => speakingFacts(row)).filter(Boolean);
+  if (!facts.length) return null;
+
+  const cefr = asCefr(meanOf(facts.map((f) => cefrNumber(f.cefr))));
+  const ielts = halfStep(meanOf(facts.map((f) => f.ielts)));
+  if (!cefr && ielts === null) return null;
+
+  const aspects = ASPECTS.map(({ key, label }) => {
+    const values = facts.map((f) => f.aspects.find((a) => a.key === key)).filter(Boolean);
+    const merged = {
+      key,
+      label,
+      cefr: asCefr(meanOf(values.map((a) => cefrNumber(a.cefr)))),
+      ielts: halfStep(meanOf(values.map((a) => a.ielts))),
+      score: meanOf(values.map((a) => a.score)) === null ? null : Math.round(meanOf(values.map((a) => a.score))),
+    };
+    return merged;
+  }).filter((a) => a.cefr || a.score !== null || a.ielts !== null);
+
+  const notes = [...new Set(facts.flatMap((f) => f.notes))].slice(0, MAX_NOTES);
+  return {
+    source: facts.some((f) => f.source === "manual") ? "manual" : "auto",
+    cefr,
+    ielts,
+    aspects,
+    relevance: null,
+    tooShort: facts.some((f) => f.tooShort),
+    offTopic: facts.some((f) => f.offTopic),
+    transcript: facts.map((f) => f.transcript).filter(Boolean).join("\n\n").slice(0, 5000),
+    answers: facts.length,
+    notes,
+  };
+}

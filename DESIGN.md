@@ -274,6 +274,10 @@ The speaking feedback is one aligned row inside the active card, directly above 
 
 The wave is the ElevenLabs UI LiveWaveform component, ported one to one into `apps/web/student/src/live-waveform.js` with its MIT notice. Its settings are fixed: canvas, static mode with the mirrored spectrum, barWidth 3, barGap 1, barRadius 1.5, minimum bar height 4, the 5% to 40% frequency slice, sensitivity 1, smoothing 0.8, fftSize 256, 30ms updates, a 24px edge fade, and `--red-500` bars. Do not replace it with a hand-made equalizer or a row of dots.
 
+### The placement speaking questions
+
+The placement speaking is a bank, not one prompt from the settings. The team manages the questions in the Speaking tab with the same table, up and down ordering, and editor page pattern as the question bank, and Pengaturan keeps only the on/off switch, the question count, the randomize switch, the minimum and maximum durations, and the dialect. The step meta in the speaking card reads "Pertanyaan 1 dari 2" when the pick carries more than one question, and each question gets its own recording between the configured minimum and maximum: a recording under the minimum is refused in the runner and by the server with no slack, the take is cleared, and the student records again.
+
 ## 10. States
 
 | State | Treatment |

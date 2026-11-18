@@ -15,6 +15,7 @@ import { SiswaList, SiswaDetail } from "./views/Siswa.jsx";
 import { Sertifikat } from "./views/Sertifikat.jsx";
 import { SessionDetail } from "./views/MockupSesi.jsx";
 import { QuestionEditor } from "./views/QuestionEditor.jsx";
+import { SpeakingQuestionEditor } from "./views/SpeakingBank.jsx";
 import { TestPage, AttemptDetail } from "./views/Test.jsx";
 import { AllSubmissions } from "./views/Submission.jsx";
 import { ProgramKelas } from "./views/Program.jsx";
@@ -140,13 +141,16 @@ function currentView(parts, params) {
     const q = parts[3] !== "baru" ? db.tests[key].questions.find((x) => String(x.id) === parts[3]) : null;
     return { view: <QuestionEditor testKey={key} id={parts[3]} />, nav: TEST_META[key].nav, title: parts[3] === "baru" ? "Tambah Soal" : q ? `Ubah Soal ${questionNumber(db.tests[key], q)}` : "Soal tidak ditemukan" };
   }
+  if (parts[0] === "tes" && parts[2] === "speaking" && parts[3]) {
+    return { view: <SpeakingQuestionEditor id={parts[3]} />, nav: "tes-placement", title: parts[3] === "baru" ? "Tambah Pertanyaan Speaking" : "Ubah Pertanyaan Speaking" };
+  }
   if (parts[0] === "tes" && parts[1] === "ielts-mockup" && parts[2] === "sesi" && parts[3]) {
     return { view: <SessionDetail id={parts[3]} />, nav: TEST_META["ielts-mockup"].nav, title: "Sesi Mockup" };
   }
   if (parts[0] === "tes") {
     const key = TEST_KEYS.includes(parts[1]) ? parts[1] : "placement";
-    const tab = ["soal", "submission", "lead", "bagian", "paket", "sesi", "pengaturan"].includes(parts[2]) ? parts[2] : "soal";
-    const tabLabel = { soal: "Soal & Jawaban", submission: "Submission", lead: "Lead", bagian: "Bagian", paket: "Paket", sesi: "Sesi", pengaturan: "Pengaturan" }[tab];
+    const tab = ["soal", "submission", "speaking", "lead", "bagian", "paket", "sesi", "pengaturan"].includes(parts[2]) ? parts[2] : "soal";
+    const tabLabel = { soal: "Soal & Jawaban", submission: "Submission", speaking: "Speaking", lead: "Lead", bagian: "Bagian", paket: "Paket", sesi: "Sesi", pengaturan: "Pengaturan" }[tab];
     return { view: <TestPage testKey={key} tab={tab} />, nav: TEST_META[key].nav, title: `${TEST_META[key].name}, ${tabLabel}` };
   }
   if (parts[0] === "program") {

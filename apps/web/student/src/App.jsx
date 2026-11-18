@@ -43,6 +43,7 @@ export default function App() {
   const [contactBusy, setContactBusy] = useState(false);
   const [stage, setStage] = useState("check");
   const [mockup, setMockup] = useState(null);
+  const [placementSpeak, setPlacementSpeak] = useState(null);
   const [recording, setRecording] = useState(null);
   const [checkUrl, setCheckUrl] = useState(null);
   const [recUrl, setRecUrl] = useState(null);
@@ -100,6 +101,7 @@ export default function App() {
   const submittedRef = useRef(submitted);
   const maxStrikesRef = useRef(maxStrikes);
   const mockupRef = useRef(mockup);
+  const placementSpeakRef = useRef(placementSpeak);
   const currentSpeakingRef = useRef(null);
   const isTestingRef = useRef(() => false);
   const tickRef = useRef(null);
@@ -133,6 +135,7 @@ export default function App() {
     submittedRef.current = submitted;
     maxStrikesRef.current = maxStrikes;
     mockupRef.current = mockup;
+    placementSpeakRef.current = placementSpeak;
     autoSubmitRef.current = autoSubmit;
   });
 
@@ -151,15 +154,21 @@ export default function App() {
 
   const mockupPart = mockup?.plan?.parts[mockup.pi];
   const mockupQuestion = mockupPart?.questions[mockup.qi];
-  const speakingOn = Boolean(config?.speaking?.enabled);
+  // The placement speaking bank: the questions picked for this attempt, one recording each.
+  const placementQuestion = placementSpeak ? placementSpeak.list[placementSpeak.index] : null;
+  const speakingOn = Boolean(config?.speaking?.enabled) || Boolean(placementSpeak);
 
   const currentSpeaking = useMemo(() => {
     if (mockup?.started && !mockup.done && mockupPart && mockupQuestion) {
       return { min: 5, max: mockupPart.speakSeconds, seconds: mockupPart.speakSeconds, minSeconds: 5, prompt: mockupQuestion.text };
     }
+    if (placementQuestion) {
+      return { ...config.speaking, min: config.speaking.minSeconds, max: config.speaking.seconds, prompt: placementQuestion.prompt, position: placementQuestion.position,
+        index: placementSpeak.index, total: placementSpeak.list.length };
+    }
     if (speakingOn) return { ...config.speaking, min: config.speaking.minSeconds, max: config.speaking.seconds, prompt: config.speaking.prompt };
     return null;
-  }, [mockup, mockupPart, mockupQuestion, config, speakingOn]);
+  }, [mockup, mockupPart, mockupQuestion, config, placementQuestion, speakingOn]);
   currentSpeakingRef.current = currentSpeaking;
 
   const question = attempt?.questions[index];
@@ -304,6 +313,7 @@ export default function App() {
     setQuestionLeft(0);
     setFsWarning(!document.fullscreenElement);
     setMockup(data.mockupSpeaking ? { plan: data.mockupSpeaking, started: false, done: false, pi: 0, qi: 0 } : null);
+    setPlacementSpeak(Array.isArray(data.speakingQuestions) && data.speakingQuestions.length ? { list: data.speakingQuestions, index: 0 } : null);
     setStage("check");
     setRecording(null);
     clearCheck();
@@ -927,6 +937,15 @@ export default function App() {
   async function sendRecording() {
     if (!recBlob || speakBusy || !attempt) return;
     const isMockup = mockupRef.current?.started && !mockupRef.current?.done;
+    // The duration gate, before anything leaves the browser: a recording under the minimum is
+    // refused here already, and the server checks it again without slack.
+    const limits = currentSpeakingRef.current;
+    if (!isMockup && limits && recDuration.current < (limits.min || 1)) {
+      clearRecording();
+      setNoteOverride(`Rekaman kamu ${recDuration.current} detik, minimal ${limits.min} detik. Rekam ulang jawaban kamu.`);
+      answerStartRef.current?.focus();
+      return;
+    }
     setSpeakBusy(true);
     setSendLabel(isMockup ? "Menyimpan..." : "Mengirim...");
     try {
@@ -942,14 +961,27 @@ export default function App() {
         clearRecording();
         advanceMockupSpeaking();
       } else {
-        await api(`/api/attempts/${attempt.id}/speaking`, {
+        const queue = placementSpeakRef.current;
+        const position = queue && limits?.position ? `?position=${limits.position}` : "";
+        await api(`/api/attempts/${attempt.id}/speaking${position}`, {
           method: "POST",
           headers: { "content-type": recBlob.type, "x-duration": String(recDuration.current) },
           body: recBlob,
         });
+        speakingCountRef.current += 1;
         clearRecording();
-        releaseMic();
-        setScreen("details");
+        // More questions from the bank are waiting: the same mic check is done, so go straight
+        // to the next answer. The last question finishes the speaking part.
+        if (queue && queue.index + 1 < queue.list.length) {
+          setPlacementSpeak({ list: queue.list, index: queue.index + 1 });
+          setStage("answer");
+          setCanRecord(false);
+          setNoteOverride("");
+          answerStartRef.current?.focus();
+        } else {
+          releaseMic();
+          setScreen("details");
+        }
       }
     } catch (error) {
       if (!isMockup && ["speaking_closed", "speaking_off", "speaking_done"].includes(error.code)) {
@@ -991,7 +1023,7 @@ export default function App() {
   }
 
   function enterSpeaking() {
-    if (!config?.speaking?.enabled) { setScreen("details"); return; }
+    if (!config?.speaking?.enabled && !placementSpeakRef.current) { setScreen("details"); return; }
     clearRecording();
     clearCheck();
     setStage("check");

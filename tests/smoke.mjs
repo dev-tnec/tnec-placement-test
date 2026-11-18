@@ -20,7 +20,7 @@ import { normalizeWhatsapp } from "@tnec/core/http";
 import { sendWhatsApp, whatsappConfigured, buildResultWhatsApp, PLACEMENT_LEAD_SOURCE } from "@tnec/core/whatsapp";
 import { runInBackground, drainDeliveries, deliverResult } from "@tnec/core/delivery";
 import {
-  mapSpeechaceResult, classifyFailure, afterFailure, speakingFacts, aspectLine, isFinalStatus,
+  mapSpeechaceResult, classifyFailure, afterFailure, speakingFacts, aggregateSpeakingFacts, aspectLine, isFinalStatus,
 } from "@tnec/core/speaking-result";
 import { speakingType, retryDelays, SPEAKING_MAX_BYTES } from "@tnec/core/speaking";
 import { numberPlaceholders } from "@tnec/core/db";
@@ -741,8 +741,7 @@ assert.equal(plainTable[0].rows.length, 2);
 assert.equal(parseRichText("A pipe | in prose\nSecond line")[0].type, "p", "not every line carrying a pipe keeps the block a paragraph");
 assert.equal(parseRichText("Single | line")[0].type, "p", "a single line with a pipe is not a table");
 
-const withImage = parseRichText("Before ![Peta Dalton](/images/ielts-writing-dalton.png) after.");
-assert.deepEqual(withImage[0].lines[0], [
+const withImage = parseRichText("Before ![Peta Dalton](/images/ielts-writing-dalton.png) after.");assert.deepEqual(withImage[0].lines[0], [
   { text: "Before " },
   { image: "/images/ielts-writing-dalton.png", alt: "Peta Dalton" },
   { text: " after." },
@@ -756,5 +755,52 @@ assert.equal(branchKey("surabaya"), null, "an unknown branch is refused");
 assert.equal(branchKey(""), null);
 assert.equal(branchLabel("medan"), "Medan");
 assert.equal(branchLabel(""), "");
+
+/* The placement speaking bank: which questions a student gets. */
+import { pickSpeakingQuestions } from "@tnec/core/speaking-bank";
+const bank = [
+  { id: 1, position: 1, prompt: "Where are you from?", status: "aktif" },
+  { id: 2, position: 2, prompt: "Do you work or study?", status: "aktif" },
+  { id: 3, position: 3, prompt: "What do you do at weekends?", status: "aktif" },
+  { id: 4, position: 4, prompt: "Do you like stars?", status: "draf" },
+  { id: 5, position: 5, prompt: "Is geography useful?", status: "aktif" },
+];
+assert.deepEqual(pickSpeakingQuestions(bank, { count: 1, randomize: true }).map((q) => q.id), [1], "one question is always the first, even with randomize on");
+assert.deepEqual(pickSpeakingQuestions(bank, { count: 2, randomize: false }).map((q) => q.id), [1, 2], "no randomize takes the first questions in order");
+assert.deepEqual(pickSpeakingQuestions(bank, { count: 9, randomize: false }).map((q) => q.id), [1, 2, 3, 5], "a count larger than the bank takes the whole active bank");
+for (let i = 0; i < 30; i += 1) {
+  const picked = pickSpeakingQuestions(bank, { count: 3, randomize: true });
+  assert.equal(picked.length, 3, "the random pick takes exactly the count");
+  assert.deepEqual([...new Set(picked.map((q) => q.id))].sort(), picked.map((q) => q.id).sort(), "no question is picked twice");
+  assert.ok(picked.every((q) => q.status === "aktif"), "the draf question is never picked");
+  assert.ok(picked.every((q) => bank.some((b) => b.id === q.id)), "the pick always comes from the bank");
+}
+assert.deepEqual(pickSpeakingQuestions([], { count: 2, randomize: true }), [], "an empty bank picks nothing");
+assert.deepEqual(pickSpeakingQuestions(bank, {}).map((q) => q.id), [1], "a missing count means one question");
+
+/* Several recordings per attempt: the aggregate the email and result page read. */
+assert.equal(aggregateSpeakingFacts([]), null, "nothing scored is no speaking block");
+const gradedRow = (cefr, ielts, score, note) => ({
+  status: "graded", cefr_overall: cefr, ielts_overall: ielts, transcript: `Answer ${cefr}.`,
+  scores: JSON.stringify({ source: "speechace", overall: { cefr, ielts, score }, aspects: { pronunciation: { cefr, ielts, score } }, notes: note ? [note] : [] }),
+});
+const twoAnswers = aggregateSpeakingFacts([
+  gradedRow("B1", 5, 60, "Slow down."),
+  gradedRow("B2", 6.5, 80, "Good effort."),
+]);
+assert.equal(twoAnswers.source, "auto");
+assert.equal(twoAnswers.cefr, "B1+", "the CEFR mean of B1 and B2 is B1+");
+assert.equal(twoAnswers.ielts, 6, "the IELTS mean of 5 and 6.5 rounds to the nearest half, 5.75 to 6");
+assert.equal(twoAnswers.answers, 2);
+assert.equal(twoAnswers.transcript.includes("B1.") && twoAnswers.transcript.includes("B2."), true, "both transcripts are kept");
+assert.deepEqual(twoAnswers.notes, ["Slow down.", "Good effort."]);
+assert.equal(twoAnswers.aspects.length, 1, "the aspects merge per key");
+const manualMixed = aggregateSpeakingFacts([
+  { status: "manual", cefr_overall: "B2", ielts_overall: null, transcript: "", scores: JSON.stringify({ source: "manual", overall: { cefr: "B2" }, note: "Jelas." }) },
+  { status: "skipped", cefr_overall: null, ielts_overall: null, transcript: "", scores: "{}" },
+]);
+assert.equal(manualMixed.source, "manual", "a hand-graded answer makes the block manual");
+assert.equal(manualMixed.cefr, "B2");
+assert.deepEqual(manualMixed.notes, ["Jelas."]);
 
 console.log("smoke ok");

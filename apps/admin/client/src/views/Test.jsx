@@ -22,6 +22,7 @@ import { MenuBtn } from "../menus.jsx";
 import { resendEmail, speakingRetry, speakingReviewed, speakingSkip } from "../actions.js";
 import { openQuestionEditor, openDaftar, openSectionEditor, openPackageEditor, openSessionEditor } from "../dialogs.jsx";
 import { SessionsTab } from "./MockupSesi.jsx";
+import { SpeakingQuestionsTab } from "./SpeakingBank.jsx";
 import { $, busy, clearErrors, fieldError, toast } from "../dom.js";
 
 /* Jumlah soal aktif versus the top level threshold. */
@@ -46,7 +47,10 @@ export function TestPage({ testKey, tab }) {
   const own = db.attempts.filter((a) => a.test === testKey);
   const speakingBank = testKey === "ielts-mockup" && t.mockupSpeaking ? t.mockupSpeaking : null;
   const tabs = [["soal", "Soal & Jawaban", packageQuestions(t).length + (speakingBank ? speakingBank.total : 0)], ["submission", "Submission", own.length]];
-  if (testKey === "placement") tabs.push(["lead", "Lead", leads().length]);
+  if (testKey === "placement") {
+    tabs.push(["speaking", "Speaking", (db.speakingBank || []).length]);
+    tabs.push(["lead", "Lead", leads().length]);
+  }
   if (testKey === "ielts-mockup") {
     tabs.push(["bagian", "Bagian", packageSections(t).length]);
     tabs.push(["paket", "Paket", t.packages.length]);
@@ -57,6 +61,7 @@ export function TestPage({ testKey, tab }) {
   const speakingView = testKey === "ielts-mockup" && ui.questions[testKey]?.skill === "Speaking";
   const actions = tab === "soal" && !speakingView
     ? <button className="btn btn--primary" type="button" onClick={() => openQuestionEditor(null)}><Icon name="plus" />Tambah soal</button>
+    : tab === "speaking" ? <button className="btn btn--primary" type="button" onClick={() => { location.hash = "#/tes/placement/speaking/baru"; }}><Icon name="plus" />Tambah soal speaking</button>
     : tab === "submission" ? <button className="btn btn--quiet" type="button" onClick={() => exportAttempts(db.attempts.filter((a) => attemptMatches(a, ui.attempts[testKey], false)))}><Icon name="download" />Ekspor CSV</button>
       : tab === "bagian" ? <button className="btn btn--primary" type="button" onClick={() => openSectionEditor(null)}><Icon name="plus" />Tambah bagian</button>
         : tab === "paket" ? <button className="btn btn--primary" type="button" onClick={() => openPackageEditor(null)}><Icon name="plus" />Tambah paket</button>
@@ -71,7 +76,7 @@ export function TestPage({ testKey, tab }) {
         <a key={k} className="seg__item" href={`#/tes/${testKey}/${k}`} {...(k === tab ? { "aria-current": "page" } : {})}>{label}{n === null ? null : <> <span className="seg__n">{n}</span></>}</a>
       ))}
     </nav>
-    {tab === "soal" ? <QuestionsTab /> : tab === "submission" ? <SubmissionsTab /> : tab === "bagian" ? <SectionsTab /> : tab === "paket" ? <PackagesTab /> : tab === "sesi" ? <SessionsTab /> : tab === "lead" ? <LeadTab /> : <SettingsTab testKey={testKey} />}
+    {tab === "soal" ? <QuestionsTab /> : tab === "submission" ? <SubmissionsTab /> : tab === "speaking" ? <SpeakingQuestionsTab /> : tab === "bagian" ? <SectionsTab /> : tab === "paket" ? <PackagesTab /> : tab === "sesi" ? <SessionsTab /> : tab === "lead" ? <LeadTab /> : <SettingsTab testKey={testKey} />}
   </>;
 }
 
@@ -486,7 +491,7 @@ function SettingsTab({ testKey }) {
   const [pass, setPass] = useState(st.passScore);
   const [openTest, setOpenTest] = useState(st.open);
   const [viol, setViol] = useState(st.maxViolations);
-  const [speak, setSpeak] = useState({ on: st.speakingEnabled, prompt: st.speakingPrompt, max: st.speakingSeconds, min: st.speakingMinSeconds, dialect: st.speakingDialect });
+  const [speak, setSpeak] = useState({ on: st.speakingEnabled, count: st.speakingCount ?? 1, randomize: Boolean(st.speakingRandomize), max: st.speakingSeconds, min: st.speakingMinSeconds, dialect: st.speakingDialect });
   const [levels, setLevels] = useState(db.levels.map((l) => ({ ...l })));
 
   const now30 = db.attempts.filter((a) => a.test === testKey && a.startedAt >= Date.now() - 30 * 86400000);
@@ -577,15 +582,17 @@ function SettingsTab({ testKey }) {
   async function saveSpeaking(e) {
     clearErrors($("#panel-speaking"));
     const on = speak.on;
-    if (on && !speak.prompt.trim()) { fieldError($("#set-speak-prompt"), "speaking-err", "Tulis pertanyaannya dulu sebelum menyalakan bagian speaking."); $("#set-speak-prompt").focus(); return; }
+    const activeBank = db.speakingBank.filter((q) => q.status === "aktif").length;
+    if (on && !activeBank) { fieldError(null, "speaking-err", "Bank speaking kosong. Tambahkan pertanyaan di tab Speaking dulu."); return; }
+    if (!Number.isInteger(Number(speak.count)) || Number(speak.count) < 1 || Number(speak.count) > 50) { fieldError($("#set-speak-count"), "speaking-err", "Jumlah pertanyaan harus angka 1 sampai 50."); $("#set-speak-count").focus(); return; }
     if (!Number.isInteger(Number(speak.min)) || Number(speak.min) < 5 || Number(speak.min) > 30) { fieldError($("#set-speak-min"), "speaking-err", "Durasi minimal harus antara 5 dan 30 detik."); $("#set-speak-min").focus(); return; }
     if (!Number.isInteger(Number(speak.max)) || Number(speak.max) < 15 || Number(speak.max) > 90) { fieldError($("#set-speak-max"), "speaking-err", "Durasi maksimal harus antara 15 dan 90 detik."); $("#set-speak-max").focus(); return; }
     if (Number(speak.min) >= Number(speak.max)) { fieldError($("#set-speak-min"), "speaking-err", "Durasi minimal harus lebih pendek dari durasi maksimal."); $("#set-speak-min").focus(); return; }
     const done = busy(e.currentTarget, "Menyimpan...");
     await mutate(() => api("/api/admin/tests/placement", {
       method: "PUT",
-      body: { speakingEnabled: on, speakingPrompt: speak.prompt.trim(), speakingSeconds: Number(speak.max), speakingMinSeconds: Number(speak.min), speakingDialect: speak.dialect },
-    }), on ? "Bagian speaking aktif untuk peserta yang mulai setelah ini." : "Bagian speaking dimatikan. Peserta yang sedang merekam tetap bisa mengirim.");
+      body: { speakingEnabled: on, speakingCount: Number(speak.count), speakingRandomize: Boolean(speak.randomize), speakingSeconds: Number(speak.max), speakingMinSeconds: Number(speak.min), speakingDialect: speak.dialect },
+    }), on ? `Bagian speaking aktif, ${Math.min(Number(speak.count), activeBank)} pertanyaan per peserta.` : "Bagian speaking dimatikan. Peserta yang sedang merekam tetap bisa mengirim.");
     done();
   }
 
@@ -771,7 +778,7 @@ function SettingsTab({ testKey }) {
     {testKey === "placement" ? <section className="panel" id="panel-speaking">
       <header className="panel__head"><div>
         <h2 className="panel__title">Bagian speaking</h2>
-        <p className="panel__desc">Kalau dinyalakan, peserta merekam satu jawaban setelah soal pilihan ganda. Rekaman dinilai Speechace, dan hasil lengkap baru dikirim setelah penilaian selesai. Nilai speaking tampil terpisah dan tidak mengubah level dari soal pilihan ganda.</p>
+        <p className="panel__desc">Kalau dinyalakan, peserta merekam satu jawaban untuk setiap pertanyaan yang dipilih dari bank di tab Speaking. Rekaman dinilai Speechace, dan hasil lengkap baru dikirim setelah semua penilaian selesai. Nilai speaking tampil terpisah dan tidak mengubah level dari soal pilihan ganda.</p>
       </div></header>
       <div className="panel__body rules">
         <div className="field">
@@ -779,9 +786,13 @@ function SettingsTab({ testKey }) {
           <p className="hint">{sum.configured ? "Kunci Speechace sudah terpasang di server, jadi rekaman dinilai otomatis." : "Kunci Speechace belum terpasang di server ini, jadi semua rekaman langsung masuk antrean penilaian manual."}</p>
         </div>
         <div className="field">
-          <label className="label" htmlFor="set-speak-prompt">Pertanyaan speaking</label>
-          <textarea className="input" id="set-speak-prompt" rows="2" maxLength="300" value={speak.prompt} onChange={(e) => setSpeak((s) => ({ ...s, prompt: e.target.value }))}></textarea>
-          <p className="hint">Tampil di layar peserta dan ikut dikirim ke Speechace sebagai konteks relevansi.</p>
+          <label className="label" htmlFor="set-speak-count">Jumlah pertanyaan untuk peserta</label>
+          <div className="unit-row"><span className="unit"><input className="input tnum" id="set-speak-count" type="number" min="1" max="50" value={speak.count} onChange={(e) => setSpeak((s) => ({ ...s, count: e.target.value }))} /><span>pertanyaan</span></span></div>
+          <p className="hint">Diambil dari bank di tab Speaking. Jumlahnya {db.speakingBank.filter((q) => q.status === "aktif").length} pertanyaan aktif sekarang; kalau angka di atas lebih besar dari bank, semua pertanyaan dipakai. Satu pertanyaan berarti selalu pertanyaan pertama.</p>
+        </div>
+        <div className="field">
+          <label className="switch"><input type="checkbox" id="set-speak-random" checked={speak.randomize} onChange={(e) => setSpeak((s) => ({ ...s, randomize: e.target.checked }))} /><span className="switch__track" aria-hidden="true"></span>Pilih pertanyaannya secara acak</label>
+          <p className="hint">Aktif: setiap peserta mendapat pertanyaan yang berbeda secara acak. Nonaktif: semua peserta mendapat beberapa pertanyaan pertama dalam urutan bank.</p>
         </div>
         <div className="field">
           <label className="label" htmlFor="set-speak-max">Durasi maksimal, detik</label>
@@ -791,7 +802,7 @@ function SettingsTab({ testKey }) {
         <div className="field">
           <label className="label" htmlFor="set-speak-min">Durasi minimal, detik</label>
           <input className="input tnum" id="set-speak-min" type="number" min="5" max="30" value={speak.min} onChange={(e) => setSpeak((s) => ({ ...s, min: e.target.value }))} />
-          <p className="hint">Tombol berhenti baru aktif setelah durasi ini, supaya jawabannya cukup panjang untuk dinilai.</p>
+          <p className="hint">Rekaman yang lebih pendek ditolak dan peserta merekam ulang, jadi jawabannya selalu cukup panjang untuk dinilai.</p>
         </div>
         <div className="field">
           <label className="label" htmlFor="set-speak-dialect">Aksen penilaian</label>
@@ -805,7 +816,7 @@ function SettingsTab({ testKey }) {
       <div className="panel__foot panel__foot--end">
         <span className="hint">{sum.review ? `Ada ${sum.review} rekaman menunggu dinilai tim.` : sum.waiting ? `${sum.waiting} rekaman sedang menunggu penilaian.` : "Belum ada rekaman yang menunggu."}</span>
         <button className="btn btn--primary" type="button" id="speaking-save"
-          disabled={speak.on === st.speakingEnabled && speak.prompt === st.speakingPrompt && Number(speak.max) === st.speakingSeconds && Number(speak.min) === st.speakingMinSeconds && speak.dialect === st.speakingDialect}
+          disabled={speak.on === st.speakingEnabled && Number(speak.count) === st.speakingCount && speak.randomize === st.speakingRandomize && Number(speak.max) === st.speakingSeconds && Number(speak.min) === st.speakingMinSeconds && speak.dialect === st.speakingDialect}
           onClick={saveSpeaking}>Simpan pengaturan speaking</button>
       </div>
     </section> : null}
@@ -995,7 +1006,7 @@ export function AttemptDetail({ testKey, id }) {
       {testKey === "ielts-mockup" ? <WritingPanel a={a} rows={writingRows} /> : null}
       {testKey === "ielts-mockup" ? <MockupSpeakingPanel a={a} /> : null}
 
-      {testKey === "placement" ? <SpeakingPanel a={a} /> : null}
+      {testKey === "placement" ? <PlacementSpeakingPanels a={a} /> : null}
 
       <section className="panel">
         <header className="panel__head"><div>
@@ -1124,15 +1135,22 @@ function MockupSpeakingPanel({ a }) {
 }
 
 /* ===================== The speaking panel ===================== */
-function SpeakingPanel({ a }) {
-  const sp = a.speaking;
-  if (!sp) return null;
+/* One panel per speaking recording. The old single recording still works: the detail carries
+   one row, and the skip marker explains itself when there is nothing recorded. */
+function PlacementSpeakingPanels({ a }) {
   if (a.loading) {
     return <section className="panel" aria-label="Speaking">
       <header className="panel__head"><div><h2 className="panel__title">Speaking</h2></div></header>
       <p className="loading-line" role="status">Memuat rekaman speaking...</p>
     </section>;
   }
+  const rows = a.speakingSubmissions || [];
+  if (!rows.length) return null;
+  return <>{rows.map((sp) => <SpeakingPanel key={sp.id} sp={sp} />)}</>;
+}
+
+function SpeakingPanel({ sp }) {
+  if (!sp) return null;
   const scores = sp.scores || {};
   const aspects = scores.aspects || {};
   const hasScores = sp.status === "graded" || sp.status === "manual";
@@ -1156,21 +1174,22 @@ function SpeakingPanel({ a }) {
 
   async function grade(e) {
     clearErrors(e.currentTarget.closest(".speak-grade"));
-    const cefr = $("#sg-cefr").value;
-    const ielts = $("#sg-ielts").value.trim();
-    const note = $("#sg-note").value.trim();
-    const aspectValues = Object.fromEntries(SPEAKING_ASPECTS.map(([key]) => [key, document.getElementById(`sg-a-${key}`).value]));
-    if (!cefr) { fieldError($("#sg-cefr"), "sg-err", "Pilih CEFR keseluruhan dulu."); $("#sg-cefr").focus(); return; }
+    const suffix = `-${sp.id}`;
+    const cefr = $(`#sg-cefr${suffix}`).value;
+    const ielts = $(`#sg-ielts${suffix}`).value.trim();
+    const note = $(`#sg-note${suffix}`).value.trim();
+    const aspectValues = Object.fromEntries(SPEAKING_ASPECTS.map(([key]) => [key, document.getElementById(`sg-a-${key}${suffix}`).value]));
+    if (!cefr) { fieldError($(`#sg-cefr${suffix}`), `sg-err${suffix}`, "Pilih CEFR keseluruhan dulu."); $(`#sg-cefr${suffix}`).focus(); return; }
     const done = busy(e.currentTarget, "Menyimpan...");
     try {
       const result = await api(`/api/admin/speaking/${sp.id}/grade`, { method: "POST", body: { cefr, ielts: ielts || null, aspects: aspectValues, note } });
       await reload();
       toast(result.sending ? "Nilai speaking disimpan dan hasil dikirim ke peserta." : "Nilai speaking disimpan. Hasilnya sudah terkirim sebelumnya.");
     } catch (error) {
-      if (error.field === "cefr") fieldError($("#sg-cefr"), "sg-err", error.message);
-      else if (error.field === "ielts") fieldError($("#sg-ielts"), "sg-err", error.message);
-      else if (error.field && document.getElementById(`sg-a-${error.field}`)) fieldError(document.getElementById(`sg-a-${error.field}`), "sg-err", error.message);
-      else fieldError($("#sg-note"), "sg-err", error.message);
+      if (error.field === "cefr") fieldError($(`#sg-cefr${suffix}`), `sg-err${suffix}`, error.message);
+      else if (error.field === "ielts") fieldError($(`#sg-ielts${suffix}`), `sg-err${suffix}`, error.message);
+      else if (error.field && document.getElementById(`sg-a-${error.field}${suffix}`)) fieldError(document.getElementById(`sg-a-${error.field}${suffix}`), `sg-err${suffix}`, error.message);
+      else fieldError($(`#sg-note${suffix}`), `sg-err${suffix}`, error.message);
     }
     done();
   }
@@ -1201,11 +1220,12 @@ function SpeakingPanel({ a }) {
       </select>
     </div>
   );
+  const suffix = `-${sp.id}`;
 
   return <section className="panel" aria-label="Speaking">
     <header className="panel__head">
       <div>
-        <h2 className="panel__title">Speaking <SpeakingStatus sp={sp} /></h2>
+        <h2 className="panel__title">Speaking <SpeakingStatus sp={sp} />{sp.position ? `Pertanyaan ${sp.position}` : ""}</h2>
         <p className="panel__desc">Pertanyaan: {sp.prompt || "-"}</p>
       </div>
       {actions.length ? <span className="row-actions">{actions}</span> : null}
@@ -1249,18 +1269,18 @@ function SpeakingPanel({ a }) {
       {canGrade ? <div className="speak-grade">
         <p className="panel__desc">{sp.status === "failed" ? "Nilai rekaman ini secara manual. Hasil dikirim otomatis setelah disimpan." : "Koreksi nilai otomatis kalau hasilnya tidak wajar. Nilai yang kamu isi menggantikan nilai sebelumnya."}</p>
         <div className="speak-grade__grid">
-          {cefrSelect("sg-cefr", "CEFR keseluruhan", "")}
+          {cefrSelect(`sg-cefr${suffix}`, "CEFR keseluruhan", "")}
           <div className="field">
-            <label className="label" htmlFor="sg-ielts">IELTS, opsional</label>
-            <input className="input tnum" id="sg-ielts" type="text" inputMode="decimal" placeholder="Contoh: 6.5" />
+            <label className="label" htmlFor={`sg-ielts${suffix}`}>IELTS, opsional</label>
+            <input className="input tnum" id={`sg-ielts${suffix}`} type="text" inputMode="decimal" placeholder="Contoh: 6.5" />
           </div>
-          {SPEAKING_ASPECTS.map(([key, label]) => cefrSelect(`sg-a-${key}`, label, aspects[key]?.cefr || ""))}
+          {SPEAKING_ASPECTS.map(([key, label]) => cefrSelect(`sg-a-${key}${suffix}`, label, aspects[key]?.cefr || ""))}
         </div>
         <div className="field">
-          <label className="label" htmlFor="sg-note">Catatan untuk siswa, opsional</label>
-          <textarea className="input" id="sg-note" rows="2" maxLength="500" placeholder="Contoh: jawaban bagus, tapi banyak jeda panjang."></textarea>
+          <label className="label" htmlFor={`sg-note${suffix}`}>Catatan untuk siswa, opsional</label>
+          <textarea className="input" id={`sg-note${suffix}`} rows="2" maxLength="500" placeholder="Contoh: jawaban bagus, tapi banyak jeda panjang."></textarea>
         </div>
-        <p className="error" id="sg-err" hidden></p>
+        <p className="error" id={`sg-err${suffix}`} hidden></p>
         <button className="btn btn--primary" type="button" onClick={grade}>Simpan nilai dan kirim hasil</button>
       </div> : null}
     </div>
