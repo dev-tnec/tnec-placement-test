@@ -33,11 +33,11 @@ function Sidebar({ nav }) {
     ["sertifikat", "#/sertifikat", "award", "Sertifikat"],
   ];
   const tests = [
+    ["submission-all", "#/submission", "send", "Submission"],
     ["tes-placement", "#/tes/placement/soal", "clipboard", "Placement Test"],
     ["tes-pre", "#/tes/pre/soal", "note", "Pre-test"],
     ["tes-post", "#/tes/post/soal", "cap", "Post-test"],
     ["tes-ielts", "#/tes/ielts-mockup/soal", "layers", "IELTS Mockup"],
-    ["submission-all", "#/submission", "send", "Submission"],
   ];
   return (
     <aside className="sidebar" aria-label="Navigasi dasbor">
