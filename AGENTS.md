@@ -125,6 +125,7 @@ The full flow passes in a headless browser against the `dev` branch: first admin
 | `packages/core/src/mockup-bulk.js` | Pure rules for the bulk mockup: the CSV parser with quotes and duplicate checks, the per-student test window, the Jakarta time formatter, and the invite message copy. Checked by `tests/smoke.mjs` |
 | `packages/core/src/speaking-result.js` | Pure scoring rules: reading a Speechace response, failure classification, retry math, and the speaking facts the email, WhatsApp, and dashboard read |
 | `tools/speechace/` | A local mic test page with a key proxy, and `preview-result.mjs` which prints the exact WhatsApp and email copy |
+| `tools/mockup/e2e-full.mjs` | The full IELTS Mockup E2E, dev branch only (`ENV_FILE` required): student and invite setup, the code gate, 82 correct answers, 18 spoken answers with real audio (Cloudflare `@cf/deepgram/aura-2-en` via `CLOUDFLARE_AI_TOKEN`, with the local Windows voice as the fallback), submit, and the four-band result. Costs 18 Speechace calls per run |
 | `start.cmd` | Double-click launcher for Windows: installs on first run, then runs `scripts/start.mjs` |
 | `scripts/start.mjs` | `npm start`: migrate, then run both apps in one process |
 | `scripts/migrate.mjs`, `scripts/create-admin.mjs` | `npm run db:migrate`, `npm run admin:create` |
@@ -140,7 +141,7 @@ The full flow passes in a headless browser against the `dev` branch: first admin
 3. With no admin in the database, the login page at `/admin/login` turns into "Buat akun admin pertama". Requests from localhost need no code; any other request needs the setup code that the admin app prints when it starts. On Render the code comes from `ADMIN_SETUP_CODE`, so it stays the same across restarts. After the first account exists, setup is closed and more accounts come from `npm run admin:create`.
 4. A host that sets `PORT`, such as Render, gives that port to an app started on its own with `npm run start:web` or `npm run start:admin`.
 
-To run against the `dev` branch, point `ENV_FILE` at a second env file with the `dev` connection string. Never run tests against `main`.
+To run against the `dev` branch, point `ENV_FILE` at a second env file with the `dev` connection string. Never run tests against `main`. The full mockup E2E also refuses to run without `ENV_FILE`: `$env:ENV_FILE = ".env.dev"; node tools/mockup/e2e-full.mjs` walks the whole IELTS Mockup with correct answers and 18 spoken recordings, and needs the dev server up.
 
 ## Flow
 
