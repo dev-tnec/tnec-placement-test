@@ -229,7 +229,7 @@ export function RichToolbar({ target }) {
       {btn("italic", "Miring", () => wrap("i"))}
       {btn("underline", "Garis bawah", () => wrap("u"))}
       <span className="rt-toolbar__sep" aria-hidden="true" />
-      {btn("list", "Daftar berbutir", () => mark("- "))}
+      {btn("list", "Daftar strip", () => mark("- "))}
       {btn("list-ordered", "Daftar bernomor", () => mark("1. "))}
       {btn("quote", "Kutipan", () => mark("> "))}
       <span className="rt-toolbar__sep" aria-hidden="true" />

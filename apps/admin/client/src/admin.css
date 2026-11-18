@@ -511,8 +511,11 @@ body.has-bulk .toasts { bottom: 88px; }
 /* Rich passage text, shared with the student renderer through @tnec/core/rich. */
 .rt { display: flex; flex-direction: column; gap: 10px; font-size: 14px; line-height: 1.7; color: var(--text-primary); }
 .rt ul, .rt ol { display: flex; flex-direction: column; gap: 4px; padding-left: 22px; }
-.rt ul { list-style: disc outside; }
+/* No bullet dots anywhere: an unnumbered list marks every item with a dash. */
+.rt ul { list-style: none; padding-left: 0; }
 .rt ol { list-style: decimal outside; }
+.rt ul > li { position: relative; padding-left: 22px; }
+.rt ul > li::before { content: "-"; position: absolute; left: 4px; color: var(--text-secondary); }
 .rt li::marker { color: var(--text-secondary); }
 .rt u { text-underline-offset: 3px; }
 .rt blockquote {

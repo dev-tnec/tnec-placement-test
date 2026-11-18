@@ -1126,8 +1126,11 @@ progress::-moz-progress-bar { background: var(--navy-900); border-radius: var(--
 .rt { display: flex; flex-direction: column; gap: var(--space-3); }
 .rt ul,
 .rt ol { display: flex; flex-direction: column; gap: 6px; padding-left: 22px; }
-.rt ul { list-style: disc outside; }
+/* No bullet dots anywhere: an unnumbered list marks every item with a dash. */
+.rt ul { list-style: none; padding-left: 0; }
 .rt ol { list-style: decimal outside; }
+.rt ul > li { position: relative; padding-left: 22px; }
+.rt ul > li::before { content: "-"; position: absolute; left: 4px; color: var(--text-secondary); }
 .rt li::marker { color: var(--text-secondary); }
 .rt strong { font-weight: 700; }
 .rt u { text-underline-offset: 3px; }

@@ -1,6 +1,6 @@
 // Markdown-lite for question passages, shared by the student renderer and the dashboard
 // preview so a passage always renders the same on both sides. The format is plain text:
-// <b> <i> <u> inline tags, "- " bullet lines, "1. " numbered lines, "> " quote lines,
+// <b> <i> <u> inline tags, "- " dash list lines, "1. " numbered lines, "> " quote lines,
 // "| a | b |" table lines, ![alt](/path.png) images, and a blank line between paragraphs.
 // React builds the elements from these blocks, so nothing ever goes through innerHTML,
 // and any syntax this parser does not know stays literal text. Images only resolve for
@@ -8,7 +8,8 @@
 
 const TAG = /<(b|i|u)>([\s\S]*?)<\/\1>/;
 const IMAGE = /!\[([^\]]*)\]\((\/[^\s)]*)\)/g;
-const BULLET = /^[-•]\s+/;
+// A pasted bullet character still starts a list item, so no round bullet ever reaches the page.
+const DASH = /^[-•]\s+/;
 const NUMBERED = /^\d+[.)]\s+/;
 const QUOTE = /^>\s?/;
 const SEP_CELL = /^:?-{3,}:?$/;
@@ -60,8 +61,8 @@ export function parseRichText(text) {
   if (!source) return [];
   return source.split(/\n\s*\n+/).map((block) => {
     const lines = block.split("\n").map((line) => line.trim()).filter(Boolean);
-    if (lines.every((line) => BULLET.test(line))) {
-      return { type: "ul", items: lines.map((line) => inlineRuns(line.replace(BULLET, ""))) };
+    if (lines.every((line) => DASH.test(line))) {
+      return { type: "ul", items: lines.map((line) => inlineRuns(line.replace(DASH, ""))) };
     }
     if (lines.every((line) => NUMBERED.test(line))) {
       return { type: "ol", items: lines.map((line) => inlineRuns(line.replace(NUMBERED, ""))) };
