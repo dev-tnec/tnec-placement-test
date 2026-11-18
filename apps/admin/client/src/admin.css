@@ -255,7 +255,7 @@ input[type="checkbox"] { width: 16px; height: 16px; margin: 0; accent-color: var
 
 /* Tables */
 .table-wrap { position: relative; overflow-x: auto; }
-.si-preview { max-height: 320px; overflow-y: auto; }
+.si-preview { max-height: 320px; overflow-y: auto; border: 1px solid var(--gray-200); border-radius: var(--radius-sm); }
 .ts-preview { margin: 0; max-height: 220px; overflow-y: auto; padding: 12px 14px; border: 1px solid var(--gray-200); border-radius: var(--radius-sm); background: var(--surface-50); font: 12px/1.6 ui-monospace, monospace; white-space: pre-wrap; word-break: break-word; }
 .table { width: 100%; border-collapse: collapse; font-size: 14px; }
 .table th {
@@ -487,6 +487,7 @@ body.has-bulk .toasts { bottom: 88px; }
 .dialog[open] { display: flex; flex-direction: column; }
 .dialog::backdrop { background: rgba(10,27,56,.72); }
 .dialog--sm { width: min(460px, calc(100vw - 32px)); }
+.dialog--import { width: min(760px, calc(100vw - 32px)); }
 .dialog__form { display: flex; flex-direction: column; min-height: 0; flex: 1 1 auto; }
 .dialog__head { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; padding: 20px 24px 16px; border-bottom: 1px solid var(--gray-200); }
 .dialog__title { font-size: 19px; font-weight: 700; line-height: 1.3; letter-spacing: -.01em; }
@@ -661,6 +662,7 @@ body.nav-collapsed .nav__count { position: absolute; top: 9px; right: 11px; min-
   .time-grid { grid-template-columns: minmax(0, 1fr); }
   .skills { grid-template-columns: minmax(0, 1fr); }
   .toolbar__meta { margin-left: 0; width: 100%; }
+  .si-row__meta { margin-left: 0; max-width: none; text-align: left; }
 }
 @media (max-width: 767px) {
   :root { --sidebar-w: 64px; }
@@ -698,6 +700,28 @@ body.nav-collapsed .account__out { margin-left: 0; }
 .copy-row { display: flex; gap: 8px; }
 .copy-row .input { flex: 1 1 auto; min-width: 0; font-size: 13px; }
 .dialog__foot .link-btn { display: inline-flex; align-items: center; gap: 6px; }
+
+/* The import dialog: every block sits on the 24px body inset, one rhythm top to bottom. */
+.si-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.si-row__meta {
+  margin-left: auto; max-width: 400px;
+  font-size: 13px; line-height: 1.5; color: var(--text-secondary); text-align: right;
+}
+.si-file {
+  display: block; width: 100%; padding: 9px 12px;
+  border: 1px dashed var(--gray-200); border-radius: var(--radius-sm);
+  background: var(--surface-50); font-size: 13px; color: var(--text-primary);
+  transition: border-color var(--duration-fast) var(--ease-standard);
+}
+.si-file::file-selector-button {
+  margin-right: 12px; padding: 8px 14px;
+  border: 1px solid var(--gray-200); border-radius: var(--radius-sm); background: var(--white);
+  font: inherit; font-weight: 600; color: var(--navy-900); cursor: pointer;
+  transition: border-color var(--duration-fast) var(--ease-standard);
+}
+.si-file:hover, .si-file:hover::file-selector-button { border-color: var(--navy-600); }
+.si-counts { font-size: 13px; line-height: 1.6; color: var(--text-secondary); }
+.si-counts strong { color: var(--navy-900); font-weight: 700; }
 
 /* Certificates: numbers keep their digits aligned. Formats wrap only after a slash (a <wbr> from admin.js). */
 .num-code { font-variant-numeric: tabular-nums; overflow-wrap: break-word; }

@@ -1635,7 +1635,6 @@ export function openSessionImport(sessionId) { openDialog({ kind: "session-impor
 function SessionImportDialog({ sessionId }) {
   const s = db.sessions.find((x) => x.id === sessionId);
   const [preview, setPreview] = useState(null);
-  const [fileName, setFileName] = useState("");
   const [parseError, setParseError] = useState("");
 
   const scheduled = s?.windowMode === "terjadwal";
@@ -1657,7 +1656,6 @@ function SessionImportDialog({ sessionId }) {
     setParseError("");
     setPreview(null);
     if (!file) return;
-    setFileName(file.name);
     const csv = await file.text();
     try {
       const r = await api(`/api/admin/mockup/sessions/${sessionId}/import`, { method: "POST", body: { csv } });
@@ -1690,19 +1688,18 @@ function SessionImportDialog({ sessionId }) {
     <Modal id="dlg-import" className="dialog dialog--import" focus="#si-file" onClose={closeDialog}>
       <Head title="Impor peserta" sub={s ? `${s.name}. ${scheduled ? "Sesi terjadwal: setiap baris membawa tanggal dan jam tesnya." : "Sesi fleksibel: semua peserta memakai rentang sesi."}` : ""} />
       <div className="dialog__body">
-        <div className="toolbar">
+        <div className="si-row">
           <button className="btn btn--quiet btn--sm" type="button" onClick={downloadTemplate}><Icon name="download" />Unduh template</button>
-          <p className="toolbar__meta">CSV dengan header: {header}. Nomor WhatsApp menerima 08, 628, atau +62.</p>
+          <p className="si-row__meta">Header: <span className="tnum">{header}</span>. Nomor WhatsApp menerima 08, 628, atau +62.</p>
         </div>
         <div className="field">
           <label className="label" htmlFor="si-file">Berkas CSV</label>
-          <input className="input" id="si-file" type="file" accept=".csv,text/csv" onChange={readFile} />
-          {fileName ? <p className="hint">{fileName}</p> : null}
+          <input className="si-file" id="si-file" type="file" accept=".csv,text/csv" onChange={readFile} />
         </div>
         {parseError ? <p className="error" role="alert">{parseError}</p> : null}
         {preview ? <>
-          <p className="hint">
-            {preview.counts.total} baris &middot; {preview.counts.newStudents} siswa baru &middot; {preview.counts.existingStudents} siswa lama &middot; {preview.counts.skipped} sudah punya undangan &middot; {preview.counts.invalid} bermasalah
+          <p className="si-counts">
+            <strong className="tnum">{preview.counts.total}</strong> baris &middot; <strong className="tnum">{preview.counts.newStudents}</strong> siswa baru &middot; <strong className="tnum">{preview.counts.existingStudents}</strong> siswa lama &middot; <strong className="tnum">{preview.counts.skipped}</strong> sudah punya undangan &middot; <strong className="tnum">{preview.counts.invalid}</strong> bermasalah
           </p>
           {preview.rows.length ? <div className="table-wrap si-preview"><table className="table">
             <caption className="sr-only">Pratinjau impor</caption>
@@ -1728,7 +1725,7 @@ function SessionImportDialog({ sessionId }) {
       </div>
       <div className="dialog__foot">
         <FootEnd>
-          <button className="link-btn" type="button" onClick={closeDialog}>Batal</button>
+          <button className="btn btn--quiet" type="button" onClick={closeDialog}>Batal</button>
           <button className="btn btn--primary" type="button" id="si-confirm" disabled={!preview || bad.length || !good.length} onClick={confirm}>
             Impor {good.length ? `${good.length} peserta` : ""}
           </button>
