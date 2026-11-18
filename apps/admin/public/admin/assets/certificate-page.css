@@ -2,15 +2,14 @@
    The certificate itself is styled by its own template CSS in apps/admin/certificates.
    Nothing here is printed except the DIBATALKAN mark. */
 
-.cert-view { padding-top: 96px; }
+.cert-view { padding-top: 0; }
 
 .cert-bar {
-  position: fixed;
+  position: sticky;
   top: 0;
-  left: 0;
-  right: 0;
   z-index: 10;
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 16px;
   padding: 12px 24px;
@@ -54,11 +53,14 @@
 .cert-bar a:focus-visible,
 .cert-bar__print:focus-visible { outline: none; box-shadow: 0 0 0 3px rgba(195, 207, 224, .55); }
 
-/* The send row of the bar: upload the printed PDF, then send it to the student. */
+/* The send row of the bar: the PDF is made automatically on send, and the upload replaces it
+   with a hand-made file. It sits on its own line so the addresses and buttons stay readable. */
 .cert-send {
-  flex: none;
+  flex: 1 1 100%;
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
+  justify-content: flex-end;
   gap: 10px;
 }
 
@@ -109,17 +111,13 @@
 .cert-send__btn[disabled] { opacity: .55; cursor: default; }
 
 @media (max-width: 900px) {
-  .cert-send { flex-wrap: wrap; }
+  .cert-send { justify-content: flex-start; }
   .cert-send__state { max-width: 100%; }
-  .cert-bar { flex-wrap: wrap; }
 }
 
 .cert-note {
-  position: absolute;
-  top: 62px;
-  left: 0;
-  right: 0;
-  margin: 0;
+  margin: 12px auto 0;
+  max-width: 820px;
   padding: 0 24px;
   text-align: center;
   color: #5C6B7F;

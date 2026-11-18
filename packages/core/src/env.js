@@ -38,6 +38,10 @@ export function buildEnv(source = process.env) {
     GEMINI_API_KEY: String(source.GEMINI_API_KEY || "").trim(),
     GEMINI_MODEL: String(source.GEMINI_MODEL || "").trim(),
     GEMINI_MOCK: String(source.GEMINI_MOCK || "").trim(),
+    // Certificate PDFs through Cloudflare Browser Run. The mailer reads its own token from the
+    // raw source, so only these two travel on the shared env object.
+    CLOUDFLARE_ACCOUNT_ID: String(source.CLOUDFLARE_ACCOUNT_ID || "").trim(),
+    CLOUDFLARE_BROWSER_TOKEN: String(source.CLOUDFLARE_BROWSER_TOKEN || "").trim(),
     WEB_PORT: webPort,
     ADMIN_PORT: adminPort,
   };

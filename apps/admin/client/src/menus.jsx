@@ -152,23 +152,19 @@ export function contextMenu(kind, id) {
     if (s && route().parts[0] !== "siswa") items.push({ label: "Buka profil siswa", icon: "user", run: () => { location.hash = `#/siswa/${s.id}`; } });
     if (!c.revokedAt && s) {
       items.push({ sep: true });
-      // Neither channel has anything to attach before the printed PDF is uploaded, so the menu
-      // offers that step right here instead of two dead send items.
-      if (!c.pdf) {
-        items.push({ label: "Unggah PDF hasil cetak", icon: "upload", run: () => uploadCertificatePdf(c) });
-      } else {
-        items.push({
-          label: s.email ? (c.emailSentAt ? "Kirim ulang email" : "Kirim email") : "Kirim email, siswa belum punya email",
-          icon: "mail", disabled: !s.email,
-          run: () => mutate(() => api(`/api/admin/certificates/${c.id}/send-email`, { method: "POST" }), `Sertifikat ${c.number} dikirim ke email ${s.email}.`),
-        });
-        items.push({
-          label: s.wa ? (c.waSentAt ? "Kirim ulang WhatsApp" : "Kirim WhatsApp") : "Kirim WhatsApp, siswa belum punya nomor",
-          icon: "message", disabled: !s.wa,
-          run: () => mutate(() => api(`/api/admin/certificates/${c.id}/send-whatsapp`, { method: "POST" }), `Sertifikat ${c.number} dikirim lewat WhatsApp.`),
-        });
-        items.push({ label: "Ganti PDF sertifikat", icon: "upload", run: () => uploadCertificatePdf(c) });
-      }
+      // The server renders the PDF automatically on send, so the sends are always offered. The
+      // upload is the override for a hand-made file, never a requirement.
+      items.push({
+        label: s.email ? (c.emailSentAt ? "Kirim ulang email" : "Kirim email") : "Kirim email, siswa belum punya email",
+        icon: "mail", disabled: !s.email,
+        run: () => { toast("Membuat PDF dan mengirim email..."); mutate(() => api(`/api/admin/certificates/${c.id}/send-email`, { method: "POST" }), `Sertifikat ${c.number} dikirim ke email ${s.email}.`); },
+      });
+      items.push({
+        label: s.wa ? (c.waSentAt ? "Kirim ulang WhatsApp" : "Kirim WhatsApp") : "Kirim WhatsApp, siswa belum punya nomor",
+        icon: "message", disabled: !s.wa,
+        run: () => { toast("Membuat PDF dan mengirim WhatsApp..."); mutate(() => api(`/api/admin/certificates/${c.id}/send-whatsapp`, { method: "POST" }), `Sertifikat ${c.number} dikirim lewat WhatsApp.`); },
+      });
+      items.push({ label: c.pdf ? "Ganti PDF sertifikat" : "Unggah PDF sendiri", icon: "upload", run: () => uploadCertificatePdf(c) });
     }
     items.push({ sep: true });
     items.push(c.revokedAt

@@ -1,5 +1,7 @@
 // The certificate page's own controls. It lives in its own file because the page sends a strict
-// CSP, so no inline script: the print button, the PDF upload, and the two send buttons.
+// CSP, so no inline script: the print button, the PDF upload, and the two send buttons. The
+// server renders the PDF automatically when a send starts; the upload only replaces it with a
+// hand-made file.
 document.getElementById("cert-print")?.addEventListener("click", () => window.print());
 
 (function () {
@@ -11,17 +13,12 @@ document.getElementById("cert-print")?.addEventListener("click", () => window.pr
   const uploadLabel = box.querySelector(".cert-send__upload");
   const emailBtn = document.getElementById("cert-send-email");
   const waBtn = document.getElementById("cert-send-wa");
+  const emailLabel = emailBtn?.textContent || "";
+  const waLabel = waBtn?.textContent || "";
 
   function flash(text, ok) {
     state.textContent = text;
     state.classList.toggle("is-ok", Boolean(ok));
-  }
-
-  function toggleButtons() {
-    const hasPdf = box.dataset.pdf === "1";
-    emailBtn.hidden = !(hasPdf && box.dataset.email);
-    waBtn.hidden = !(hasPdf && box.dataset.whatsapp);
-    if (hasPdf) uploadLabel.classList.add("is-done");
   }
 
   async function post(path, options) {
@@ -45,13 +42,12 @@ document.getElementById("cert-print")?.addEventListener("click", () => window.pr
         body: file,
       });
       box.dataset.pdf = "1";
-      flash(`PDF tersimpan: ${file.name}. Sekarang bisa dikirim ke siswa.`, true);
+      flash(`PDF tersimpan: ${file.name}.`, true);
     } catch (error) {
       flash(error.message);
     } finally {
       uploadLabel.classList.remove("is-busy");
       input.value = "";
-      toggleButtons();
     }
   });
 
@@ -64,7 +60,7 @@ document.getElementById("cert-print")?.addEventListener("click", () => window.pr
       flash("Email sertifikat terkirim.", true);
     } catch (error) {
       emailBtn.disabled = false;
-      emailBtn.textContent = "Kirim email";
+      emailBtn.textContent = emailLabel;
       flash(error.message);
     }
   });
@@ -78,10 +74,8 @@ document.getElementById("cert-print")?.addEventListener("click", () => window.pr
       flash("Sertifikat terkirim lewat WhatsApp.", true);
     } catch (error) {
       waBtn.disabled = false;
-      waBtn.textContent = "Kirim WhatsApp";
+      waBtn.textContent = waLabel;
       flash(error.message);
     }
   });
-
-  toggleButtons();
 })();

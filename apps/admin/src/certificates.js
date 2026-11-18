@@ -323,7 +323,8 @@ export async function updateCertificate(request, env, user, url, id) {
   const details = { ...readDetails(template, body.details), penanda_tangan: old.penanda_tangan ?? "", jabatan: old.jabatan ?? "" };
   const now = nowSeconds();
   const statements = [
-    env.DB.prepare("UPDATE certificates SET recipient_name = ?, details = ?, updated_at = ?, updated_by = ? WHERE id = ?")
+    // The stored PDF shows the old name or scores, so the next send renders it again.
+    env.DB.prepare("UPDATE certificates SET recipient_name = ?, details = ?, pdf = NULL, pdf_name = NULL, pdf_bytes = NULL, updated_at = ?, updated_by = ? WHERE id = ?")
       .bind(recipient, JSON.stringify(details), now, user.name, id),
   ];
   if (c.student_id) statements.push(addActivity(env, c.student_id, "sertifikat", `Mengubah data sertifikat nomor ${c.number}.`, user.name, { certificateId: id }, now));
@@ -351,11 +352,80 @@ export async function certificateAction(request, env, user, url, id, action) {
 }
 
 /* ===================== Sending the certificate to the student ===================== */
-// The team prints the certificate to PDF with the print dialog, uploads that exact file here,
-// and then sends it on both channels. The WhatsApp send needs a URL AttCos can fetch, so the
-// row carries a random token and the admin app serves the file at /cert-file/<token>.
+// The PDF is rendered from the same template the print page uses, by Cloudflare Browser Run, at
+// the moment the team presses send. The upload stays as an override for a hand-made file. The
+// WhatsApp send needs a URL AttCos can fetch, so the row carries a random token and the admin
+// app serves the file at /cert-file/<token>.
 
 const PDF_MAX_BYTES = 5 * 1024 * 1024;
+const BROWSER_PDF_API = "https://api.cloudflare.com/client/v4";
+const BROWSER_PDF_TIMEOUT = 45000;
+
+/** The template HTML with its own stylesheets and drawings inlined, because Browser Run renders
+ *  the string without a base URL. Replacement functions keep a "$" in the CSS from being read
+ *  as a pattern. */
+export async function certificatePdfHtml(templateKey, values) {
+  const template = TEMPLATES[templateKey];
+  if (!template) return null;
+  let html = fillTemplate(await readFile(resolve(CERT_DIR, template.file), "utf8"), values);
+  for (const match of [...html.matchAll(/<link rel="stylesheet" href="([^"]+)">/g)]) {
+    const css = await readFile(resolve(CERT_DIR, match[1]), "utf8");
+    html = html.replace(match[0], () => `<style>\n${css}\n</style>`);
+  }
+  for (const match of [...html.matchAll(/src="([^"]+\.svg)"/g)]) {
+    const svg = await readFile(resolve(CERT_DIR, match[1]));
+    html = html.replace(match[0], () => `src="data:image/svg+xml;base64,${svg.toString("base64")}"`);
+  }
+  return html;
+}
+
+/** Renders the certificate to a PDF with Cloudflare Browser Run, stores it on the row, and
+ *  returns the row with the bytes. A missing token or a failed render is a clear 5xx, and the
+ *  team can still upload a PDF by hand. */
+async function generateCertificatePdf(env, c, user) {
+  if (!env.CLOUDFLARE_BROWSER_TOKEN) {
+    throw new HttpError(503, "PDF sertifikat belum bisa dibuat otomatis di server ini. Isi CLOUDFLARE_BROWSER_TOKEN, atau unggah PDF-nya dari halaman cetak.");
+  }
+  const template = TEMPLATES[c.template];
+  if (!template) throw new HttpError(409, "Template sertifikat ini tidak ditemukan, jadi PDF-nya tidak bisa dibuat.");
+  const html = await certificatePdfHtml(c.template, certificateValues(c, template, parseDetails(c.details)));
+  let response;
+  try {
+    response = await fetch(`${BROWSER_PDF_API}/accounts/${env.CLOUDFLARE_ACCOUNT_ID}/browser-rendering/pdf`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${env.CLOUDFLARE_BROWSER_TOKEN}`, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        html,
+        pdfOptions: { format: "a4", printBackground: true, preferCSSPageSize: true, margin: { top: 0, right: 0, bottom: 0, left: 0 } },
+        gotoOptions: { waitUntil: "load", timeout: 30000 },
+        actionTimeout: 30000,
+      }),
+      signal: AbortSignal.timeout(BROWSER_PDF_TIMEOUT),
+    });
+  } catch (error) {
+    throw new HttpError(502, `PDF sertifikat gagal dibuat: ${String(error.message || error).slice(0, 160)}`);
+  }
+  if (!response.ok) {
+    const data = await response.json().catch(() => null);
+    const message = data?.errors?.[0]?.message || `HTTP ${response.status}`;
+    throw new HttpError(502, `PDF sertifikat gagal dibuat: ${String(message).slice(0, 160)}`);
+  }
+  const pdf = Buffer.from(await response.arrayBuffer());
+  if (pdf.length < 4 || pdf.subarray(0, 4).toString("latin1") !== "%PDF") {
+    throw new HttpError(502, "Layanan PDF mengirim berkas yang bukan PDF. Coba lagi.");
+  }
+  if (pdf.length > PDF_MAX_BYTES) throw new HttpError(502, "PDF hasil render lebih dari 5 MB, jadi tidak disimpan. Periksa template sertifikatnya.");
+  const name = `${c.number.replace(/[^\w-]+/g, "-")}.pdf`;
+  // The token is minted once and kept, so earlier links stay valid when the file is replaced.
+  const token = c.pdf_token || randomToken(24);
+  await env.DB.prepare("UPDATE certificates SET pdf = ?, pdf_name = ?, pdf_bytes = ?, pdf_token = ?, pdf_uploaded_at = ?, pdf_uploaded_by = ? WHERE id = ?")
+    .bind(pdf, name, pdf.length, token, nowSeconds(), user?.name || "Sistem", c.id).run();
+  return { ...c, pdf, pdf_name: name, pdf_bytes: pdf.length, pdf_token: token };
+}
+
+async function ensureCertificatePdf(env, c, user) {
+  return c.pdf ? c : generateCertificatePdf(env, c, user);
+}
 
 export async function uploadCertificatePdf(request, env, user, url, id) {
   const c = await getCertificateRow(env, id);
@@ -395,17 +465,17 @@ async function studentOfCertificate(env, c) {
   return s;
 }
 
-function requirePdf(c) {
+function requireSendable(c) {
   if (c.revoked_at) throw new HttpError(409, "Sertifikat yang dibatalkan tidak bisa dikirim. Pulihkan dulu kalau masih dipakai.");
-  if (!c.pdf) throw new HttpError(409, "Belum ada PDF di sertifikat ini. Buka halaman cetaknya, simpan PDF-nya, lalu unggah dari bilah atasnya.");
 }
 
 export async function sendCertificateEmail(request, env, user, url, id) {
   const c = await getCertificateRow(env, id);
-  requirePdf(c);
+  requireSendable(c);
   const s = await studentOfCertificate(env, c);
   if (!s.email) throw new HttpError(409, "Siswa ini belum punya alamat email. Lengkapi dulu di profilnya.");
   if (!env.SEND_EMAIL) throw new HttpError(503, "Pengiriman email belum diatur di server ini.");
+  const withPdf = await ensureCertificatePdf(env, c, user);
   const type = await env.DB.prepare("SELECT name FROM certificate_types WHERE id = ?").bind(c.type_id).first();
   const mail = buildCertificateEmail({ name: c.recipient_name, typeName: type?.name || "Sertifikat", number: c.number });
   try {
@@ -415,7 +485,7 @@ export async function sendCertificateEmail(request, env, user, url, id) {
       subject: mail.subject,
       html: mail.html,
       text: mail.text,
-      attachments: [{ content: c.pdf.toString("base64"), filename: c.pdf_name || "sertifikat.pdf" }],
+      attachments: [{ content: withPdf.pdf.toString("base64"), filename: withPdf.pdf_name || "sertifikat.pdf" }],
     });
   } catch (error) {
     throw new HttpError(502, `Email sertifikat gagal terkirim: ${String(error.message || error).slice(0, 160)}`);
@@ -431,18 +501,19 @@ export async function sendCertificateEmail(request, env, user, url, id) {
 
 export async function sendCertificateWhatsApp(request, env, user, url, id) {
   const c = await getCertificateRow(env, id);
-  requirePdf(c);
+  requireSendable(c);
   const s = await studentOfCertificate(env, c);
   if (!s.whatsapp) throw new HttpError(409, "Siswa ini belum punya nomor WhatsApp. Lengkapi dulu di profilnya.");
   if (!whatsappConfigured(env)) throw new HttpError(503, "Integrasi WhatsApp belum diatur di server ini.");
+  const withPdf = await ensureCertificatePdf(env, c, user);
   // AttCos fetches the document from this public, unguessable link.
-  const fileUrl = `${url.origin}/cert-file/${c.pdf_token}`;
+  const fileUrl = `${url.origin}/cert-file/${withPdf.pdf_token}`;
   const first = String(c.recipient_name || s.name).trim().split(/\s+/)[0];
   const message = `Halo ${first}, ini sertifikat kamu dari Titik Nol English Course. Filenya terlampir, silakan disimpan.`;
   const result = await sendWhatsApp(env, {
     to: s.whatsapp,
     text: message,
-    media: { kind: "document", url: fileUrl, filename: c.pdf_name || "sertifikat.pdf" },
+    media: { kind: "document", url: fileUrl, filename: withPdf.pdf_name || "sertifikat.pdf" },
   });
   const now = nowSeconds();
   const statements = [
@@ -463,8 +534,8 @@ export async function sendCertificateWhatsApp(request, env, user, url, id) {
 /* ===================== Printable page ===================== */
 const PAGE_HEAD = `<meta name="robots" content="noindex, nofollow">
 <link rel="icon" href="/favicon.svg" type="image/svg+xml">
-<link rel="stylesheet" href="/admin/assets/certificate-page.css?v=3">
-<script src="/admin/assets/certificate-page.js?v=3" defer></script>`;
+<link rel="stylesheet" href="/admin/assets/certificate-page.css?v=4">
+<script src="/admin/assets/certificate-page.js?v=4" defer></script>`;
 
 function fillTemplate(html, values) {
   return html.replace(/\{\{(\w+)\}\}/g, (_, key) => escapeHtml(values[key] ?? ""));
@@ -472,11 +543,11 @@ function fillTemplate(html, values) {
 
 function barHtml({ info, note, back, send = null }) {
   const sendHtml = send ? `
-  <div class="cert-send" data-cert-id="${send.id}" data-pdf="${send.hasPdf ? "1" : "0"}" data-email="${escapeHtml(send.email)}" data-whatsapp="${escapeHtml(send.whatsapp)}">
-    <label class="cert-send__upload"><input type="file" id="cert-pdf-input" accept="application/pdf,.pdf" hidden /> Unggah PDF</label>
-    <span class="cert-send__state" id="cert-pdf-state">${send.hasPdf ? `PDF tersimpan: ${escapeHtml(send.pdfName)}` : "Belum ada PDF. Cetak, simpan PDF-nya, lalu unggah di sini."}</span>
-    <button class="cert-send__btn" type="button" id="cert-send-email" hidden>${send.emailSentAt ? "Kirim ulang email" : "Kirim email"}${send.email ? ` ke ${escapeHtml(send.email)}` : ""}</button>
-    <button class="cert-send__btn" type="button" id="cert-send-wa" hidden>Kirim WhatsApp${send.whatsapp ? ` ke ${escapeHtml(send.whatsapp)}` : ""}</button>
+  <div class="cert-send" data-cert-id="${send.id}" data-pdf="${send.hasPdf ? "1" : "0"}">
+    <span class="cert-send__state" id="cert-pdf-state">${send.hasPdf ? `PDF tersimpan: ${escapeHtml(send.pdfName)}` : "PDF dibuat otomatis saat dikirim."}</span>
+    ${send.email ? `<button class="cert-send__btn" type="button" id="cert-send-email">${send.emailSentAt ? "Kirim ulang email" : "Kirim email"} ke ${escapeHtml(send.email)}</button>` : ""}
+    ${send.whatsapp ? `<button class="cert-send__btn" type="button" id="cert-send-wa">Kirim WhatsApp ke ${escapeHtml(send.whatsapp)}</button>` : ""}
+    <label class="cert-send__upload"><input type="file" id="cert-pdf-input" accept="application/pdf,.pdf" hidden /> ${send.hasPdf ? "Ganti PDF" : "Unggah PDF sendiri"}</label>
   </div>` : "";
   return `<div class="cert-bar" role="region" aria-label="Aksi sertifikat">
   <a class="cert-bar__back" href="${back}">Kembali ke dasbor</a>
@@ -503,6 +574,15 @@ function templateValues(template, source) {
   const values = {};
   for (const f of template.fields) values[f.key] = f.type === "date" ? englishDate(source[f.key] || "") : source[f.key] ?? "";
   return values;
+}
+
+/** The values a certificate's template needs, from the row and its stored details. */
+function certificateValues(c, template, details) {
+  return {
+    ...templateValues(template, details),
+    nomor: c.number, nama: c.recipient_name, tanggal: englishDate(isoFromSeconds(c.issued_at)),
+    penanda_tangan: details.penanda_tangan ?? "", jabatan: details.jabatan ?? "",
+  };
 }
 
 /** The page for an issued certificate (crt_...) or a sample of a certificate type (ctp_...). */
@@ -543,11 +623,7 @@ export async function certificatePage(env, id) {
   } : null;
   return renderCertificateHtml({
     templateKey: c.template,
-    values: {
-      ...templateValues(template, details),
-      nomor: c.number, nama: c.recipient_name, tanggal: englishDate(isoFromSeconds(c.issued_at)),
-      penanda_tangan: details.penanda_tangan ?? "", jabatan: details.jabatan ?? "",
-    },
+    values: certificateValues(c, template, details),
     title: `${c.recipient_name}, ${c.type_name}`,
     info: `${escapeHtml(c.type_name)} nomor ${escapeHtml(c.number)} untuk ${escapeHtml(c.recipient_name)}`,
     note: revoked

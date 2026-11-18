@@ -27,6 +27,7 @@ Starting updates the database schema when needed, builds the React test runner f
 | Database | `DATABASE_URL` in `.env`, the Neon connection string |
 | Ports and public addresses | `WEB_PORT`, `ADMIN_PORT`, `PUBLIC_WEB_URL`, `ADMIN_URL` in `.env`. Test links sent from the dashboard use `PUBLIC_WEB_URL` |
 | Result email | `CLOUDFLARE_ACCOUNT_ID`, `CLOUDFLARE_EMAIL_TOKEN`, `RESULT_FROM_EMAIL` in `.env`. Leave the token empty to skip emails |
+| Certificate PDF | `CLOUDFLARE_BROWSER_TOKEN` in `.env`, on the dashboard service only. Leave it empty and a certificate send asks for an uploaded PDF |
 | WhatsApp through AttCos | `ATTCOS_API_KEY`, `ATTCOS_CHANNEL_ID`, `ATTCOS_API_BASE` in `.env` |
 | Questions, timing, violation limit, pass score, levels | Dashboard, each test's Pengaturan and Soal & Jawaban |
 | Programs, periods, classes, tutors | Dashboard, Program & Kelas |
@@ -65,6 +66,7 @@ Both build with `npm ci --no-audit --no-fund` from `dev-tnec/tnec-placement-test
 |---|---|---|
 | `DATABASE_URL`, `TRUST_PROXY=1`, `PUBLIC_WEB_URL` | Yes | Yes |
 | `CLOUDFLARE_ACCOUNT_ID`, `CLOUDFLARE_EMAIL_TOKEN`, `RESULT_FROM_EMAIL` | Yes | Yes |
+| `CLOUDFLARE_BROWSER_TOKEN` | No | Yes, for the certificate PDF |
 | `ATTCOS_API_BASE`, `ATTCOS_CHANNEL_ID`, `ATTCOS_API_KEY` | Yes, for the automatic result WhatsApp | Yes |
 | `GEMINI_API_KEY`, `GEMINI_MODEL` | Yes, for Writing scoring | Yes, for re-scoring Writing |
 | `SPEECHACE_KEY`, `SPEECHACE_API_BASE` | Yes, for Speaking scoring | Yes, for re-scoring Speaking |

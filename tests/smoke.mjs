@@ -33,7 +33,7 @@ import {
 import { buildEnv } from "@tnec/core/env";
 import { announceSetup, createAdminHandler } from "../apps/admin/server.js";
 import {
-  BUILT_IN_FIELDS, CERT_DIR, TEMPLATES, englishDate, formatCertificateNumber, isIsoDate,
+  BUILT_IN_FIELDS, CERT_DIR, TEMPLATES, certificatePdfHtml, englishDate, formatCertificateNumber, isIsoDate,
   numberFormatProblem, numberPattern, periodKey, renderCertificateHtml,
 } from "../apps/admin/src/certificates.js";
 
@@ -551,6 +551,20 @@ assert.ok(certHtml.includes("<title>Rani $&amp;</title>"));
 assert.ok(certHtml.includes('class="cert-void"'), "a cancelled certificate carries the DIBATALKAN mark");
 assert.ok(certHtml.includes('href="logo.css"'), "the template keeps its relative stylesheet links");
 assert.equal(/\{\{\w+\}\}/.test(certHtml), false, "no placeholder is left on the page");
+
+// The PDF render sends the template as one string to Cloudflare, so its own stylesheets and
+// drawings must travel inside it; a relative link or image would load nothing there.
+const pdfHtml = await certificatePdfHtml("completion", {
+  nomor: "1/COMP/TNEC/XI/2026", nama: "Rani", tanggal: "15 November 2026", penanda_tangan: "A", jabatan: "B",
+  program: "General English", nilai_akhir: "87", listening_nilai: "88", listening_grade: "A",
+  speaking_nilai: "85", speaking_grade: "A", reading_nilai: "90", reading_grade: "A",
+  writing_nilai: "84", writing_grade: "B", mulai: "12 August 2026", selesai: "15 November 2026",
+});
+assert.equal(/<link rel="stylesheet"/.test(pdfHtml), false, "the PDF HTML carries no stylesheet link");
+assert.equal(/src="[^"]+\.svg"/.test(pdfHtml), false, "the PDF HTML carries no relative drawing");
+assert.ok(pdfHtml.includes("data:image/svg+xml;base64,"), "the drawing travels as a data URI");
+assert.ok(pdfHtml.includes("@page { size: A4 portrait"), "the template's page size travels with the PDF HTML");
+assert.equal(await certificatePdfHtml("nope", {}), null, "an unknown template has no PDF HTML");
 
 // The React test runner build output is committed too, so Render needs no build command.
 // The Node build writes runner-manifest.json, and the web server builds the shell from it.
