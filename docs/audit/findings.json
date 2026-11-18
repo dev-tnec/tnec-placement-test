@@ -1,0 +1,1528 @@
+[
+ {
+  "verdict": "confirmed",
+  "fingerprint": "admin-auth/lockout-parallel-bypass",
+  "title": "Concurrent logins defeat the 5-failure account lockout through a lost-update on failed_logins",
+  "description": "The per-account lockout is the only online-guessing brake on the admin login, and a trivial parallel request pattern fully defeats it: each concurrent wave of wrong-password requests advances the JavaScript-computed counter by about one.",
+  "root_cause": "login reads the user row, checks locked_until on that stale copy, and writes failed_logins = user.failed_logins + 1 as an absolute value computed in JavaScript from the pre-read row (apps/admin/src/api.js:190-200). Concurrent wrong-password requests all read the same counter and each write the same +1, so LOCK_AFTER=5 is reached only after roughly 5 waves of any size. No IP throttle exists anywhere in the admin app or node-server.js.",
+  "intended_behavior": "Five wrong passwords lock the account for 15 minutes (LOCK_AFTER=5, LOCK_SECONDS=900 at api.js:66-67), the documented anti-guessing control.",
+  "trace": [
+   {
+    "kind": "entrypoint",
+    "file": "apps/admin/src/api.js",
+    "line": 185,
+    "scope": "POST /api/admin/login",
+    "description": "Unauthenticated route, 4 KB body cap, no IP throttle."
+   },
+   {
+    "kind": "propagation",
+    "file": "apps/admin/src/api.js",
+    "line": 190,
+    "scope": "login user read",
+    "description": "SELECT reads the row; the lock check at 193-195 runs on this stale copy."
+   },
+   {
+    "kind": "propagation",
+    "file": "apps/admin/src/api.js",
+    "line": 197,
+    "scope": "failed counter computed in JS",
+    "description": "failed = user.failed_logins + 1 from the pre-read row, then an absolute UPDATE."
+   },
+   {
+    "kind": "sink",
+    "file": "apps/admin/src/api.js",
+    "line": 66,
+    "scope": "LOCK_AFTER constant",
+    "description": "The 15 minute lock never engages under concurrency."
+   }
+  ],
+  "evidence": [
+   {
+    "file": "apps/admin/src/api.js",
+    "line": 190,
+    "description": "The read side of the read-modify-write."
+   },
+   {
+    "file": "apps/admin/src/api.js",
+    "line": 197,
+    "description": "Counter computed in JavaScript from the stale row."
+   },
+   {
+    "file": "apps/admin/src/api.js",
+    "line": 198,
+    "description": "Absolute UPDATE SET failed_logins = ? with the computed value."
+   },
+   {
+    "file": "packages/core/src/crypto.js",
+    "line": 6,
+    "description": "Each guess still pays one 600,000-iteration PBKDF2 verify, bounding throughput but not the total guess count."
+   }
+  ],
+  "conditions": [
+   {
+    "kind": "authentication_level",
+    "description": "Unauthenticated internet user with a known admin email."
+   }
+  ],
+  "execution": {
+   "attacker_perspective": "An unauthenticated attacker targeting a known admin email sends 5+ simultaneous wrong-password requests per wave; each wave advances the counter by about one while consuming many guesses, so the account never locks and guessing continues indefinitely at KDF speed.",
+   "payloads": [
+    "5+ concurrent POST /api/admin/login bodies with wrong passwords"
+   ],
+   "instructions": [
+    "Read the counter computation at api.js:197 and note it is JavaScript-side from the row read at 190",
+    "Send simultaneous wrong-password requests and observe failed_logins advances by about one per wave"
+   ],
+   "observed_result": "Source-only analysis on this run: the read-modify-write is directly source-visible at the cited lines; no runtime execution was permitted on the Windows host."
+  },
+  "remediation": {
+   "strategy": "Make the increment atomic in SQL: UPDATE admin_users SET failed_logins = failed_logins + 1, locked_until = CASE WHEN failed_logins + 1 >= 5 THEN now + 900 END WHERE id = ? RETURNING failed_logins, locked_until, and gate the 401 on the returned values; optionally add a per-IP login throttle."
+  },
+  "severity": {
+   "likelihood": {
+    "score": "medium",
+    "reason": "A trivial parallel request pattern defeats the only lockout control."
+   },
+   "impact": {
+    "score": "medium",
+    "reason": "The lockout is fully defeated; guessing throughput remains bounded by the 600k-iteration KDF, so this matters against weak or leaked passwords."
+   },
+   "overall_severity": "medium"
+  },
+  "confidence": {
+   "score": "high",
+   "reason": "The counter computation and absolute write are directly source-visible; no runtime dependency."
+  }
+ },
+ {
+  "verdict": "confirmed",
+  "fingerprint": "admin-auth/login-user-enumeration-timing",
+  "title": "Login timing distinguishes existing admin emails from unknown ones",
+  "description": "An unauthenticated attacker can confirm which staff emails have active admin accounts by response time, feeding the lockout race above.",
+  "root_cause": "login returns 401 for an unknown or inactive email at line 192 before any KDF work, while a known email runs verifyPassword at line 196, which is PBKDF2-SHA256 at 600,000 iterations (apps/admin/src/api.js:190-201, packages/core/src/crypto.js:6). No dummy verify exists on the unknown path.",
+  "intended_behavior": "The 401 body is identical in both branches so content does not enumerate; only the timing does.",
+  "trace": [
+   {
+    "kind": "entrypoint",
+    "file": "apps/admin/src/api.js",
+    "line": 185,
+    "scope": "POST /api/admin/login",
+    "description": "Unauthenticated."
+   },
+   {
+    "kind": "propagation",
+    "file": "apps/admin/src/api.js",
+    "line": 190,
+    "scope": "user lookup",
+    "description": "SELECT by email."
+   },
+   {
+    "kind": "sink",
+    "file": "apps/admin/src/api.js",
+    "line": 192,
+    "scope": "early 401",
+    "description": "Unknown email returns before any KDF work; a known email pays the full 600k-iteration deriveBits first."
+   }
+  ],
+  "evidence": [
+   {
+    "file": "apps/admin/src/api.js",
+    "line": 192,
+    "description": "Early return for unknown or inactive emails."
+   },
+   {
+    "file": "apps/admin/src/api.js",
+    "line": 196,
+    "description": "verifyPassword on the known-email path."
+   },
+   {
+    "file": "packages/core/src/crypto.js",
+    "line": 6,
+    "description": "PBKDF2_ITERATIONS = 600000; typically 100 to 400 ms per verify."
+   }
+  ],
+  "conditions": [
+   {
+    "kind": "authentication_level",
+    "description": "Unauthenticated remote attacker."
+   }
+  ],
+  "execution": {
+   "attacker_perspective": "An unauthenticated attacker compares median response times for candidate emails against a known-nonexistent control; existing accounts show a consistent KDF-sized delay.",
+   "payloads": [
+    "POST /api/admin/login with candidate emails and a dummy password"
+   ],
+   "instructions": [
+    "Compare median response times across candidate emails"
+   ],
+   "observed_result": "Source-only analysis: the control-flow difference is directly source-visible; the KDF magnitude is a property of the iteration count."
+  },
+  "remediation": {
+   "strategy": "Run verifyPassword against a fixed dummy hash on the unknown-email path before returning the same 401, so both branches cost one KDF."
+  },
+  "severity": {
+   "likelihood": {
+    "score": "medium",
+    "reason": "Requires only network proximity and enough samples to beat transport noise."
+   },
+   "impact": {
+    "score": "low",
+    "reason": "Confirms account existence only; no password information leaks."
+   },
+   "overall_severity": "low"
+  },
+  "confidence": {
+   "score": "high",
+   "reason": "The code order is directly source-visible."
+  }
+ },
+ {
+  "verdict": "rejected",
+  "fingerprint": "admin-auth/setup-code-unlimited-guesses",
+  "title": "First-admin setup code can be guessed without any limit during the bootstrap window",
+  "description": "The setup code check has no throttle or counter and a non-constant-time compare, but the code carries roughly 40 bits of entropy in an 8-character alphanumeric code, and the window closes the moment the first admin exists, so online guessing is infeasible by many orders of magnitude.",
+  "claimed_root_cause": "The setup code check in setupFirstAdmin has no throttle or attempt counter and compares with a plain inequality, so the code can be guessed online without limit.",
+  "trace": [
+   {
+    "kind": "entrypoint",
+    "file": "apps/admin/src/api.js",
+    "line": 240,
+    "scope": "setup code check",
+    "description": "No counter, non-constant-time compare."
+   },
+   {
+    "kind": "propagation",
+    "file": "apps/admin/server.js",
+    "line": 42,
+    "scope": "code generation",
+    "description": "randomToken(6) filtered to alphanumerics, sliced to 8 characters, uppercased; on Render a fixed ADMIN_SETUP_CODE chosen by the owner is used instead."
+   },
+   {
+    "kind": "sink",
+    "file": "apps/admin/src/api.js",
+    "line": 239,
+    "scope": "bootstrap window",
+    "description": "Closes the moment the first admin exists."
+   }
+  ],
+  "evidence": [
+   {
+    "file": "apps/admin/src/api.js",
+    "line": 240,
+    "description": "The plain compare."
+   },
+   {
+    "file": "packages/core/src/crypto.js",
+    "line": 18,
+    "description": "randomToken from crypto.getRandomValues."
+   },
+   {
+    "file": "apps/admin/src/api.js",
+    "line": 261,
+    "description": "The code is nulled after success."
+   }
+  ],
+  "reason": "The factual observations hold (no throttle, non-constant-time compare), but the exploit is infeasible: the target is an 8-character alphanumeric code with roughly 40 bits of entropy (on Render a fixed ADMIN_SETUP_CODE chosen by the owner instead), the endpoint disappears the moment the first admin is created, a window of minutes on a fresh deploy, and even ignoring the window, unlimited online guessing at 100 requests per second needs centuries to cover the space, while the window itself allows only a few thousand guesses. An attacker who somehow won would create an account the owner discovers immediately. This is a hardening note (constant-time compare plus a small failure counter would be tidy), not a vulnerability."
+ },
+ {
+  "verdict": "confirmed",
+  "fingerprint": "admin-auth/setup-race-double-admin",
+  "title": "Two concurrent first-admin setups both succeed under the WHERE NOT EXISTS gate",
+  "description": "During the no-admin bootstrap window, two concurrent setup requests with different emails both create admin accounts and both receive sessions, violating the one-admin invariant.",
+  "root_cause": "setupFirstAdmin checks adminCount outside any transaction, then runs INSERT ... WHERE NOT EXISTS inside DB.batch at Postgres READ COMMITTED (apps/admin/src/api.js:237-263, packages/core/src/db.js:102-121). Neither transaction sees the other's uncommitted insert, ids and emails differ so no unique constraint applies, and both commit.",
+  "intended_behavior": "Exactly one first admin may exist; after that, setup closes and the setup code is nulled.",
+  "trace": [
+   {
+    "kind": "entrypoint",
+    "file": "apps/admin/src/api.js",
+    "line": 237,
+    "scope": "POST /api/admin/setup",
+    "description": "Open only while zero admins exist; non-localhost requires the setup code."
+   },
+   {
+    "kind": "propagation",
+    "file": "apps/admin/src/api.js",
+    "line": 239,
+    "scope": "adminCount check",
+    "description": "A plain read outside any transaction."
+   },
+   {
+    "kind": "sink",
+    "file": "apps/admin/src/api.js",
+    "line": 253,
+    "scope": "INSERT WHERE NOT EXISTS",
+    "description": "Under READ COMMITTED both concurrent probes see an empty table and both commit."
+   }
+  ],
+  "evidence": [
+   {
+    "file": "apps/admin/src/api.js",
+    "line": 239,
+    "description": "Count check outside the transaction."
+   },
+   {
+    "file": "apps/admin/src/api.js",
+    "line": 254,
+    "description": "The NOT EXISTS guard that cannot see an uncommitted competitor."
+   },
+   {
+    "file": "packages/core/src/db.js",
+    "line": 108,
+    "description": "batch is BEGIN/statements/COMMIT at the default isolation."
+   }
+  ],
+  "conditions": [
+   {
+    "kind": "authentication_level",
+    "description": "Requesters already hold the setup code or are on localhost."
+   },
+   {
+    "kind": "timing_dependency",
+    "description": "Two concurrent requests during the brief no-admin window after a fresh database or deploy."
+   }
+  ],
+  "execution": {
+   "attacker_perspective": "A setup-code holder racing themselves or a second holder creates two admin accounts where the design promises one.",
+   "payloads": [
+    "Two concurrent POST /api/admin/setup with the same code and different emails"
+   ],
+   "instructions": [
+    "Send both requests while adminCount is zero"
+   ],
+   "observed_result": "Source-only analysis: the isolation-level reasoning is source-grounded; live double-insert confirmation was not run on this host."
+  },
+  "remediation": {
+   "strategy": "Serialize the setup with a transaction-scoped advisory lock before the check (the pattern migrate.js already uses) or enforce the singleton with a constraint, so the second insert fails."
+  },
+  "severity": {
+   "likelihood": {
+    "score": "low",
+    "reason": "The window exists only while zero admins exist."
+   },
+   "impact": {
+    "score": "low",
+    "reason": "Both creators already held the setup code, so no privilege boundary is crossed; the one-admin invariant breaks on a one-time bootstrap path."
+   },
+   "overall_severity": "low"
+  },
+  "confidence": {
+   "score": "medium",
+   "reason": "The READ COMMITTED reasoning is sound; the window is one-time and brief."
+  }
+ },
+ {
+  "verdict": "confirmed",
+  "fingerprint": "admin-data/duplicate-email-race",
+  "title": "Duplicate student emails via check-then-act assertUnique, causing wrong-student links at the contact step",
+  "description": "students.email has no unique constraint, so two concurrent operator writes can create duplicate emails, and the public contact step then matches by email alone, misattributing attempts to the wrong student row.",
+  "root_cause": "assertUnique is check-then-act (apps/admin/src/api.js:678-687), idx_students_email is a plain non-unique index (db/migrations/0001_init.sql:127), and upsertStudentFromContact matches WHERE whatsapp = ? OR (email IS NOT NULL AND email = ?) ... LIMIT 1 (packages/core/src/store.js:190-192), so with duplicate email rows the pick among non-whatsapp-matching rows is not deterministic by identity. The CSV import is a second unsynchronized writer with no email uniqueness check (api.js:1172-1174).",
+  "intended_behavior": "Emails identify students across the contact step and the CRM; the whatsapp column already carries the unique partial index the email column lacks.",
+  "trace": [
+   {
+    "kind": "entrypoint",
+    "file": "apps/admin/src/api.js",
+    "line": 678,
+    "scope": "assertUnique",
+    "description": "Check-then-act uniqueness check."
+   },
+   {
+    "kind": "propagation",
+    "file": "db/migrations/0001_init.sql",
+    "line": 127,
+    "scope": "students.email index",
+    "description": "Plain index, not unique, unlike whatsapp at line 126."
+   },
+   {
+    "kind": "sink",
+    "file": "packages/core/src/store.js",
+    "line": 190,
+    "scope": "upsertStudentFromContact",
+    "description": "Email-only match with LIMIT 1 links a stranger's attempt to whichever duplicate row wins."
+   }
+  ],
+  "evidence": [
+   {
+    "file": "apps/admin/src/api.js",
+    "line": 683,
+    "description": "The SELECT that both concurrent creates pass."
+   },
+   {
+    "file": "db/migrations/0001_init.sql",
+    "line": 127,
+    "description": "The non-unique email index."
+   },
+   {
+    "file": "packages/core/src/store.js",
+    "line": 191,
+    "description": "The OR email match with LIMIT 1."
+   },
+   {
+    "file": "apps/admin/src/api.js",
+    "line": 1172,
+    "description": "The CSV import writes students with no email uniqueness check."
+   }
+  ],
+  "conditions": [
+   {
+    "kind": "authorization_role",
+    "description": "Two concurrent operator writes, or an operator create racing a student contact-step insert; not directly attacker-reachable."
+   },
+   {
+    "kind": "data_state",
+    "description": "Two student rows sharing one email."
+   }
+  ],
+  "execution": {
+   "attacker_perspective": "Not attacker-initiated: two privileged writes race. The consequence is record misattribution and CRM pollution, not cross-person exposure, because the result email and private link are keyed to the attempt's own columns.",
+   "payloads": [
+    "Two concurrent POST /api/admin/students with the same email"
+   ],
+   "instructions": [
+    "Issue both creates simultaneously and inspect the students table"
+   ],
+   "observed_result": "Source-only analysis: the non-unique index and the OR-email match are directly source-visible."
+  },
+  "remediation": {
+   "strategy": "Add a unique partial index on students(email) WHERE email IS NOT NULL, matching the whatsapp one, and let assertUnique catch the constraint violation as the existing 409."
+  },
+  "severity": {
+   "likelihood": {
+    "score": "low",
+    "reason": "Needs two privileged writes in a small window."
+   },
+   "impact": {
+    "score": "low",
+    "reason": "Mislinked internal records; the student-facing result is keyed to the attempt, not the student row."
+   },
+   "overall_severity": "low"
+  },
+  "confidence": {
+   "score": "high",
+   "reason": "The index definition and the match query are directly source-visible."
+  }
+ },
+ {
+  "verdict": "rejected",
+  "fingerprint": "admin-data/plain-token-persistence",
+  "title": "Plain invite token persists on failed queue rows and in wa_messages",
+  "description": "The token does persist on failed rows and in the message log, but the only principal who can read either is someone with database read access, who by design already reads plaintext result tokens, student contact data, answers, and transcripts, so no boundary is crossed for any reachable principal.",
+  "claimed_root_cause": "plain_token is NULLed only when both channels deliver, so a permanently failed channel keeps the live token, and the sent WhatsApp text containing the token link is stored in wa_messages with no purge.",
+  "trace": [
+   {
+    "kind": "entrypoint",
+    "file": "apps/admin/src/invite-queue.js",
+    "line": 136,
+    "scope": "token erase rule",
+    "description": "Fires only after both channels deliver."
+   },
+   {
+    "kind": "propagation",
+    "file": "apps/admin/src/invite-queue.js",
+    "line": 116,
+    "scope": "wa_messages insert",
+    "description": "The sent text with the live token is stored."
+   },
+   {
+    "kind": "sink",
+    "file": "apps/admin/src/api.js",
+    "line": 1346,
+    "scope": "roster select",
+    "description": "Selects plain_token but never emits it to any client."
+   }
+  ],
+  "evidence": [
+   {
+    "file": "apps/admin/src/invite-queue.js",
+    "line": 136,
+    "description": "The conditional erase."
+   },
+   {
+    "file": "apps/admin/src/invite-queue.js",
+    "line": 116,
+    "description": "The message log insert."
+   },
+   {
+    "file": "apps/web/src/api.js",
+    "line": 572,
+    "description": "The equally secret result_token already stored plaintext by design."
+   }
+  ],
+  "reason": "No security boundary is violated for any reachable principal today: the only reader of plain_token or wa_messages.text is a database reader, who already holds equivalent live secrets by design. Storing the sent message text is inherent to sending the link and doubles as the delivery log. This is a defense-in-depth gap against a future database compromise, which per the strict gate is a hardening note: extend the erase rule to clear the token once the invite is used or expired, and add a retention purge for wa_messages."
+ },
+ {
+  "verdict": "rejected",
+  "fingerprint": "admin-data/protocol-relative-asset-urls",
+  "title": "startsWith validators and the rich IMAGE regex accept protocol-relative //host URLs",
+  "description": "The validators do accept //host values, but the only writers are authenticated admins and the only student-facing effect today is a blocked resource load, because the strict CSP on the runner shell rejects any non-self, non-titiknolenglish.com image or media source, so no boundary is violated.",
+  "claimed_root_cause": "The startsWith('/') validators and the rich parser IMAGE regex accept protocol-relative //host URLs, leaving the CSP as the only same-origin enforcement.",
+  "trace": [
+   {
+    "kind": "entrypoint",
+    "file": "apps/admin/src/api.js",
+    "line": 1406,
+    "scope": "audio_url validator",
+    "description": "Accepts //evil.com."
+   },
+   {
+    "kind": "propagation",
+    "file": "packages/core/src/rich.js",
+    "line": 10,
+    "scope": "IMAGE regex",
+    "description": "Accepts //host paths."
+   },
+   {
+    "kind": "sink",
+    "file": "apps/web/student/src/screens.jsx",
+    "line": 436,
+    "scope": "student audio and image tags",
+    "description": "Render the stored value directly."
+   }
+  ],
+  "evidence": [
+   {
+    "file": "apps/admin/src/api.js",
+    "line": 1574,
+    "description": "The section validators."
+   },
+   {
+    "file": "packages/core/src/node-server.js",
+    "line": 32,
+    "description": "The strict CSP that blocks the load."
+   },
+   {
+    "file": "apps/web/server.js",
+    "line": 19,
+    "description": "The runner shell headers."
+   }
+  ],
+  "reason": "The only writers are authenticated admins, the only student-facing effect is a blocked resource load (img-src and media-src do not grant script or connect), and the CSP is a static, server-set header applied to every runner response, not an incidental control. No data leaves the browser and no boundary is violated, so per the strict gate this is a hardening note: reject values starting with // in the three validators so the same-origin invariant holds in the data layer too."
+ },
+ {
+  "verdict": "confirmed",
+  "fingerprint": "admin-data/session-quota-race",
+  "title": "Session quota check-then-insert race can overshoot mockup session quota",
+  "description": "Two concurrent CSV import confirms each see a count below quota and both insert, so a paid wave can end with more participants than sold.",
+  "root_cause": "confirmSessionImport reads the roster count and checks it against session.quota, then collects the inserts into one batch with no lock (apps/admin/src/api.js:1154-1157, 1162-1207). Concurrent confirms are not serialized, so both pass the check. idx_invites_session_student (db/migrations/0015_mockup_sessions.sql:28) stops the same student being double-invited but not two different imports overshooting together.",
+  "intended_behavior": "The session quota caps the paid wave; the unique per-student index caps duplicate people.",
+  "trace": [
+   {
+    "kind": "entrypoint",
+    "file": "apps/admin/src/api.js",
+    "line": 1154,
+    "scope": "confirmSessionImport",
+    "description": "Count read outside any serialization."
+   },
+   {
+    "kind": "propagation",
+    "file": "apps/admin/src/api.js",
+    "line": 1162,
+    "scope": "statement collection",
+    "description": "Inserts collected with no lock or advisory."
+   },
+   {
+    "kind": "sink",
+    "file": "apps/admin/src/api.js",
+    "line": 1207,
+    "scope": "batch write",
+    "description": "Both confirms commit and the session ends over quota."
+   }
+  ],
+  "evidence": [
+   {
+    "file": "apps/admin/src/api.js",
+    "line": 1154,
+    "description": "The unserialized count."
+   },
+   {
+    "file": "db/migrations/0015_mockup_sessions.sql",
+    "line": 28,
+    "description": "The per-student unique index that bounds the damage."
+   }
+  ],
+  "conditions": [
+   {
+    "kind": "authorization_role",
+    "description": "Authenticated admin operators, two tabs or two operators."
+   }
+  ],
+  "execution": {
+   "attacker_perspective": "Two trusted operators racing imports overshoot a soft business limit; no security boundary crossed.",
+   "payloads": [
+    "Two concurrent import confirm bodies each under quota"
+   ],
+   "instructions": [
+    "Send both confirms simultaneously against one session"
+   ],
+   "observed_result": "Source-only analysis: the count-then-insert sequence is directly source-visible."
+  },
+  "remediation": {
+   "strategy": "Take a transaction with SELECT ... FOR UPDATE on the mockup_sessions row (or an advisory lock on the session id) around the count and the batch."
+  },
+  "severity": {
+   "likelihood": {
+    "score": "low",
+    "reason": "Requires two concurrent operator confirms on one session."
+   },
+   "impact": {
+    "score": "low",
+    "reason": "Quota overshoot bounded by the per-student unique index; a business-rule violation."
+   },
+   "overall_severity": "low"
+  },
+  "confidence": {
+   "score": "high",
+   "reason": "The check-then-insert sequence and the bounding index are directly source-visible."
+  }
+ },
+ {
+  "verdict": "confirmed",
+  "fingerprint": "admin-data/testsend-quota-unaccounted",
+  "title": "Test sends consume the shared Cloudflare email quota but are not counted by emailsSentRecently",
+  "description": "Each test send silently spends the shared 200/day Cloudflare quota, so the drain believes it has headroom and real invite emails can start failing while the dashboard shows space remaining.",
+  "root_cause": "testSendSessionMessage sends a real email through env.SEND_EMAIL and writes nothing to either counted table for the email channel (apps/admin/src/api.js:1309-1341), while emailsSentRecently counts only attempts.email_sent_at and mockup_invite_queue.email_sent_at (apps/admin/src/invite-queue.js:31-37).",
+  "intended_behavior": "The 200/day limit is shared between invite emails and result emails; the queue pauses only when the counter says it is spent.",
+  "trace": [
+   {
+    "kind": "entrypoint",
+    "file": "apps/admin/src/api.js",
+    "line": 1309,
+    "scope": "testSendSessionMessage",
+    "description": "Real email, no accounting row."
+   },
+   {
+    "kind": "sink",
+    "file": "apps/admin/src/invite-queue.js",
+    "line": 31,
+    "scope": "emailsSentRecently",
+    "description": "Counts only the two tables the test send never writes."
+   }
+  ],
+  "evidence": [
+   {
+    "file": "apps/admin/src/api.js",
+    "line": 1326,
+    "description": "The direct SEND_EMAIL.send with no written counter."
+   },
+   {
+    "file": "apps/admin/src/invite-queue.js",
+    "line": 31,
+    "description": "The quota query's two counted sources."
+   }
+  ],
+  "conditions": [
+   {
+    "kind": "authorization_role",
+    "description": "Authenticated admin pressing Kirim email uji during session setup."
+   }
+  ],
+  "execution": {
+   "attacker_perspective": "The team self-inflicts quota blindness; repeated test sends push the drain past the real limit and paid invite rows burn their three retries falling to failed.",
+   "payloads": [
+    "Repeated POST /api/admin/mockup/sessions/:id/test-send"
+   ],
+   "instructions": [
+    "Press the test send repeatedly, then run a wave and watch rows fail against the real Cloudflare limit"
+   ],
+   "observed_result": "Source-only analysis: the send path and the counter query are directly source-visible."
+  },
+  "remediation": {
+   "strategy": "Count test sends in the quota query (a counter row or a log row with a channel column), or clamp testSendSessionMessage to refuse when emailsSentRecently is near the limit."
+  },
+  "severity": {
+   "likelihood": {
+    "score": "low",
+    "reason": "Requires an operator pressing the test send."
+   },
+   "impact": {
+    "score": "low",
+    "reason": "Availability nuisance for paid waves; the error text is visible on the row."
+   },
+   "overall_severity": "low"
+  },
+  "confidence": {
+   "score": "high",
+   "reason": "Both the send and the counter are directly source-visible."
+  }
+ },
+ {
+  "verdict": "confirmed",
+  "fingerprint": "baseline/mockup-answer-key-public",
+  "title": "The paid IELTS mockup answer key is committed in a public repository",
+  "description": "The full December bank, including every accepted answer for all 80 mockup questions, is committed as plain SQL migrations in a repository that is public by the owner's decision so Render can deploy, so anyone can read the answer key before sitting the paid test.",
+  "root_cause": "db/migrations/0008_ielts_mockup.sql seeds the full bank with the answer and accepted columns in plaintext (rows 1001 onward carry the correct answer and full accepted-variant lists), and the repository remote is public (AGENTS.md documents the decision and the Render deploy flow depends on it).",
+  "intended_behavior": "Question data is versioned in migrations applied at startup, and the owner knowingly made the repository public, so the exposure is a documented trade-off rather than a code oversight; this record asks the owner to accept it explicitly or move the bank.",
+  "trace": [
+   {
+    "kind": "entrypoint",
+    "file": "db/migrations/0008_ielts_mockup.sql",
+    "line": 36,
+    "scope": "INSERT INTO questions",
+    "description": "The bank seed with answer and accepted columns."
+   },
+   {
+    "kind": "sink",
+    "file": "db/migrations/0008_ielts_mockup.sql",
+    "line": 38,
+    "scope": "answer values",
+    "description": "Rows 1001 onward carry the correct answer and full accepted-variant lists in plaintext."
+   }
+  ],
+  "evidence": [
+   {
+    "file": "db/migrations/0008_ielts_mockup.sql",
+    "line": 7,
+    "description": "The seed header."
+   },
+   {
+    "file": "db/migrations/0008_ielts_mockup.sql",
+    "line": 38,
+    "description": "The answer and accepted columns."
+   },
+   {
+    "file": "AGENTS.md",
+    "line": 367,
+    "description": "The repository is public by the owner's decision."
+   }
+  ],
+  "conditions": [
+   {
+    "kind": "system_configuration",
+    "description": "Anyone who can reach the public GitHub repository can read the key; no authentication or runtime interaction is needed."
+   }
+  ],
+  "execution": {
+   "attacker_perspective": "A paying student, a competitor, or anyone with the repo URL reads the answer key before sitting the paid mockup.",
+   "payloads": [
+    "db/migrations/0008_ielts_mockup.sql rows 1001 onward: the answer and accepted lists in plaintext"
+   ],
+   "instructions": [
+    "Open the public repository dev-tnec/tnec-placement-test on GitHub",
+    "Open the migration and read the INSERT rows"
+   ],
+   "observed_result": "Verified in source during this run: rows 1001 to 1006 each carry the correct answer and full accepted-variant list; the repo's public status is documented in AGENTS.md."
+  },
+  "remediation": {
+   "strategy": "The owner decides: accept the exposure as a documented business trade-off, or move the bank out of the public repository, seeding the mockup questions at deploy time from a private source; any move must also handle the already-public git history, which keeps the current key forever."
+  },
+  "severity": {
+   "likelihood": {
+    "score": "high",
+    "reason": "The repository is public and the file is plaintext."
+   },
+   "impact": {
+    "score": "medium",
+    "reason": "The asset is the paid mockup bank; no student data, credentials, or system access is exposed, so the impact is bounded by the bank's business value."
+   },
+   "overall_severity": "medium"
+  },
+  "confidence": {
+   "score": "high",
+   "reason": "The fact is fully source-verifiable and was verified during this run."
+  }
+ },
+ {
+  "verdict": "confirmed",
+  "fingerprint": "baseline/session-export-untracked-in-public-repo",
+  "title": "The session export sits untracked and un-gitignored at the repo root of a public repository",
+  "description": "A 9.7 MB session export at the repo root holds infrastructure identifiers and the full internal working history; one git add -A followed by a push publishes it, and only a manual habit has kept it out so far.",
+  "root_cause": "tikno-english-placement-test-setup.json exists at the repo root, is untracked, and git check-ignore does not match it, so nothing but convention prevents its publication. A content scan found the Cloudflare account ID and four zone IDs, internal emails, public WhatsApp numbers, local file paths, and the full setup conversation; no API key values were found.",
+  "intended_behavior": "The file is a local session export and does not belong in the repository; the git rules require a status review before every push, which is the mitigation that has so far held.",
+  "trace": [
+   {
+    "kind": "entrypoint",
+    "file": ".gitignore",
+    "line": 1,
+    "scope": "gitignore coverage",
+    "description": "The file is not covered."
+   },
+   {
+    "kind": "sink",
+    "file": "tikno-english-placement-test-setup.json",
+    "line": 1,
+    "scope": "repo root file",
+    "description": "9,749,399 bytes, untracked, one git add -A from publication."
+   }
+  ],
+  "evidence": [
+   {
+    "file": "tikno-english-placement-test-setup.json",
+    "line": 1,
+    "description": "The file exists, untracked and unignored, verified during this run."
+   },
+   {
+    "file": "AGENTS.md",
+    "line": 367,
+    "description": "The repository remote is public by the owner's decision."
+   }
+  ],
+  "conditions": [
+   {
+    "kind": "system_configuration",
+    "description": "The repository is public; only the manual status-review habit prevents the commit."
+   }
+  ],
+  "execution": {
+   "attacker_perspective": "Any future git add -A on this machine, by the owner or an agent session that skips the review, publishes infrastructure identifiers and internal conversation.",
+   "payloads": [
+    "git add -A followed by git push"
+   ],
+   "instructions": [
+    "Verify with git status and git check-ignore"
+   ],
+   "observed_result": "Verified locally during this run: the file exists, is untracked, and is not ignored; the content scan found identifiers but no credential values."
+  },
+  "remediation": {
+   "strategy": "Add tikno-english-placement-test-setup.json (or *-setup.json) to .gitignore today, and optionally to .git/info/exclude."
+  },
+  "severity": {
+   "likelihood": {
+    "score": "medium",
+    "reason": "One git add -A is a routine mistake away."
+   },
+   "impact": {
+    "score": "low",
+    "reason": "The verifier downgraded from medium: no credential values were found in the file, and account and zone IDs are low-sensitivity identifiers; the volume of internal conversation is the main exposure."
+   },
+   "overall_severity": "low"
+  },
+  "confidence": {
+   "score": "high",
+   "reason": "Every fact was verified locally during this run."
+  }
+ },
+ {
+  "verdict": "confirmed",
+  "fingerprint": "core/speaking-lease-owner-guard",
+  "title": "Speaking workers' final writes match on status='grading' without lease ownership, allowing a double Speechace call after a lease expiry",
+  "description": "A worker that stalls past its own 120s lease can have its row re-claimed, and its late final write still matches, so one recording can cost two Speechace calls with a last-writer-wins grade of the same audio.",
+  "root_cause": "The claim predicate re-claims expired grading rows, but both final UPDATEs (graded and failure paths) match only on status='grading' with no lease_until check (packages/core/src/speaking.js:137-142, 156-160; speaking-mockup-worker.js:110-114, 120-124), while checkLater's failure path at speaking.js:185-188 does check the lease, showing the intended pattern.",
+  "intended_behavior": "A worker's final write should belong only to the worker whose claim is still live, mirroring checkLater.",
+  "trace": [
+   {
+    "kind": "entrypoint",
+    "file": "packages/core/src/speaking.js",
+    "line": 115,
+    "scope": "claim predicate",
+    "description": "Re-claims grading rows whose lease has passed."
+   },
+   {
+    "kind": "propagation",
+    "file": "packages/core/src/speaking.js",
+    "line": 137,
+    "scope": "final graded write",
+    "description": "Matches on status='grading' only, no lease ownership."
+   },
+   {
+    "kind": "sink",
+    "file": "packages/core/src/speaking.js",
+    "line": 156,
+    "scope": "final failure write",
+    "description": "The same missing lease check on the failure path."
+   }
+  ],
+  "evidence": [
+   {
+    "file": "packages/core/src/speaking.js",
+    "line": 137,
+    "description": "The graded-path final UPDATE."
+   },
+   {
+    "file": "packages/core/src/speaking.js",
+    "line": 156,
+    "description": "The failure-path final UPDATE."
+   },
+   {
+    "file": "packages/core/src/speaking.js",
+    "line": 185,
+    "description": "checkLater checks the lease, the intended pattern the final writes omit."
+   },
+   {
+    "file": "packages/core/src/speaking-mockup-worker.js",
+    "line": 110,
+    "description": "The mockup worker carries the same shape."
+   }
+  ],
+  "conditions": [
+   {
+    "kind": "timing_dependency",
+    "description": "A worker must stall past its 120s lease, for example a deploy pause or host sleep stacking on the 60s Speechace call timeout."
+   }
+  ],
+  "execution": {
+   "attacker_perspective": "No attacker; an infrastructure stall triggers it. The observable harm is two Speechace quota calls for one recording and a wasted retry; both calls score the same audio, so no wrong grade.",
+   "payloads": [
+    "A worker stall longer than the 120s lease on a claimed recording"
+   ],
+   "instructions": [
+    "Read the claim predicate and both final UPDATEs",
+    "Note the checkLater lease check the final writes lack"
+   ],
+   "observed_result": "Source-only analysis: the predicates are directly source-visible; no runtime stall was induced."
+  },
+  "remediation": {
+   "strategy": "Carry the claim's lease_until into both final UPDATEs (AND lease_until = ?) in both workers, so a stalled worker's late write matches zero rows."
+  },
+  "severity": {
+   "likelihood": {
+    "score": "low",
+    "reason": "Requires a genuine process stall longer than the lease."
+   },
+   "impact": {
+    "score": "low",
+    "reason": "Speechace quota double-spend and log noise; no wrong grade is possible."
+   },
+   "overall_severity": "low"
+  },
+  "confidence": {
+   "score": "high",
+   "reason": "The predicate asymmetry is directly source-visible."
+  }
+ },
+ {
+  "verdict": "needs_validation",
+  "fingerprint": "wave2/direct-port-reachability",
+  "title": "Both servers bind 0.0.0.0, so a directly reachable Render port would make the trusted proxy headers fully attacker-controlled",
+  "description": "Informational. startServer defaults to host 0.0.0.0 and neither app passes a host, and under TRUST_PROXY every x-forwarded header is trusted, so an attacker reaching the process port directly, bypassing the TLS edge, would control the origin comparison target, the Secure flag, and the certificate file URL. Whether Render publishes the raw TCP port is a platform property; the standard service shape routes only through the edge.",
+  "claimed_root_cause": "The servers listen on all interfaces while the proxy-header trust model assumes every connection arrives through the edge.",
+  "trace": [
+   {
+    "kind": "entrypoint",
+    "file": "packages/core/src/node-server.js",
+    "line": 119,
+    "scope": "startServer bind",
+    "description": "Defaults to 0.0.0.0."
+   },
+   {
+    "kind": "propagation",
+    "file": "apps/admin/server.js",
+    "line": 54,
+    "scope": "admin listener",
+    "description": "Takes PORT from the host."
+   },
+   {
+    "kind": "sink",
+    "file": "packages/core/src/node-server.js",
+    "line": 79,
+    "scope": "trusted headers",
+    "description": "Under TRUST_PROXY the forwarded headers are trusted from any peer."
+   }
+  ],
+  "evidence": [
+   {
+    "file": "apps/web/server.js",
+    "line": 94,
+    "description": "The web listener takes PORT the same way."
+   },
+   {
+    "file": "README.md",
+    "line": 67,
+    "description": "The Render deploy shape."
+   }
+  ],
+  "blockers": [
+   "Whether the Render service exposes the Node process port directly, bypassing the HTTPS edge, is a platform and deployment property not verifiable from repository source",
+   "The run policy forbids scanning deployed endpoints"
+  ],
+  "validation_plan": {
+   "deployment": "Owner check: in the Render dashboard confirm no direct TCP port is published for either service; each should show only the onrender.com HTTPS route. If a direct port is ever published, bind to the edge interface or gate the proxy-header trust on the remote address."
+  }
+ },
+ {
+  "verdict": "confirmed",
+  "fingerprint": "wave2/invite-queue-drain-race",
+  "title": "The invite queue has no cross-process claim guard, so a deploy during a wave drain double-sends invites",
+  "description": "claimNext's SELECT plus unconditional UPDATEs never inspect changed-row counts, the boot requeue blindly flips every sending row back to pending, the draining flag is per-process, and the SIGTERM path never awaits the in-flight drain, so during a deploy that lands while a wave is draining, both Render instances can deliver the same row on both channels.",
+  "root_cause": "The queue claim is a SELECT followed by unconditional UPDATEs whose results are never inspected, there is no lease column comparable to attempts.delivery_lease_until, the boot-time requeue cannot distinguish a crashed row from one being sent by a live process, and the shutdown path does not join the running drain before exiting (apps/admin/src/invite-queue.js:40-58, 22-28, 18; apps/admin/server.js:62-71). AGENTS.md line 241 documents that Render keeps the old instance running about 60 seconds after a deploy switches traffic, breaking the single-process assumption in the code's own comment.",
+  "intended_behavior": "The comment at invite-queue.js line 22 says only this process drains the queue; the intended guard pattern exists in the same codebase as the delivery lease.",
+  "trace": [
+   {
+    "kind": "entrypoint",
+    "file": "apps/admin/src/invite-queue.js",
+    "line": 41,
+    "scope": "claimNext SELECT",
+    "description": "Selects the next eligible row."
+   },
+   {
+    "kind": "propagation",
+    "file": "apps/admin/src/invite-queue.js",
+    "line": 53,
+    "scope": "unconditional claim UPDATEs",
+    "description": "Changed-row counts never inspected."
+   },
+   {
+    "kind": "propagation",
+    "file": "apps/admin/src/invite-queue.js",
+    "line": 25,
+    "scope": "boot requeue",
+    "description": "Flips every sending row to pending with no lease."
+   },
+   {
+    "kind": "sink",
+    "file": "apps/admin/src/invite-queue.js",
+    "line": 134,
+    "scope": "both channels send",
+    "description": "Both instances deliver the same row on both channels."
+   }
+  ],
+  "evidence": [
+   {
+    "file": "apps/admin/src/invite-queue.js",
+    "line": 18,
+    "description": "The per-process draining flag."
+   },
+   {
+    "file": "apps/admin/src/invite-queue.js",
+    "line": 54,
+    "description": "The second unconditional UPDATE."
+   },
+   {
+    "file": "apps/admin/server.js",
+    "line": 66,
+    "description": "The stop path clears the timer but never awaits the drain."
+   },
+   {
+    "file": "AGENTS.md",
+    "line": 241,
+    "description": "The documented 60 second old-instance overlap."
+   }
+  ],
+  "conditions": [
+   {
+    "kind": "timing_dependency",
+    "description": "A paid wave mid-drain when a deploy lands, or an old instance exiting mid-row after the provider received the message."
+   }
+  ],
+  "execution": {
+   "attacker_perspective": "No attacker is needed; the deploy schedule triggers it. The observable harm is a student receiving the same paid invite twice on both channels and the queue logging two sends for one row.",
+   "payloads": [
+    "Deploy both Render services while a mockup session drain is running"
+   ],
+   "instructions": [
+    "Read claimNext and note the UPDATE results are never inspected",
+    "Read the boot requeue and note the unconditional flip",
+    "Read the stop path and note the drain is never awaited",
+    "Read AGENTS.md for the 60 second overlap"
+   ],
+   "observed_result": "Verified entirely in source during this run; the 60 second overlap is documented in the repository's own AGENTS.md, so no deployed endpoint was contacted."
+  },
+  "remediation": {
+   "strategy": "Make the claim atomic and leased following the delivery pattern (UPDATE ... WHERE status IN (...) RETURNING, inspect the result), add a lease column so the boot requeue only resurrects rows whose lease lapsed, and have stop() await or abort the in-flight drain with a partial-send marker."
+  },
+  "severity": {
+   "likelihood": {
+    "score": "medium",
+    "reason": "Deploys are routine after every push and waves drain for minutes one row at a time, so the overlap is realistic when the two coincide."
+   },
+   "impact": {
+    "score": "medium",
+    "reason": "Duplicate paid deliveries on both channels and doubled quota consumption; no data exposure or unauthorized access."
+   },
+   "overall_severity": "medium"
+  },
+  "confidence": {
+   "score": "high",
+   "reason": "Every code fact and the platform overlap are source-verifiable and were verified."
+  }
+ },
+ {
+  "verdict": "needs_validation",
+  "fingerprint": "wave2/proxy-host-header-trust",
+  "title": "Under TRUST_PROXY the first x-forwarded-host value is trusted for the origin check, the Secure cookie flag, and the certificate file URL",
+  "description": "The source chain is verified: toRequest takes first(x-forwarded-host) and first(x-forwarded-proto) when TRUST_PROXY is set, and url.origin flows into checkOrigin's comparison target, the certificate fileUrl, and the Secure flag derivation. The decisive fact is Render's edge behavior: overwrite is safe, append is not, because first() would pick the client value.",
+  "claimed_root_cause": "first(x-forwarded-host) and first(x-forwarded-proto) in toRequest trust the leftmost forwarded value, which is client-controlled whenever the edge appends rather than overwrites, and three security-relevant consumers derive from it.",
+  "trace": [
+   {
+    "kind": "entrypoint",
+    "file": "packages/core/src/node-server.js",
+    "line": 79,
+    "scope": "toRequest header read",
+    "description": "first() of both forwarded headers under TRUST_PROXY."
+   },
+   {
+    "kind": "propagation",
+    "file": "apps/admin/src/api.js",
+    "line": 182,
+    "scope": "checkOrigin target",
+    "description": "The origin comparison target derives from the forwarded host."
+   },
+   {
+    "kind": "sink",
+    "file": "apps/admin/src/certificates.js",
+    "line": 518,
+    "scope": "cert fileUrl",
+    "description": "The WhatsApp document URL AttCos fetches derives from the same origin."
+   }
+  ],
+  "evidence": [
+   {
+    "file": "packages/core/src/node-server.js",
+    "line": 78,
+    "description": "The first() semantics."
+   },
+   {
+    "file": "apps/admin/src/api.js",
+    "line": 151,
+    "description": "The Secure flag derivation."
+   },
+   {
+    "file": "apps/admin/src/api.js",
+    "line": 182,
+    "description": "The checkOrigin comparison."
+   }
+  ],
+  "blockers": [
+   "Render's edge overwrite-vs-append behavior for X-Forwarded-Host and X-Forwarded-Proto is a deployment property that cannot be verified from repository source",
+   "The run policy forbids contacting deployed endpoints, so no probe of the live services may be run by the verifier"
+  ],
+  "validation_plan": {
+   "deployment": "Owner check 1 (origin trust differential): run curl -sS -D - -X POST -H 'X-Forwarded-Host: probe.invalid' -H 'X-Forwarded-Proto: http' -H 'Origin: http://probe.invalid' -d '{}' https://tnec-placement-admin.onrender.com/api/admin/login and read the response: a 403 origin rejection means the edge overwrote the headers and the trust is sound; any other response means the client value survived. Owner check 2 (Secure flag differential): log in over curl with a spoofed X-Forwarded-Proto: http and inspect the Set-Cookie line; combined with a normal login this settles both this record and the Secure-cookie record in one observation."
+  }
+ },
+ {
+  "verdict": "confirmed",
+  "fingerprint": "wave2/resend-email-second-writer",
+  "title": "resend-email ignores the delivery lease and the void flag, so it can double-send and email a voided result",
+  "description": "The resend branch never reads the delivery lease or channel statuses, so a manual send racing the automatic delivery produces two result emails and two writers on one status column; and it never checks voided_at, so a voided placement result can be emailed, though the dashboard button is hidden for voided rows, making that path API-only.",
+  "root_cause": "The resend branch was written as a standalone manual action and never reconciled with the delivery lease, and the void feature was added without revisiting the resend guard, which still tests the raw status column that voiding does not touch (apps/admin/src/api.js:2026-2043; packages/core/src/delivery.js:70-94; the UI hides the button for voided rows at apps/admin/client/src/views/Test.jsx:918 with the status mapping at packages/core/src/store.js:176).",
+  "intended_behavior": "The delivery lease exists so two writers never send the same result, and voiding exists so a cancelled result stops reaching the student; resend-email should respect both.",
+  "trace": [
+   {
+    "kind": "entrypoint",
+    "file": "apps/admin/src/api.js",
+    "line": 2026,
+    "scope": "resend-email guard",
+    "description": "Checks only test_key and status submitted."
+   },
+   {
+    "kind": "propagation",
+    "file": "apps/admin/src/api.js",
+    "line": 2035,
+    "scope": "direct send",
+    "description": "Sends without reading email_status, wa_status, or delivery_lease_until."
+   },
+   {
+    "kind": "sink",
+    "file": "apps/admin/src/api.js",
+    "line": 2040,
+    "scope": "unconditional status write",
+    "description": "Clobbers the delivery writer's status whichever finishes last; the voided_at column is never read."
+   }
+  ],
+  "evidence": [
+   {
+    "file": "packages/core/src/delivery.js",
+    "line": 70,
+    "description": "The lease claim the resend ignores."
+   },
+   {
+    "file": "packages/core/src/delivery.js",
+    "line": 94,
+    "description": "The second writer on the same columns."
+   },
+   {
+    "file": "apps/admin/src/api.js",
+    "line": 2015,
+    "description": "The void branch writes voided_at only, leaving status submitted."
+   },
+   {
+    "file": "apps/admin/client/src/views/Test.jsx",
+    "line": 918,
+    "description": "The UI hides the resend button for voided rows, making the void path API-only."
+   }
+  ],
+  "conditions": [
+   {
+    "kind": "authorization_role",
+    "description": "The race is reachable through the normal UI while a result email is pending; the void path needs a sessioned operator calling the API directly."
+   }
+  ],
+  "execution": {
+   "attacker_perspective": "A team member is the actor: a suppressed result goes out after the team voided it, or a student receives the same result email twice.",
+   "payloads": [
+    "POST /api/admin/attempts/<id>/resend-email for a voided attempt with a valid session",
+    "The same POST while delivery.js holds the lease"
+   ],
+   "instructions": [
+    "Read the resend guard and note only test_key and status are checked",
+    "Read the void branch and note it writes voided_at only",
+    "Read the delivery lease claim and status write"
+   ],
+   "observed_result": "Verified in source during this run; no runtime execution was performed."
+  },
+  "remediation": {
+   "strategy": "In the resend branch, reject when a.voided_at is set and reject or defer when delivery_lease_until is live or email_status is pending; one smoke-test assertion can pin the guard list."
+  },
+  "severity": {
+   "likelihood": {
+    "score": "low",
+    "reason": "The race needs an admin press to coincide with an in-flight delivery; the void path needs a deliberate direct API call."
+   },
+   "impact": {
+    "score": "low",
+    "reason": "At worst a suppressed result is emailed or one student gets a duplicate; no data exposure or privilege gain."
+   },
+   "overall_severity": "low"
+  },
+  "confidence": {
+   "score": "high",
+   "reason": "Both the missing lease read and the missing voided_at check are confirmed by reading the full path."
+  }
+ },
+ {
+  "verdict": "needs_validation",
+  "fingerprint": "wave2/trust-proxy-secure-cookie",
+  "title": "The session cookie's Secure flag depends on the deployed TRUST_PROXY value and the edge's x-forwarded-proto",
+  "description": "Merged record from the cookie and host-trust hunters. secureFor sets Secure from url.protocol, which on Render is only https when TRUST_PROXY=1 makes the server read x-forwarded-proto, because Render terminates TLS in front of a plain-HTTP Node process. A missing or zero TRUST_PROXY would strip Secure from the production session cookie.",
+  "claimed_root_cause": "The Secure flag on the tnec_admin cookie derives from the request protocol, which on Render is https only when TRUST_PROXY=1 reads x-forwarded-proto.",
+  "trace": [
+   {
+    "kind": "entrypoint",
+    "file": "packages/core/src/node-server.js",
+    "line": 78,
+    "scope": "toRequest",
+    "description": "Protocol from first(x-forwarded-proto) under TRUST_PROXY."
+   },
+   {
+    "kind": "propagation",
+    "file": "apps/admin/src/api.js",
+    "line": 150,
+    "scope": "secureFor",
+    "description": "Reads the derived protocol."
+   },
+   {
+    "kind": "sink",
+    "file": "apps/admin/src/api.js",
+    "line": 153,
+    "scope": "sessionCookie",
+    "description": "Secure appended only when the derived protocol is https."
+   }
+  ],
+  "evidence": [
+   {
+    "file": ".env.example",
+    "line": 12,
+    "description": "Ships TRUST_PROXY=0, not the Render value."
+   },
+   {
+    "file": "README.md",
+    "line": 67,
+    "description": "Documents TRUST_PROXY=1 for both Render services, which the working dashboard implies is actually set."
+   },
+   {
+    "file": "apps/admin/src/api.js",
+    "line": 151,
+    "description": "The flag derivation."
+   }
+  ],
+  "blockers": [
+   "The actual TRUST_PROXY value on each Render service and the Set-Cookie flags of the live login response are deployment properties not verifiable from repository source",
+   "The run policy forbids contacting deployed endpoints"
+  ],
+  "validation_plan": {
+   "deployment": "Owner check, option A: run npm run render -- env list both and confirm TRUST_PROXY appears in each service's variable list; the masked name list is enough. Option B: log into the dashboard in a browser, open devtools, and read the tnec_admin Set-Cookie line, confirming HttpOnly; Secure; SameSite=Strict; Max-Age. A missing Secure confirms the issue; its presence closes it."
+  }
+ },
+ {
+  "verdict": "confirmed",
+  "fingerprint": "webapi/contact-rearm-failed-channel",
+  "title": "Replayed contact step re-arms failed delivery channels and swaps the destination",
+  "description": "A placement attempt holder can replay the contact step: each replay rewrites the attempt's email and WhatsApp and re-arms any channel whose previous send failed, producing another school-branded result message to a newly chosen address for as long as the sends keep failing.",
+  "root_cause": "saveContact rewrites attempts.name/email/whatsapp unconditionally and re-arms a channel whenever its sent_at is NULL (apps/web/src/api.js:575-579), while delivery.js writes sent_at only on success (packages/core/src/delivery.js:94,103), so a failed channel keeps NULL sent_at, flips back to pending on replay, and the same handler then calls deliverInBackground (api.js:594), which sends to the freshly written destination. The student_id is immutable after the first contact (api.js:571), so only the delivery destination moves.",
+  "intended_behavior": "The documented intent: a failed channel is retried after the student corrects the address, and a delivered channel is never sent twice. The residual defect is that nothing bounds retry frequency and the destination is rewritable by the attempt holder.",
+  "trace": [
+   {
+    "kind": "entrypoint",
+    "file": "apps/web/src/api.js",
+    "line": 546,
+    "scope": "POST /api/attempts/:id/contact",
+    "description": "Public, requires status submitted on a placement attempt."
+   },
+   {
+    "kind": "propagation",
+    "file": "apps/web/src/api.js",
+    "line": 575,
+    "scope": "unconditional destination rewrite",
+    "description": "Email and WhatsApp rewritten on every replay."
+   },
+   {
+    "kind": "propagation",
+    "file": "apps/web/src/api.js",
+    "line": 576,
+    "scope": "CASE re-arm",
+    "description": "A NULL sent_at passes the guard and the status resets to pending."
+   },
+   {
+    "kind": "sink",
+    "file": "packages/core/src/delivery.js",
+    "line": 83,
+    "scope": "deliverResult send",
+    "description": "Sends to the newly overwritten destination."
+   }
+  ],
+  "evidence": [
+   {
+    "file": "apps/web/src/api.js",
+    "line": 575,
+    "description": "The unconditional column rewrite."
+   },
+   {
+    "file": "packages/core/src/delivery.js",
+    "line": 94,
+    "description": "Failure writes sent_at = NULL, the exact state the CASE treats as re-armable."
+   },
+   {
+    "file": "apps/web/src/api.js",
+    "line": 594,
+    "description": "The immediate deliverInBackground call."
+   },
+   {
+    "file": "apps/web/src/api.js",
+    "line": 571,
+    "description": "The student_id gate that keeps the CRM record fixed."
+   }
+  ],
+  "conditions": [
+   {
+    "kind": "authentication_level",
+    "description": "Holder of the attempt UUID; no rate limit on the route."
+   },
+   {
+    "kind": "data_state",
+    "description": "At least one previously failed channel; each replay needs a well-formed but undeliverable address to keep the loop going."
+   }
+  ],
+  "execution": {
+   "attacker_perspective": "The attempt holder loops submit-with-bad-address to burn Cloudflare email quota and AttCos sends, directing school-branded result messages at chosen addresses.",
+   "payloads": [
+    "POST contact with a valid-format bouncing email, then repeat with different addresses"
+   ],
+   "instructions": [
+    "Submit contact with a bouncing email",
+    "After the failed send, replay contact with a different address",
+    "Observe the new send in the message log"
+   ],
+   "observed_result": "Source-only analysis: the CASE guard text, the NULL-on-failure write, the unconditional rewrite, and the immediate delivery call are directly source-visible."
+  },
+  "remediation": {
+   "strategy": "Bound re-arms per attempt (for example one re-arm per channel) or rate-limit the contact route for a given attemptId, and consider freezing the destination after the first failed retry round."
+  },
+  "severity": {
+   "likelihood": {
+    "score": "medium",
+    "reason": "Any attempt holder can loop it; each iteration needs a new well-formed address."
+   },
+   "impact": {
+    "score": "low",
+    "reason": "School-branded messages to chosen recipients and quota burn; delivered channels stay closed and the CRM record stays fixed."
+   },
+   "overall_severity": "low"
+  },
+  "confidence": {
+   "score": "high",
+   "reason": "Every step of the loop is directly source-visible."
+  }
+ },
+ {
+  "verdict": "confirmed",
+  "fingerprint": "webapi/mockup-speaking-requeue-unbounded",
+  "title": "Mockup speaking re-upload resets tries and re-queues Speechace without bound, with no duration gate",
+  "description": "Any invited mockup participant can re-upload a 1KB junk recording any number of times, including after all three Speechace tries failed, because the upsert resets tries to 0 for pending and failed rows, and each upload fires a fresh paid Speechace call.",
+  "root_cause": "uploadMockupSpeaking's ON CONFLICT clause resets tries=0, lease_until=0, next_attempt_at=0 and clears error/scores for any row in status pending or failed, then immediately fires gradeMockupAnswer (apps/web/src/api.js:711-719). The worker's MAX_TRIES=3 cap bounds tries only within a single arm, never across re-arms, because the route zeroes tries with no counter or cooldown. The route also stores x-duration with no validation at all (line 703). The placement route shows the intended gates: clamped duration and replace-only-while-pending-tries-0-lease-expired (api.js:662-682).",
+  "intended_behavior": "Re-recording replaces the audio only while the answer is still pending or failed, and the Speechace queue tries each answer at most MAX_TRIES times before waiting for the team.",
+  "trace": [
+   {
+    "kind": "entrypoint",
+    "file": "apps/web/src/api.js",
+    "line": 696,
+    "scope": "POST /api/attempts/:id/speaking-answer",
+    "description": "Public route, gated only by status in_progress and a valid part/prompt pair."
+   },
+   {
+    "kind": "propagation",
+    "file": "apps/web/src/api.js",
+    "line": 703,
+    "scope": "raw duration header",
+    "description": "Parsed with Number() and never clamped or minimum-checked."
+   },
+   {
+    "kind": "propagation",
+    "file": "apps/web/src/api.js",
+    "line": 711,
+    "scope": "re-arm upsert",
+    "description": "Resets tries to 0 for pending and failed rows."
+   },
+   {
+    "kind": "sink",
+    "file": "packages/core/src/speaking-mockup-worker.js",
+    "line": 78,
+    "scope": "gradeAnswer claim",
+    "description": "Each re-arm grants a fresh budget of 3 Speechace calls, unbounded across uploads."
+   }
+  ],
+  "evidence": [
+   {
+    "file": "apps/web/src/api.js",
+    "line": 711,
+    "description": "The ON CONFLICT reset clause."
+   },
+   {
+    "file": "apps/web/src/api.js",
+    "line": 719,
+    "description": "The unconditional background grade call."
+   },
+   {
+    "file": "packages/core/src/speaking-result.js",
+    "line": 20,
+    "description": "MAX_TRIES = 3, bounded only within a single arm."
+   },
+   {
+    "file": "apps/web/src/api.js",
+    "line": 673,
+    "description": "The placement route's contrasting correct gate."
+   }
+  ],
+  "conditions": [
+   {
+    "kind": "authentication_level",
+    "description": "Holder of a mockup invite token plus its 6 character code; no session or rate limit."
+   },
+   {
+    "kind": "data_state",
+    "description": "At least one speaking_answers row in pending or failed state, which junk audio guarantees."
+   },
+   {
+    "kind": "timing_dependency",
+    "description": "The window extends to the next purge sweep, since the route checks status, not expires_at."
+   }
+  ],
+  "execution": {
+   "attacker_perspective": "A seated or leaked-invite participant drains the school's Speechace quota: upload junk, let it fail, re-upload, repeat; each post resets tries and fires a new paid call.",
+   "payloads": [
+    "POST /api/attempts/<uuid>/speaking-answer?part=1&prompt=1 with Content-Type audio/webm, x-duration 0, and a 1024-byte body, repeated"
+   ],
+   "instructions": [
+    "Upload junk audio to one question",
+    "Re-post the same endpoint after each failure",
+    "Observe each post re-arms the row and fires a Speechace call"
+   ],
+   "observed_result": "Source-only analysis: the reset clause, the missing duration gate, and the per-upload grading call are directly source-visible; the placement route demonstrates the contrasting correct control."
+  },
+  "remediation": {
+   "strategy": "Mirror the placement gates: refuse re-recording once tries > 0, clamp and minimum-check x-duration, and add a per-attempt upload counter or cooldown.",
+   "code_changes": [
+    {
+     "file_name": "apps/web/src/api.js",
+     "fixed_code": "Change the conflict guard to WHERE speaking_answers.status = 'pending' AND speaking_answers.tries = 0 AND (lease_until IS NULL OR lease_until < now), and add the clamped duration and minimum check from uploadSpeaking."
+    }
+   ]
+  },
+  "severity": {
+   "likelihood": {
+    "score": "medium",
+    "reason": "Any participant can loop it with a script; no privileged access needed."
+   },
+   "impact": {
+    "score": "medium",
+    "reason": "Unbounded paid Speechace spend per answer row plus queue flooding; the claimed indefinite result stall was refuted (failed rows do not hold readiness), so the durable harm is the spend."
+   },
+   "overall_severity": "medium"
+  },
+  "confidence": {
+   "score": "high",
+   "reason": "The verifier refuted the stall claim and confirmed the spend claim; the re-arm mechanism is directly source-visible."
+  }
+ },
+ {
+  "verdict": "confirmed",
+  "fingerprint": "webapi/violation-log-unbounded-append",
+  "title": "Uncapped violation logging appends to an unbounded TEXT column with whole-row rewrites",
+  "description": "The violation endpoint accepts unlimited POSTs per in-progress attempt, each appending a fixed small entry to violation_log, with the row surviving until the sweep at expires_at+60, so a scripted holder can bloat one row and amplify writes quadratically.",
+  "root_cause": "logViolation gates only the type whitelist and status in_progress, and appends violation_log = COALESCE(violation_log,'') || entry with no count or length ceiling (apps/web/src/api.js:294-306). The client-side debounce and limit dialog are client-only; the server keeps accepting violations on a paused attempt because the limit no longer ends anything server-side. Postgres MVCC rewrites the whole row per append, so n appends of a growing column cost O(n^2) bytes.",
+  "intended_behavior": "The server records each focus violation as a fixed small entry so the dashboard can show strike history; the cap exists in the runner, not the server.",
+  "trace": [
+   {
+    "kind": "entrypoint",
+    "file": "apps/web/src/api.js",
+    "line": 294,
+    "scope": "POST /api/attempts/:id/violation",
+    "description": "Public, gated only by the attempt UUID and status in_progress."
+   },
+   {
+    "kind": "propagation",
+    "file": "apps/web/src/api.js",
+    "line": 298,
+    "scope": "fixed entry",
+    "description": "About 15 bytes, sliced to 200; the whitelist caps content."
+   },
+   {
+    "kind": "sink",
+    "file": "apps/web/src/api.js",
+    "line": 301,
+    "scope": "appending UPDATE",
+    "description": "No ceiling on count or length; full-row rewrite per append."
+   },
+   {
+    "kind": "propagation",
+    "file": "packages/core/src/speaking.js",
+    "line": 245,
+    "scope": "deferred sweep",
+    "description": "The row survives to expires_at + 60 and only the next sweep deletes it."
+   }
+  ],
+  "evidence": [
+   {
+    "file": "apps/web/src/api.js",
+    "line": 301,
+    "description": "The append with no ceiling."
+   },
+   {
+    "file": "apps/web/src/api.js",
+    "line": 297,
+    "description": "The type whitelist caps entry content but not frequency."
+   },
+   {
+    "file": "packages/core/src/speaking.js",
+    "line": 245,
+    "description": "The deferred sweep that holds the inflated row."
+   }
+  ],
+  "conditions": [
+   {
+    "kind": "authentication_level",
+    "description": "Only the holder of the attempt UUID, so the row is the attacker's own."
+   },
+   {
+    "kind": "timing_dependency",
+    "description": "Bounded by the test duration plus sweep delay, at most roughly 6 hours past expiry."
+   }
+  ],
+  "execution": {
+   "attacker_perspective": "A scripted holder of their own attemptId loops the violation POST; each call appends and rewrites the row. Self-inflicted on their own row, but it degrades the shared database.",
+   "payloads": [
+    "Loop POST /api/attempts/<uuid>/violation with type copy_attempt"
+   ],
+   "instructions": [
+    "Loop the request while the attempt is in progress and watch the violation_log column grow"
+   ],
+   "observed_result": "Source-only analysis: the missing ceiling and the deferred sweep are directly source-visible; the quadratic write cost follows from Postgres MVCC row-version semantics."
+  },
+  "remediation": {
+   "strategy": "Cap the log (keep the last 50 entries) and stop counting or appending once violations exceeds max_violations, so a flood costs the attacker more than the server."
+  },
+  "severity": {
+   "likelihood": {
+    "score": "medium",
+    "reason": "Scriptable by any attempt holder."
+   },
+   "impact": {
+    "score": "low",
+    "reason": "DB bloat and write amplification on one own row for one test's lifetime; no cross-tenant effect."
+   },
+   "overall_severity": "low"
+  },
+  "confidence": {
+   "score": "high",
+   "reason": "The verifier downgraded the severity from medium and confirmed the mechanism; the window and principal bound the impact."
+  }
+ }
+]

@@ -1,0 +1,38 @@
+{
+ "run_id": "run-1",
+ "repo": "dev-tnec/tnec-placement-test",
+ "target": "C:/Users/Sales/Desktop/tnec/titiknolenglish-placement-test",
+ "source_ref": "9a934ef (clean worktree; owner-untracked files excluded from scope)",
+ "profile": "standard",
+ "scope_paths": [
+  "apps/web",
+  "apps/admin",
+  "packages/core",
+  "db",
+  "scripts",
+  "tools",
+  "tests"
+ ],
+ "budget": null,
+ "execution_policy": "sandboxed-source-and-local-only",
+ "companion_files": [],
+ "prior_run_paths": [],
+ "shared_file_owners": "parent",
+ "run_status": "complete",
+ "coverage_units": 50,
+ "coverage_state": {
+  "covered": 34,
+  "candidate": 16,
+  "blocked": 0,
+  "deferred": 0
+ },
+ "waves": 2,
+ "critic_final": "clean pass, stop accepted",
+ "candidates_pending_validation": 20,
+ "critic_budget_note": "no budget was set; all mandatory critic and verifier calls ran",
+ "findings": {
+  "confirmed": 14,
+  "needs_validation": 3,
+  "rejected": 3
+ }
+}

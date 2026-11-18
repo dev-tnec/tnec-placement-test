@@ -1,0 +1,3840 @@
+[
+ {
+  "coverage_id": "apps%2Fadmin%2Fclient%2Fsrc%23bootstrap%20cache::apps%2Fadmin%2Fclient%2Fsrc%2Fbootstrap-cache.js%23sessionStorage%20PII%20persistence::apps%2Fadmin%2Fclient%2Fsrc::ATTACK-CLASSES.md%23Feature%20abuse%20and%20data%20leakage",
+  "canonical_refs": {
+   "surface": "apps/admin/client/src#bootstrap cache",
+   "boundary": "apps/admin/client/src/bootstrap-cache.js#sessionStorage PII persistence",
+   "subsystem": "apps/admin/client/src",
+   "attack_class": "ATTACK-CLASSES.md#Feature abuse and data leakage"
+  },
+  "surface": "apps/admin/client/src#bootstrap cache",
+  "boundary": "apps/admin/client/src/bootstrap-cache.js#sessionStorage PII persistence",
+  "subsystem": "apps/admin/client/src",
+  "attack_class": "ATTACK-CLASSES.md#Feature abuse and data leakage",
+  "starting_paths": [
+   "apps/admin/client/src/bootstrap-cache.js",
+   "apps/admin/client/src/App.jsx"
+  ],
+  "ordinary_attack_class_block": "ATTACK-CLASSES.md#Feature abuse and data leakage",
+  "selected_companion_blocks": [
+   "CLIENT-SIDE.md#Core discipline"
+  ],
+  "excluded_blocks": [],
+  "prior_status": "none",
+  "attempts": [],
+  "wave": 2,
+  "status": "covered",
+  "agent_id": "hunter-wave2-client-cache",
+  "reviewed_paths": [
+   "apps/admin/client/src/bootstrap-cache.js",
+   "apps/admin/client/src/store.js",
+   "apps/admin/client/src/App.jsx",
+   "apps/admin/client/src/login-main.jsx",
+   "apps/admin/src/api.js",
+   "apps/admin/src/certificates.js"
+  ],
+  "local_checks": [
+   {
+    "agent_id": "hunter-wave2-client-cache",
+    "reviewed_paths": [
+     "apps/admin/client/src/bootstrap-cache.js",
+     "apps/admin/client/src/store.js",
+     "apps/admin/client/src/App.jsx",
+     "apps/admin/client/src/login-main.jsx",
+     "apps/admin/src/api.js",
+     "apps/admin/src/certificates.js"
+    ],
+    "invariant": "The bootstrap cache stores PII only, is cleared on every logout, login, and 401 path, carries no bearer, invite, result, or pdf token, and its TTL never exceeds the session cookie TTL.",
+    "method": "source",
+    "result": "Verified all clearBootstrapCache call sites: login success, the sidebar logout button, any 401 in api(), and a corrupt cached read; closing the tab destroys sessionStorage entirely. The payload carries student names, emails, WhatsApp numbers, branch, birth date, scores, and attempts, but no tokens: invite tokens are only hashed server-side and never returned, certificate pdf_token is deliberately excluded from the bootstrap select, no result_token appears in the payload, and the session cookie is HttpOnly and unreachable from JS. TTL is 12h, equal to the session cookie TTL; the cache is rewritten on every reload, so a mid-session write can outlive a cookie created at session start, but the same tab still renders the identical data in the DOM, so the stale cache crosses no boundary. No realistic less-authorized reader exists. Hardening note only.",
+    "artifact": null
+   }
+  ],
+  "result_fingerprints": [],
+  "unresolved": [],
+  "unit_read_paths": [
+   "apps/admin/client/src/bootstrap-cache.js",
+   "apps/admin/client/src/store.js",
+   "apps/admin/client/src/App.jsx",
+   "apps/admin/client/src/login-main.jsx",
+   "apps/admin/src/api.js",
+   "apps/admin/src/certificates.js"
+  ],
+  "hardening_notes": []
+ },
+ {
+  "coverage_id": "apps%2Fadmin%2Fclient%2Fsrc%23context%20menu::apps%2Fadmin%2Fclient%2Fsrc%2Fmenus.jsx%23innerHTML%20sink::apps%2Fadmin%2Fclient%2Fsrc::ATTACK-CLASSES.md%23Injection",
+  "canonical_refs": {
+   "surface": "apps/admin/client/src#context menu",
+   "boundary": "apps/admin/client/src/menus.jsx#innerHTML sink",
+   "subsystem": "apps/admin/client/src",
+   "attack_class": "ATTACK-CLASSES.md#Injection"
+  },
+  "surface": "apps/admin/client/src#context menu",
+  "boundary": "apps/admin/client/src/menus.jsx#innerHTML sink",
+  "subsystem": "apps/admin/client/src",
+  "attack_class": "ATTACK-CLASSES.md#Injection",
+  "starting_paths": [
+   "apps/admin/client/src/menus.jsx",
+   "apps/admin/client/src/lib.js"
+  ],
+  "ordinary_attack_class_block": "ATTACK-CLASSES.md#Injection",
+  "selected_companion_blocks": [
+   "CLIENT-SIDE.md#Core discipline"
+  ],
+  "excluded_blocks": [],
+  "prior_status": "none",
+  "attempts": [],
+  "wave": 1,
+  "status": "covered",
+  "agent_id": "hunter-client",
+  "reviewed_paths": [
+   "apps/admin/client/src/menus.jsx",
+   "apps/admin/client/src/lib.js",
+   "apps/admin/client/src/dom.js",
+   "apps/admin/client/src/views/Test.jsx",
+   "apps/admin/client/src/views/Program.jsx",
+   "apps/admin/client/src/views/Siswa.jsx",
+   "apps/admin/client/src/views/Sertifikat.jsx",
+   "apps/admin/client/src/views/MockupSesi.jsx"
+  ],
+  "local_checks": [
+   {
+    "agent_id": "hunter-client",
+    "reviewed_paths": [
+     "apps/admin/client/src/menus.jsx",
+     "apps/admin/client/src/views/Test.jsx",
+     "apps/admin/client/src/views/Program.jsx",
+     "apps/admin/client/src/views/Siswa.jsx",
+     "apps/admin/client/src/views/Sertifikat.jsx"
+    ],
+    "invariant": "Every label interpolated into the innerHTML menu template must be either a literal string or escaped; no student- or operator-entered data may reach the sink raw.",
+    "method": "source",
+    "result": "PASS. The only producer of items is contextMenu, reached solely via the document-level data-menu trigger dispatch; every it.label reaching the template is a hardcoded Indonesian literal or a ternary of two literals. Program names, class codes, tutor names, and certificate numbers appear only in confirmThen/toast messages (textContent sinks) and in MenuBtn aria-label/title, which are React attribute interpolations. No student-supplied value reaches any menu label. iconHtml interpolates only the static icon name.",
+    "artifact": null
+   },
+   {
+    "agent_id": "hunter-client",
+    "reviewed_paths": [
+     "apps/admin/client/src/lib.js",
+     "apps/admin/client/src/views/Sertifikat.jsx"
+    ],
+    "invariant": "The slashWrap labels rendered through dangerouslySetInnerHTML must be HTML-escaped before the wbr injection.",
+    "method": "source",
+    "result": "PASS. escStr escapes & < > \" ' first, then slashWrap only replaces / with /<wbr>. The three dangerouslySetInnerHTML sites all pass values through slashWrap, so certificate numbers, formats, and computed next numbers cannot carry markup.",
+    "artifact": null
+   },
+   {
+    "agent_id": "hunter-client",
+    "reviewed_paths": [
+     "apps/admin/client/src/menus.jsx"
+    ],
+    "invariant": "The item click dispatch must not be redirectable by content inside the menu or by DOM clobbering.",
+    "method": "source",
+    "result": "PASS. data-index is generated from the map counter and read back with Number() against the closure-held items array, disabled items are skipped, and the menu host div is populated only from the same items array. No attacker-controlled HTML exists inside the menu; the CSP would additionally block any injected event handler.",
+    "artifact": null
+   }
+  ],
+  "result_fingerprints": [],
+  "unresolved": [],
+  "hardening_notes": [],
+  "unit_read_paths": [
+   "apps/admin/client/src/menus.jsx",
+   "apps/admin/client/src/lib.js",
+   "apps/admin/client/src/dom.js",
+   "apps/admin/client/src/views/Test.jsx",
+   "apps/admin/client/src/views/Program.jsx",
+   "apps/admin/client/src/views/Siswa.jsx",
+   "apps/admin/client/src/views/Sertifikat.jsx",
+   "apps/admin/client/src/views/MockupSesi.jsx"
+  ]
+ },
+ {
+  "coverage_id": "apps%2Fadmin%2Fclient%2Fsrc%23csv%20export::apps%2Fadmin%2Fclient%2Fsrc%23downloadCsv%20formula%20injection::apps%2Fadmin%2Fclient%2Fsrc::ATTACK-CLASSES.md%23Feature%20abuse%20and%20data%20leakage",
+  "canonical_refs": {
+   "surface": "apps/admin/client/src#csv export",
+   "boundary": "apps/admin/client/src#downloadCsv formula injection",
+   "subsystem": "apps/admin/client/src",
+   "attack_class": "ATTACK-CLASSES.md#Feature abuse and data leakage"
+  },
+  "surface": "apps/admin/client/src#csv export",
+  "boundary": "apps/admin/client/src#downloadCsv formula injection",
+  "subsystem": "apps/admin/client/src",
+  "attack_class": "ATTACK-CLASSES.md#Feature abuse and data leakage",
+  "starting_paths": [
+   "apps/admin/client/src/lib.js",
+   "apps/admin/client/src/views/Siswa.jsx"
+  ],
+  "ordinary_attack_class_block": "ATTACK-CLASSES.md#Feature abuse and data leakage",
+  "selected_companion_blocks": [
+   "CLIENT-SIDE.md#Core discipline"
+  ],
+  "excluded_blocks": [],
+  "prior_status": "none",
+  "attempts": [],
+  "wave": 1,
+  "status": "covered",
+  "agent_id": "hunter-client",
+  "reviewed_paths": [
+   "apps/admin/client/src/lib.js",
+   "apps/admin/client/src/views/MockupSesi.jsx",
+   "apps/admin/client/src/views/Siswa.jsx"
+  ],
+  "local_checks": [
+   {
+    "agent_id": "hunter-client",
+    "reviewed_paths": [
+     "apps/admin/client/src/lib.js",
+     "apps/admin/client/src/views/MockupSesi.jsx"
+    ],
+    "invariant": "Every CSV cell written from student- or participant-controlled data must neutralize spreadsheet formula prefixes before the file is offered for download.",
+    "method": "source",
+    "result": "PASS. csvCell prefixes any value starting with = + - @ tab or CR with a single quote before quoting, and every export path funnels through it: exportStudents, exportAttempts, exportAllAttempts, exportLeads, and exportRoster all call downloadCsv, which maps csvCell over every cell. A crafted name like =cmd|'/c calc'!A1 becomes '=cmd... and renders as text. Escape order is correct: the apostrophe is inside the quoted field. No export builder bypasses downloadCsv.",
+    "artifact": null
+   },
+   {
+    "agent_id": "hunter-client",
+    "reviewed_paths": [
+     "apps/admin/client/src/views/MockupSesi.jsx"
+    ],
+    "invariant": "The roster export filename built from the session name must not allow path manipulation.",
+    "method": "source",
+    "result": "PASS. The session name is stripped to word and dash characters before becoming the download filename, and assignment happens through the anchor download property, not a filesystem path.",
+    "artifact": null
+   }
+  ],
+  "result_fingerprints": [],
+  "unresolved": [],
+  "hardening_notes": [],
+  "unit_read_paths": [
+   "apps/admin/client/src/lib.js",
+   "apps/admin/client/src/views/MockupSesi.jsx",
+   "apps/admin/client/src/views/Siswa.jsx"
+  ]
+ },
+ {
+  "coverage_id": "apps%2Fadmin%2Fsrc%2Fapi.js%23admin%20route%20table::apps%2Fadmin%2Fsrc%2Fapi.js%23checkOrigin::apps%2Fadmin%2Fsrc%2Fapi.js::ATTACK-CLASSES.md%23Access%20control",
+  "canonical_refs": {
+   "surface": "apps/admin/src/api.js#admin route table",
+   "boundary": "apps/admin/src/api.js#checkOrigin",
+   "subsystem": "apps/admin/src/api.js",
+   "attack_class": "ATTACK-CLASSES.md#Access control"
+  },
+  "surface": "apps/admin/src/api.js#admin route table",
+  "boundary": "apps/admin/src/api.js#checkOrigin",
+  "subsystem": "apps/admin/src/api.js",
+  "attack_class": "ATTACK-CLASSES.md#Access control",
+  "starting_paths": [
+   "apps/admin/src/api.js"
+  ],
+  "ordinary_attack_class_block": "ATTACK-CLASSES.md#Access control",
+  "selected_companion_blocks": [
+   "WEB-PROTOCOL-AND-AUTH.md#Ordinary CSRF",
+   "WEB-PROTOCOL-AND-AUTH.md#Host and forwarded-header trust"
+  ],
+  "excluded_blocks": [],
+  "prior_status": "none",
+  "attempts": [],
+  "wave": 1,
+  "status": "covered",
+  "agent_id": "hunter-admin-auth",
+  "reviewed_paths": [
+   "apps/admin/src/api.js",
+   "packages/core/src/node-server.js"
+  ],
+  "local_checks": [
+   {
+    "agent_id": "hunter-admin-auth",
+    "reviewed_paths": [
+     "apps/admin/src/api.js"
+    ],
+    "invariant": "Every state-changing request must carry the admin origin, so no cross-site or no-origin request can mutate staff data with a browser-attached cookie.",
+    "method": "source",
+    "result": "checkOrigin (179-183) rejects any non-GET/HEAD with a mismatched Origin but passes requests with no Origin at all. The browser path where both defenses must hold: SameSite=Strict stops every cross-site send, and on the shared registrable domain onrender.com (where a hostile tenant app is same-site, so SameSite does not apply) browsers still attach Origin to cross-origin POST fetches and form submissions, which checkOrigin then rejects against the server-derived url.origin. No browser request class was found that both omits Origin and carries the Strict cookie cross-site. The no-Origin allowance reduces to cookie-as-bearer for non-browser clients, the same trust as a stolen cookie, and is by design. Strong dual defense; no bypass found.",
+    "artifact": null
+   },
+   {
+    "agent_id": "hunter-admin-auth",
+    "reviewed_paths": [
+     "apps/admin/src/api.js"
+    ],
+    "invariant": "No route reachable without a session performs a state change other than login and setup.",
+    "method": "source",
+    "result": "Held. handleAdminApi runs checkOrigin first, then admits only POST login and GET/POST setup before the gate; every ROUTES entry sits behind the user check. Outside the API, serveAdminPage only accepts GET/HEAD.",
+    "artifact": null
+   },
+   {
+    "agent_id": "hunter-admin-auth",
+    "reviewed_paths": [
+     "apps/admin/src/api.js"
+    ],
+    "invariant": "GET and HEAD routes have no side effects, so the method exemption in checkOrigin cannot be abused.",
+    "method": "source",
+    "result": "Held. The six GET handlers in ROUTES and the page/asset paths only read and serve; no write, send, or counter mutation was found on any GET path.",
+    "artifact": null
+   },
+   {
+    "agent_id": "hunter-admin-auth",
+    "reviewed_paths": [
+     "apps/admin/src/api.js",
+     "packages/core/src/node-server.js"
+    ],
+    "invariant": "checkOrigin compares against a trustworthy origin.",
+    "method": "source",
+    "result": "Conditional. With TRUST_PROXY=1 the comparison target url.origin derives from x-forwarded-host and x-forwarded-proto, so a direct-connection attacker can make origin match by controlling both headers. That path requires already holding the session cookie and defeats no browser CSRF defense, but checkOrigin's strictness is only as trustworthy as the proxy header policy. Recorded as hardening.",
+    "artifact": null
+   }
+  ],
+  "result_fingerprints": [],
+  "unresolved": [],
+  "hardening_notes": [],
+  "unit_read_paths": [
+   "apps/admin/src/api.js",
+   "packages/core/src/node-server.js"
+  ]
+ },
+ {
+  "coverage_id": "apps%2Fadmin%2Fsrc%2Fapi.js%23admin%20route%20table::apps%2Fadmin%2Fsrc%2Fapi.js%23no%20role%20check::apps%2Fadmin%2Fsrc%2Fapi.js::ATTACK-CLASSES.md%23Access%20control",
+  "canonical_refs": {
+   "surface": "apps/admin/src/api.js#admin route table",
+   "boundary": "apps/admin/src/api.js#no role check",
+   "subsystem": "apps/admin/src/api.js",
+   "attack_class": "ATTACK-CLASSES.md#Access control"
+  },
+  "surface": "apps/admin/src/api.js#admin route table",
+  "boundary": "apps/admin/src/api.js#no role check",
+  "subsystem": "apps/admin/src/api.js",
+  "attack_class": "ATTACK-CLASSES.md#Access control",
+  "starting_paths": [
+   "apps/admin/src/api.js"
+  ],
+  "ordinary_attack_class_block": "ATTACK-CLASSES.md#Access control",
+  "selected_companion_blocks": [
+   "DATA-ISOLATION-AND-LIFECYCLE.md#Core discipline"
+  ],
+  "excluded_blocks": [],
+  "prior_status": "none",
+  "attempts": [],
+  "wave": 1,
+  "status": "covered",
+  "agent_id": "hunter-admin-auth",
+  "reviewed_paths": [
+   "apps/admin/src/api.js",
+   "scripts/create-admin.mjs",
+   "db/migrations/0001_init.sql"
+  ],
+  "local_checks": [
+   {
+    "agent_id": "hunter-admin-auth",
+    "reviewed_paths": [
+     "apps/admin/src/api.js",
+     "db/migrations/0001_init.sql"
+    ],
+    "invariant": "Destructive or admin-affecting actions are limited to the admin role.",
+    "method": "source",
+    "result": "Not enforced anywhere: the role column exists and currentUser returns it, but no ROUTES handler reads user.role, so a pendidikan operator can void and bulk-delete attempts, delete students, delete certificate types, and re-score writing and speaking. This matches the documented decision (both roles see everything), so it is informational; there is no second privilege tier in the product to violate.",
+    "artifact": null
+   },
+   {
+    "agent_id": "hunter-admin-auth",
+    "reviewed_paths": [
+     "scripts/create-admin.mjs"
+    ],
+    "invariant": "Admin accounts cannot be created or reset outside an authenticated, audited path.",
+    "method": "source",
+    "result": "Held within the trust model: the script mints or resets any account's password using only DATABASE_URL from the machine running it, which is database-owner privilege, the same level that could edit the table directly, and no dashboard route creates or resets accounts.",
+    "artifact": null
+   }
+  ],
+  "result_fingerprints": [],
+  "unresolved": [],
+  "hardening_notes": [],
+  "unit_read_paths": [
+   "apps/admin/src/api.js",
+   "scripts/create-admin.mjs",
+   "db/migrations/0001_init.sql"
+  ]
+ },
+ {
+  "coverage_id": "apps%2Fadmin%2Fsrc%2Fapi.js%23admin%20route%20table::apps%2Fadmin%2Fsrc%2Fapi.js%23session%20gate::apps%2Fadmin%2Fsrc%2Fapi.js::ATTACK-CLASSES.md%23Feature%20abuse%20and%20data%20leakage",
+  "canonical_refs": {
+   "surface": "apps/admin/src/api.js#admin route table",
+   "boundary": "apps/admin/src/api.js#session gate",
+   "subsystem": "apps/admin/src/api.js",
+   "attack_class": "ATTACK-CLASSES.md#Feature abuse and data leakage"
+  },
+  "surface": "apps/admin/src/api.js#admin route table",
+  "boundary": "apps/admin/src/api.js#session gate",
+  "subsystem": "apps/admin/src/api.js",
+  "attack_class": "ATTACK-CLASSES.md#Feature abuse and data leakage",
+  "starting_paths": [
+   "apps/admin/src/api.js"
+  ],
+  "ordinary_attack_class_block": "ATTACK-CLASSES.md#Feature abuse and data leakage",
+  "selected_companion_blocks": [
+   "WEB-PROTOCOL-AND-AUTH.md#Session fixation and invalidation"
+  ],
+  "excluded_blocks": [],
+  "prior_status": "none",
+  "attempts": [],
+  "wave": 1,
+  "status": "covered",
+  "agent_id": "hunter-admin-auth",
+  "reviewed_paths": [
+   "apps/admin/src/api.js",
+   "packages/core/src/node-server.js"
+  ],
+  "local_checks": [
+   {
+    "agent_id": "hunter-admin-auth",
+    "reviewed_paths": [
+     "apps/admin/src/api.js"
+    ],
+    "invariant": "Every state-changing request must carry the admin origin, so no cross-site or no-origin request can mutate staff data with a browser-attached cookie.",
+    "method": "source",
+    "result": "checkOrigin (179-183) rejects any non-GET/HEAD with a mismatched Origin but passes requests with no Origin at all. The browser path where both defenses must hold: SameSite=Strict stops every cross-site send, and on the shared registrable domain onrender.com (where a hostile tenant app is same-site, so SameSite does not apply) browsers still attach Origin to cross-origin POST fetches and form submissions, which checkOrigin then rejects against the server-derived url.origin. No browser request class was found that both omits Origin and carries the Strict cookie cross-site. The no-Origin allowance reduces to cookie-as-bearer for non-browser clients, the same trust as a stolen cookie. Strong dual defense; no bypass found.",
+    "artifact": null
+   },
+   {
+    "agent_id": "hunter-admin-auth",
+    "reviewed_paths": [
+     "apps/admin/src/api.js"
+    ],
+    "invariant": "No route reachable without a session performs a state change other than login and setup.",
+    "method": "source",
+    "result": "Held. handleAdminApi (345-358) runs checkOrigin first, then admits only POST login and GET/POST setup before the gate; every ROUTES entry sits behind the user check at 350-351. Outside the API, serveAdminPage only accepts GET/HEAD and every mutating handler lives in ROUTES.",
+    "artifact": null
+   },
+   {
+    "agent_id": "hunter-admin-auth",
+    "reviewed_paths": [
+     "apps/admin/src/api.js"
+    ],
+    "invariant": "GET and HEAD routes have no side effects, so the method exemption in checkOrigin cannot be abused.",
+    "method": "source",
+    "result": "Held. The six GET handlers in ROUTES and the page/asset paths only read and serve; no write, send, or counter mutation exists on any GET path.",
+    "artifact": null
+   },
+   {
+    "agent_id": "hunter-admin-auth",
+    "reviewed_paths": [
+     "apps/admin/src/api.js",
+     "packages/core/src/node-server.js"
+    ],
+    "invariant": "checkOrigin compares against a trustworthy origin.",
+    "method": "source",
+    "result": "Conditional. With TRUST_PROXY=1 the comparison target url.origin derives from x-forwarded-host and x-forwarded-proto, so a direct-connection attacker can make origin match by controlling both headers. That path requires already holding the session cookie and defeats no browser CSRF defense, but checkOrigin's strictness is only as trustworthy as the proxy header policy. Recorded as hardening.",
+    "artifact": null
+   }
+  ],
+  "result_fingerprints": [],
+  "unresolved": [],
+  "hardening_notes": [],
+  "unit_read_paths": [
+   "apps/admin/src/api.js",
+   "packages/core/src/node-server.js"
+  ]
+ },
+ {
+  "coverage_id": "apps%2Fadmin%2Fsrc%2Fapi.js%23attempts%20resend-email::apps%2Fadmin%2Fsrc%2Fapi.js%23attemptAction%20resend-email%20channel%20write::apps%2Fadmin%2Fsrc%2Fapi.js::ATTACK-CLASSES.md%23Business%20logic",
+  "canonical_refs": {
+   "surface": "apps/admin/src/api.js#attempts resend-email",
+   "boundary": "apps/admin/src/api.js#attemptAction resend-email channel write",
+   "subsystem": "apps/admin/src/api.js",
+   "attack_class": "ATTACK-CLASSES.md#Business logic"
+  },
+  "surface": "apps/admin/src/api.js#attempts resend-email",
+  "boundary": "apps/admin/src/api.js#attemptAction resend-email channel write",
+  "subsystem": "apps/admin/src/api.js",
+  "attack_class": "ATTACK-CLASSES.md#Business logic",
+  "starting_paths": [
+   "apps/admin/src/api.js",
+   "packages/core/src/delivery.js",
+   "apps/web/src/api.js"
+  ],
+  "ordinary_attack_class_block": "ATTACK-CLASSES.md#Business logic",
+  "selected_companion_blocks": [
+   "DATA-ISOLATION-AND-LIFECYCLE.md#Core discipline"
+  ],
+  "excluded_blocks": [],
+  "prior_status": "none",
+  "attempts": [],
+  "wave": 2,
+  "status": "candidate",
+  "agent_id": "hunter-wave2-admin-parallel",
+  "reviewed_paths": [
+   "apps/admin/src/api.js",
+   "packages/core/src/delivery.js",
+   "apps/web/src/api.js"
+  ],
+  "local_checks": [
+   {
+    "agent_id": "hunter-wave2-admin-parallel",
+    "reviewed_paths": [
+     "apps/admin/src/api.js"
+    ],
+    "invariant": "Exactly one writer sends a given attempt's result email, coordinated through delivery_lease_until; a voided attempt's result is never delivered.",
+    "method": "source",
+    "result": "FAIL on coordination and on the void gate. attemptAction's resend-email branch sends via env.SEND_EMAIL.send and unconditionally writes email_sent_at/email_status without reading email_status, wa_status, or delivery_lease_until, while delivery.js claims the same attempt through the lease and writes the same columns on completion. A press inside a background delivery's claim-to-completion window produces two emails and clobbers the bookkeeping whichever writer finishes last. The branch also never reads voided_at, so a voided placement attempt's full result email (score, level, speaking transcript, private link) can be sent at any time. Gates present: placement, submitted, a.email present, speaking finality. Candidate wave2/resend-email-second-writer.",
+    "artifact": null
+   }
+  ],
+  "result_fingerprints": [
+   "wave2/resend-email-second-writer"
+  ],
+  "unresolved": [
+   "Whether any deployed workflow lets a non-operator influence the timing of an admin resend press relative to a background delivery; not derivable from source."
+  ],
+  "unit_read_paths": [
+   "apps/admin/src/api.js",
+   "packages/core/src/delivery.js",
+   "apps/web/src/api.js"
+  ],
+  "hardening_notes": []
+ },
+ {
+  "coverage_id": "apps%2Fadmin%2Fsrc%2Fapi.js%23attempts%20void%20delete%20export::apps%2Fadmin%2Fsrc%2Fapi.js%23bulk%20id%20validation::apps%2Fadmin%2Fsrc%2Fapi.js::ATTACK-CLASSES.md%23Business%20logic",
+  "canonical_refs": {
+   "surface": "apps/admin/src/api.js#attempts void delete export",
+   "boundary": "apps/admin/src/api.js#bulk id validation",
+   "subsystem": "apps/admin/src/api.js",
+   "attack_class": "ATTACK-CLASSES.md#Business logic"
+  },
+  "surface": "apps/admin/src/api.js#attempts void delete export",
+  "boundary": "apps/admin/src/api.js#bulk id validation",
+  "subsystem": "apps/admin/src/api.js",
+  "attack_class": "ATTACK-CLASSES.md#Business logic",
+  "starting_paths": [
+   "apps/admin/src/api.js"
+  ],
+  "ordinary_attack_class_block": "ATTACK-CLASSES.md#Business logic",
+  "selected_companion_blocks": [
+   "DATA-ISOLATION-AND-LIFECYCLE.md#Core discipline"
+  ],
+  "excluded_blocks": [],
+  "prior_status": "none",
+  "attempts": [],
+  "wave": 1,
+  "status": "covered",
+  "agent_id": "hunter-admin-data",
+  "reviewed_paths": [
+   "apps/admin/src/api.js",
+   "apps/admin/client/src/lib.js"
+  ],
+  "local_checks": [
+   {
+    "agent_id": "hunter-admin-data",
+    "reviewed_paths": [
+     "apps/admin/src/api.js"
+    ],
+    "invariant": "bulk delete accepts only well-formed attempt ids and cannot touch other tables.",
+    "method": "source",
+    "result": "pass: the 36-character hex filter at 2057 caps the list at 500 and every id is a bound parameter; the batch deletes answers then attempts only, and speaking rows cascade via FK.",
+    "artifact": null
+   },
+   {
+    "agent_id": "hunter-admin-data",
+    "reviewed_paths": [
+     "apps/admin/src/api.js"
+    ],
+    "invariant": "void/restore keep reason length bounded and stay unrestricted by design.",
+    "method": "source",
+    "result": "pass: void reason capped at 300 chars, restore clears all three columns, unrestricted cross-record void/restore for any session is accepted by design.",
+    "artifact": null
+   },
+   {
+    "agent_id": "hunter-admin-data",
+    "reviewed_paths": [
+     "apps/admin/src/api.js",
+     "apps/admin/client/src/lib.js"
+    ],
+    "invariant": "the export path neutralizes formula characters and does not export secrets.",
+    "method": "source",
+    "result": "pass: no server-side CSV endpoint exists; the export is built in the client from the bootstrap payload, whose columns are id, name, email, WhatsApp, branch, dates, scores, bands, device label, and country. No answer keys, essays, tokens, or raw answers travel in the attempt payload. Formula neutralization happens in csvCell, which prefixes cells starting with = + - @ tab or CR.",
+    "artifact": null
+   }
+  ],
+  "result_fingerprints": [],
+  "unresolved": [],
+  "hardening_notes": [],
+  "unit_read_paths": [
+   "apps/admin/src/api.js",
+   "apps/admin/client/src/lib.js"
+  ]
+ },
+ {
+  "coverage_id": "apps%2Fadmin%2Fsrc%2Fapi.js%23first%20admin%20setup::apps%2Fadmin%2Fsrc%2Fapi.js%23adminCount%20gate::apps%2Fadmin%2Fsrc%2Fapi.js::ATTACK-CLASSES.md%23Access%20control",
+  "canonical_refs": {
+   "surface": "apps/admin/src/api.js#first admin setup",
+   "boundary": "apps/admin/src/api.js#adminCount gate",
+   "subsystem": "apps/admin/src/api.js",
+   "attack_class": "ATTACK-CLASSES.md#Access control"
+  },
+  "surface": "apps/admin/src/api.js#first admin setup",
+  "boundary": "apps/admin/src/api.js#adminCount gate",
+  "subsystem": "apps/admin/src/api.js",
+  "attack_class": "ATTACK-CLASSES.md#Access control",
+  "starting_paths": [
+   "apps/admin/src/api.js",
+   "apps/admin/server.js"
+  ],
+  "ordinary_attack_class_block": "ATTACK-CLASSES.md#Access control",
+  "selected_companion_blocks": [
+   "WEB-PROTOCOL-AND-AUTH.md#Step-up binding and bypass"
+  ],
+  "excluded_blocks": [],
+  "prior_status": "none",
+  "attempts": [],
+  "wave": 1,
+  "status": "candidate",
+  "agent_id": "hunter-admin-auth",
+  "reviewed_paths": [
+   "apps/admin/src/api.js",
+   "apps/admin/server.js",
+   "packages/core/src/db.js",
+   "db/migrations/0001_init.sql"
+  ],
+  "local_checks": [
+   {
+    "agent_id": "hunter-admin-auth",
+    "reviewed_paths": [
+     "apps/admin/src/api.js",
+     "apps/admin/server.js"
+    ],
+    "invariant": "The localhost setup exemption cannot be triggered by a remote request.",
+    "method": "source",
+    "result": "Held. isLocalRequest (227-232) requires all three of: socket remoteAddress is loopback (not header-derived), no x-forwarded-for header, and a localhost-family Host. A remote attacker controls Host but not the socket peer address; on Render the peer is Render's proxy, never loopback.",
+    "artifact": null
+   },
+   {
+    "agent_id": "hunter-admin-auth",
+    "reviewed_paths": [
+     "apps/admin/src/api.js",
+     "packages/core/src/db.js"
+    ],
+    "invariant": "Once any admin exists, setup is closed even under concurrent setups.",
+    "method": "source",
+    "result": "Not airtight, low impact. The gate is adminCount at 239 followed by an INSERT ... WHERE NOT EXISTS inside batch() (253-257), which runs at Postgres READ COMMITTED. Two concurrent setups with different emails both evaluate NOT EXISTS before either commits, neither violates the email UNIQUE constraint, both commit with changes=1, and both receive session cookies: two admins from a window that is supposed to close on the first. Both requesters already passed the code or localhost check. Candidate: admin-auth/setup-race-double-admin.",
+    "artifact": null
+   },
+   {
+    "agent_id": "hunter-admin-auth",
+    "reviewed_paths": [
+     "apps/admin/src/api.js",
+     "apps/admin/server.js"
+    ],
+    "invariant": "The setup code cannot be brute-forced.",
+    "method": "source",
+    "result": "No attempt counter, throttle, or lockout exists on POST /api/admin/setup, and a wrong guess does not disable anything: setupCode stays set (cleared only on success at 261) and the comparison at 240 is a plain !==. The window exists only while zero admins exist, and the code is 8 or more uppercase alphanumerics, roughly 36^8, infeasible online. The invariant that secret-guessing endpoints rate-limit is still absent. Candidate: admin-auth/setup-code-unlimited-guesses.",
+    "artifact": null
+   },
+   {
+    "agent_id": "hunter-admin-auth",
+    "reviewed_paths": [
+     "apps/admin/src/api.js"
+    ],
+    "invariant": "A failed setup attempt leaves the flow exactly as it was.",
+    "method": "source",
+    "result": "Held: a failed guess throws before any INSERT, and the only state change on the path (setupCode = null at 261) happens after the changes check confirms creation.",
+    "artifact": null
+   }
+  ],
+  "result_fingerprints": [
+   "admin-auth/setup-race-double-admin",
+   "admin-auth/setup-code-unlimited-guesses"
+  ],
+  "unresolved": [],
+  "hardening_notes": [],
+  "unit_read_paths": [
+   "apps/admin/src/api.js",
+   "apps/admin/server.js",
+   "packages/core/src/db.js",
+   "db/migrations/0001_init.sql"
+  ]
+ },
+ {
+  "coverage_id": "apps%2Fadmin%2Fsrc%2Fapi.js%23invite%20create%20and%20queue::apps%2Fadmin%2Fsrc%2Fapi.js%23plain_token%20queue%20row::apps%2Fadmin%2Fsrc%2Fapi.js::ATTACK-CLASSES.md%23Cryptography%20and%20secrets",
+  "canonical_refs": {
+   "surface": "apps/admin/src/api.js#invite create and queue",
+   "boundary": "apps/admin/src/api.js#plain_token queue row",
+   "subsystem": "apps/admin/src/api.js",
+   "attack_class": "ATTACK-CLASSES.md#Cryptography and secrets"
+  },
+  "surface": "apps/admin/src/api.js#invite create and queue",
+  "boundary": "apps/admin/src/api.js#plain_token queue row",
+  "subsystem": "apps/admin/src/api.js",
+  "attack_class": "ATTACK-CLASSES.md#Cryptography and secrets",
+  "starting_paths": [
+   "apps/admin/src/api.js",
+   "apps/admin/src/invite-queue.js",
+   "packages/core/src/crypto.js"
+  ],
+  "ordinary_attack_class_block": "ATTACK-CLASSES.md#Cryptography and secrets",
+  "selected_companion_blocks": [
+   "WEB-PROTOCOL-AND-AUTH.md#API-key exposure and unsafe transport"
+  ],
+  "excluded_blocks": [],
+  "prior_status": "none",
+  "attempts": [],
+  "wave": 1,
+  "status": "candidate",
+  "agent_id": "hunter-admin-data",
+  "reviewed_paths": [
+   "apps/admin/src/api.js",
+   "apps/admin/src/invite-queue.js",
+   "packages/core/src/crypto.js",
+   "apps/web/src/api.js"
+  ],
+  "local_checks": [
+   {
+    "agent_id": "hunter-admin-data",
+    "reviewed_paths": [
+     "apps/admin/src/api.js",
+     "packages/core/src/crypto.js"
+    ],
+    "invariant": "only the SHA-256 hash of an invite token is stored long-term; the plaintext reaches only the operator who created it.",
+    "method": "source",
+    "result": "pass for the invites table: createInvite stores sha256Hex(token) and returns the link once to the creating operator; moveInviteToSession stores only the hash of the new token.",
+    "artifact": null
+   },
+   {
+    "agent_id": "hunter-admin-data",
+    "reviewed_paths": [
+     "apps/admin/src/invite-queue.js",
+     "apps/admin/src/api.js"
+    ],
+    "invariant": "the plaintext token on the queue row is erased once delivered and never reaches a client payload or a persistent log.",
+    "method": "source",
+    "result": "fail: the queue row's plain_token is erased only when email is sent/dilewati AND wa is sent (invite-queue.js:138), so a permanently failed channel keeps the usable token in the database indefinitely, with no expiry sweep. Worse, sendWhatsAppChannel (106-121) inserts the full message text, which contains the same live token in the link, into wa_messages with no purge, and wa_messages survive the queue-row erasure. The design goal 'the token lives on the queue row only until both channels have delivered' is defeated by the message log copy. No client payload leaks it: getSessionRoster selects q.plain_token but never emits it, and retryInviteChannel uses it only for a truthiness check. Candidate: admin-data/plain-token-persistence.",
+    "artifact": null
+   },
+   {
+    "agent_id": "hunter-admin-data",
+    "reviewed_paths": [
+     "apps/admin/src/api.js",
+     "apps/admin/src/invite-queue.js"
+    ],
+    "invariant": "a test send cannot create a usable invite or silently bypass the shared email quota accounting.",
+    "method": "source",
+    "result": "partial fail: testSendSessionMessage uses the literal link ?undangan=contoh-tautan and code ABC234, so it creates no invite and cannot start a test. However, it sends a real email through env.SEND_EMAIL and records nothing, while emailsSentRecently counts only attempts.email_sent_at and queue email_sent_at. Each test send consumes real Cloudflare quota the queue believes it still has, so repeated test sends let the drain overshoot the 200/day limit and real invite emails start failing. Candidate: admin-data/testsend-quota-unaccounted.",
+    "artifact": null
+   }
+  ],
+  "result_fingerprints": [
+   "admin-data/plain-token-persistence",
+   "admin-data/testsend-quota-unaccounted"
+  ],
+  "unresolved": [],
+  "hardening_notes": [],
+  "unit_read_paths": [
+   "apps/admin/src/api.js",
+   "apps/admin/src/invite-queue.js",
+   "packages/core/src/crypto.js",
+   "apps/web/src/api.js"
+  ]
+ },
+ {
+  "coverage_id": "apps%2Fadmin%2Fsrc%2Fapi.js%23login::apps%2Fadmin%2Fsrc%2Fapi.js%23PBKDF2%20verify%2Blockout::apps%2Fadmin%2Fsrc%2Fapi.js::ATTACK-CLASSES.md%23Access%20control",
+  "canonical_refs": {
+   "surface": "apps/admin/src/api.js#login",
+   "boundary": "apps/admin/src/api.js#PBKDF2 verify+lockout",
+   "subsystem": "apps/admin/src/api.js",
+   "attack_class": "ATTACK-CLASSES.md#Access control"
+  },
+  "surface": "apps/admin/src/api.js#login",
+  "boundary": "apps/admin/src/api.js#PBKDF2 verify+lockout",
+  "subsystem": "apps/admin/src/api.js",
+  "attack_class": "ATTACK-CLASSES.md#Access control",
+  "starting_paths": [
+   "apps/admin/src/api.js",
+   "packages/core/src/crypto.js"
+  ],
+  "ordinary_attack_class_block": "ATTACK-CLASSES.md#Access control",
+  "selected_companion_blocks": [
+   "WEB-PROTOCOL-AND-AUTH.md#Password reset and broader recovery",
+   "WEB-PROTOCOL-AND-AUTH.md#Cookie scope and transport"
+  ],
+  "excluded_blocks": [],
+  "prior_status": "none",
+  "attempts": [],
+  "wave": 1,
+  "status": "candidate",
+  "agent_id": "hunter-admin-auth",
+  "reviewed_paths": [
+   "apps/admin/src/api.js",
+   "packages/core/src/crypto.js",
+   "db/migrations/0001_init.sql"
+  ],
+  "local_checks": [
+   {
+    "agent_id": "hunter-admin-auth",
+    "reviewed_paths": [
+     "packages/core/src/crypto.js"
+    ],
+    "invariant": "Password verification is constant-time and the 5-failure lockout cannot be bypassed or delayed by concurrent attempts.",
+    "method": "source",
+    "result": "verifyPassword compares fixed-length 64-char hex digests through timingSafeEqual; the length early-exit is unreachable because both operands are always 256-bit hex, so the compare is sound. The lockout is not: login reads the user row, checks locked_until on that stale row, and writes failed_logins = user.failed_logins + 1 with a plain UPDATE, an unguarded read-modify-write. N simultaneous wrong-password requests each read the same counter value and each write the same +1, so the counter advances by about one per concurrent wave and LOCK_AFTER=5 is reached after roughly 5 waves of any size. No IP throttle and no per-account atomic increment, so parallel guessing makes the account effectively never lock. Candidate: admin-auth/lockout-parallel-bypass.",
+    "artifact": null
+   },
+   {
+    "agent_id": "hunter-admin-auth",
+    "reviewed_paths": [
+     "apps/admin/src/api.js"
+    ],
+    "invariant": "Login responses do not let an attacker distinguish a known account from an unknown one.",
+    "method": "source",
+    "result": "Response bodies are identical and the locked-state message does not leak existence because it is reachable only for a real row. Timing does leak: an unknown email returns before any PBKDF2 work, while a known email runs a 600k-iteration deriveBits before the same 401, a difference of roughly 100ms per request. Candidate: admin-auth/login-user-enumeration-timing.",
+    "artifact": null
+   },
+   {
+    "agent_id": "hunter-admin-auth",
+    "reviewed_paths": [
+     "apps/admin/src/api.js",
+     "packages/core/src/crypto.js"
+    ],
+    "invariant": "A locked account cannot be unlocked or reset except by time or a successful login.",
+    "method": "source",
+    "result": "Held: the lock check runs before verifyPassword and before the reset UPDATE, a successful login resets failed_logins and locked_until in the same batch, and the reset only fires after a correct password, so the lock is not clearable by guessing.",
+    "artifact": null
+   }
+  ],
+  "result_fingerprints": [
+   "admin-auth/lockout-parallel-bypass",
+   "admin-auth/login-user-enumeration-timing"
+  ],
+  "unresolved": [],
+  "hardening_notes": [],
+  "unit_read_paths": [
+   "apps/admin/src/api.js",
+   "packages/core/src/crypto.js",
+   "db/migrations/0001_init.sql"
+  ]
+ },
+ {
+  "coverage_id": "apps%2Fadmin%2Fsrc%2Fapi.js%23login::apps%2Fadmin%2Fsrc%2Fapi.js%23tnec_admin%20cookie::apps%2Fadmin%2Fsrc%2Fapi.js::ATTACK-CLASSES.md%23Business%20logic",
+  "canonical_refs": {
+   "surface": "apps/admin/src/api.js#login",
+   "boundary": "apps/admin/src/api.js#tnec_admin cookie",
+   "subsystem": "apps/admin/src/api.js",
+   "attack_class": "ATTACK-CLASSES.md#Business logic"
+  },
+  "surface": "apps/admin/src/api.js#login",
+  "boundary": "apps/admin/src/api.js#tnec_admin cookie",
+  "subsystem": "apps/admin/src/api.js",
+  "attack_class": "ATTACK-CLASSES.md#Business logic",
+  "starting_paths": [
+   "apps/admin/src/api.js",
+   "packages/core/src/node-server.js"
+  ],
+  "ordinary_attack_class_block": "ATTACK-CLASSES.md#Business logic",
+  "selected_companion_blocks": [
+   "WEB-PROTOCOL-AND-AUTH.md#Cookie scope and transport",
+   "WEB-PROTOCOL-AND-AUTH.md#Ordinary CSRF",
+   "WEB-PROTOCOL-AND-AUTH.md#Session fixation and invalidation"
+  ],
+  "excluded_blocks": [],
+  "prior_status": "none",
+  "attempts": [
+   {
+    "wave": 1,
+    "status": "candidate",
+    "agent_id": "hunter-admin-auth",
+    "reviewed_paths": [
+     "apps/admin/src/api.js",
+     "packages/core/src/crypto.js",
+     "db/migrations/0001_init.sql"
+    ],
+    "local_checks": [
+     {
+      "agent_id": "hunter-admin-auth",
+      "reviewed_paths": [
+       "packages/core/src/crypto.js"
+      ],
+      "invariant": "Password verification is constant-time and the 5-failure lockout cannot be bypassed or delayed by concurrent attempts.",
+      "method": "source",
+      "result": "verifyPassword compares fixed-length hex through timingSafeEqual (48-53); the length early-exit is unreachable because both operands are always 256-bit hex. The lockout is not airtight: login (api.js 190-200) reads the user row, checks locked_until on that stale row, and writes failed_logins = user.failed_logins + 1 with a plain UPDATE, an unguarded read-modify-write. N simultaneous wrong-password requests each read the same counter and each write the same +1, so the counter advances about once per concurrent wave and LOCK_AFTER=5 is reached only after roughly 5 waves of any size. No IP throttle and no per-account atomic increment. Candidate: admin-auth/lockout-parallel-bypass.",
+      "artifact": null
+     },
+     {
+      "agent_id": "hunter-admin-auth",
+      "reviewed_paths": [
+       "apps/admin/src/api.js"
+      ],
+      "invariant": "Login responses do not let an attacker distinguish a known account from an unknown one.",
+      "method": "source",
+      "result": "Response bodies are identical (401 at 192 and 200) and the locked-state message does not leak existence. Timing does leak: an unknown email returns at 192 before any PBKDF2 work, while a known email runs a 600k-iteration deriveBits before the same 401, a reliable account-enumeration oracle. Candidate: admin-auth/login-user-enumeration-timing.",
+      "artifact": null
+     },
+     {
+      "agent_id": "hunter-admin-auth",
+      "reviewed_paths": [
+       "apps/admin/src/api.js",
+       "packages/core/src/crypto.js"
+      ],
+      "invariant": "A locked account cannot be unlocked or reset except by time or a successful login.",
+      "method": "source",
+      "result": "Held: the lock check (193-195) runs before verifyPassword and before the reset UPDATE, a successful login resets failed_logins and locked_until in the same batch (203-208), and the reset only fires after a correct password.",
+      "artifact": null
+     }
+    ],
+    "result_fingerprints": [
+     "admin-auth/lockout-parallel-bypass",
+     "admin-auth/login-user-enumeration-timing"
+    ],
+    "unresolved": [],
+    "reassignment_reason": "The unit selected the cookie companion but no check tests the cookie flags or the TRUST_PROXY-derived Secure flag; the deployment fact needs its needs_validation home."
+   }
+  ],
+  "wave": 2,
+  "status": "candidate",
+  "agent_id": "hunter-wave2-reopen-cookie",
+  "reviewed_paths": [
+   "apps/admin/src/api.js",
+   "apps/admin/server.js",
+   "packages/core/src/node-server.js",
+   "packages/core/src/env.js"
+  ],
+  "local_checks": [
+   {
+    "agent_id": "hunter-wave2-reopen-cookie",
+    "reviewed_paths": [
+     "apps/admin/src/api.js"
+    ],
+    "invariant": "Every Set-Cookie site emits the tnec_admin cookie with HttpOnly, SameSite=Strict, Path=/, and Max-Age; the logout expiry keeps the same attributes.",
+    "method": "source",
+    "result": "PASS. sessionCookie is the single builder; exactly three Set-Cookie sites exist (login, logout with Max-Age=0, setup); no Domain attribute is ever emitted, so the cookie is host-only; no other route sets a cookie.",
+    "artifact": null
+   },
+   {
+    "agent_id": "hunter-wave2-reopen-cookie",
+    "reviewed_paths": [
+     "apps/admin/src/api.js",
+     "packages/core/src/node-server.js",
+     "packages/core/src/env.js"
+    ],
+    "invariant": "The Secure flag is derived from the request protocol, which under TRUST_PROXY comes from x-forwarded-proto; the deployed configuration determines whether the flag is present.",
+    "method": "source",
+    "result": "PASS with one deployment fact unverifiable. With TRUST_PROXY set and the edge sending x-forwarded-proto https, the cookie is Secure. If TRUST_PROXY is unset, the protocol derives as http behind the edge, Secure is dropped, and checkOrigin would reject every dashboard write, which would have been noticed; the dashboard demonstrably works, so the deployed config is almost certainly TRUST_PROXY=1 with an https proto. The single fact not confirmable from source is the actual x-forwarded-proto value Render injects and the literal TRUST_PROXY value in the Render env. Candidate wave2/trust-proxy-secure-cookie.",
+    "artifact": null
+   },
+   {
+    "agent_id": "hunter-wave2-reopen-cookie",
+    "reviewed_paths": [
+     "apps/admin/src/api.js"
+    ],
+    "invariant": "Login mints a fresh unpredictable token per session and logout deletes the session row server-side.",
+    "method": "source",
+    "result": "PASS. Every login mints randomToken(32) fresh and stores only its sha256; the client can never inject a chosen token, so fixation is impossible. Logout evicts the cache entry, deletes the row, and clears the cookie.",
+    "artifact": null
+   }
+  ],
+  "result_fingerprints": [
+   "wave2/trust-proxy-secure-cookie"
+  ],
+  "unresolved": [],
+  "hardening_notes": [],
+  "unit_read_paths": [
+   "apps/admin/src/api.js",
+   "apps/admin/server.js",
+   "packages/core/src/node-server.js",
+   "packages/core/src/env.js"
+  ]
+ },
+ {
+  "coverage_id": "apps%2Fadmin%2Fsrc%2Fapi.js%23mockup%20regrade%20routes::apps%2Fadmin%2Fsrc%2Fapi.js%23retryMockupSpeaking%20and%20regradeWriting%20state%20gates::apps%2Fadmin%2Fsrc%2Fapi.js::ATTACK-CLASSES.md%23Business%20logic",
+  "canonical_refs": {
+   "surface": "apps/admin/src/api.js#mockup regrade routes",
+   "boundary": "apps/admin/src/api.js#retryMockupSpeaking and regradeWriting state gates",
+   "subsystem": "apps/admin/src/api.js",
+   "attack_class": "ATTACK-CLASSES.md#Business logic"
+  },
+  "surface": "apps/admin/src/api.js#mockup regrade routes",
+  "boundary": "apps/admin/src/api.js#retryMockupSpeaking and regradeWriting state gates",
+  "subsystem": "apps/admin/src/api.js",
+  "attack_class": "ATTACK-CLASSES.md#Business logic",
+  "starting_paths": [
+   "apps/admin/src/api.js",
+   "packages/core/src/speaking-mockup-worker.js"
+  ],
+  "ordinary_attack_class_block": "ATTACK-CLASSES.md#Business logic",
+  "selected_companion_blocks": [
+   "RESOURCE-EXHAUSTION-AND-AVAILABILITY.md#Core discipline"
+  ],
+  "excluded_blocks": [],
+  "prior_status": "none",
+  "attempts": [],
+  "wave": 2,
+  "status": "covered",
+  "agent_id": "hunter-wave2-admin-parallel",
+  "reviewed_paths": [
+   "apps/admin/src/api.js",
+   "packages/core/src/speaking-mockup-worker.js",
+   "apps/web/src/api.js"
+  ],
+  "local_checks": [
+   {
+    "agent_id": "hunter-wave2-admin-parallel",
+    "reviewed_paths": [
+     "apps/admin/src/api.js"
+    ],
+    "invariant": "Paid third-party scoring is re-armed only under a state gate and within a bounded budget per attempt.",
+    "method": "source",
+    "result": "PARTIAL FAIL within operator authority. retryMockupSpeaking resets every failed row of the attempt at once with no submitted or voided gate, so it can requeue an in_progress attempt's rows mid-interview and a voided attempt's rows at any time; regradeWriting overwrites attempts.bands with the same missing gates. However the principal is an authenticated operator whose per-press cost is bounded by the attempt's own rows (at most 18 speaking answers, 2 essays) and the worker caps tries per row; repeated presses are unbounded in count but every press is an intentional authenticated action of the same authority that already triggers paid Gemini calls in regradeWriting by design. Not a boundary crossing; hardening. Two facts recorded for the report: the admin retry and the student re-upload are one root-cause class with two instances (both reset a speaking_answers row to pending/tries=0 with no attempt budget), and the public mockup result read (web api.js getAttemptResult) never selects voided_at, so a voided attempt's bands stay readable by attempt UUID regardless.",
+    "artifact": null
+   }
+  ],
+  "result_fingerprints": [],
+  "unresolved": [],
+  "unit_read_paths": [
+   "apps/admin/src/api.js",
+   "packages/core/src/speaking-mockup-worker.js",
+   "apps/web/src/api.js"
+  ],
+  "hardening_notes": []
+ },
+ {
+  "coverage_id": "apps%2Fadmin%2Fsrc%2Fapi.js%23mockup%20sessions%20and%20CSV%20import::apps%2Fadmin%2Fsrc%2Fapi.js%23roster%20import%20validation::apps%2Fadmin%2Fsrc%2Fapi.js::ATTACK-CLASSES.md%23Feature%20abuse%20and%20data%20leakage",
+  "canonical_refs": {
+   "surface": "apps/admin/src/api.js#mockup sessions and CSV import",
+   "boundary": "apps/admin/src/api.js#roster import validation",
+   "subsystem": "apps/admin/src/api.js",
+   "attack_class": "ATTACK-CLASSES.md#Feature abuse and data leakage"
+  },
+  "surface": "apps/admin/src/api.js#mockup sessions and CSV import",
+  "boundary": "apps/admin/src/api.js#roster import validation",
+  "subsystem": "apps/admin/src/api.js",
+  "attack_class": "ATTACK-CLASSES.md#Feature abuse and data leakage",
+  "starting_paths": [
+   "apps/admin/src/api.js",
+   "packages/core/src/mockup-bulk.js"
+  ],
+  "ordinary_attack_class_block": "ATTACK-CLASSES.md#Feature abuse and data leakage",
+  "selected_companion_blocks": [
+   "DATA-ISOLATION-AND-LIFECYCLE.md#Core discipline",
+   "RESOURCE-EXHAUSTION-AND-AVAILABILITY.md#Core discipline"
+  ],
+  "excluded_blocks": [],
+  "prior_status": "none",
+  "attempts": [],
+  "wave": 1,
+  "status": "candidate",
+  "agent_id": "hunter-admin-data",
+  "reviewed_paths": [
+   "apps/admin/src/api.js",
+   "packages/core/src/mockup-bulk.js",
+   "db/migrations/0015_mockup_sessions.sql",
+   "db/migrations/0017_session_packages.sql",
+   "db/migrations/0007_pendaftaran_and_mockup.sql"
+  ],
+  "local_checks": [
+   {
+    "agent_id": "hunter-admin-data",
+    "reviewed_paths": [
+     "apps/admin/src/api.js",
+     "packages/core/src/mockup-bulk.js"
+    ],
+    "invariant": "confirm re-validates everything preview validated, so preview and confirm cannot diverge into an unvalidated import.",
+    "method": "source",
+    "result": "pass: confirmSessionImport re-parses the re-sent CSV through the same matchRosterRows and refuses any row with errors or a windowError (1151-1152). A different CSV at confirm gets fully re-validated; no preview state is trusted by confirm.",
+    "artifact": null
+   },
+   {
+    "agent_id": "hunter-admin-data",
+    "reviewed_paths": [
+     "apps/admin/src/api.js",
+     "packages/core/src/mockup-bulk.js"
+    ],
+    "invariant": "the session quota is enforced atomically.",
+    "method": "source",
+    "result": "fail: the quota check reads the roster count then inserts in the same request (1154-1157), with no transaction isolation against a second concurrent confirm. Two overlapping confirms on one session can each pass the check and together exceed session.quota. Per-student duplication is still stopped by the unique index idx_invites_session_student, so the wrong result is bounded to quota overshoot. Candidate: admin-data/session-quota-race.",
+    "artifact": null
+   },
+   {
+    "agent_id": "hunter-admin-data",
+    "reviewed_paths": [
+     "apps/admin/src/api.js",
+     "db/migrations/0007_pendaftaran_and_mockup.sql"
+    ],
+    "invariant": "invite codes are unique.",
+    "method": "source",
+    "result": "pass: the code loops are check-then-act, but idx_invites_code is a unique index, so a concurrent collision aborts the batch with a 500 instead of creating two invites with one code.",
+    "artifact": null
+   },
+   {
+    "agent_id": "hunter-admin-data",
+    "reviewed_paths": [
+     "packages/core/src/mockup-bulk.js",
+     "apps/admin/src/api.js"
+    ],
+    "invariant": "every imported row gets a sane, future test window matching the session mode.",
+    "method": "source",
+    "result": "pass: scheduled sessions require per-row date and time parsed at +07:00 and in the future, flexible sessions reject date columns outright, and inviteWindow refuses unset or inverted ranges. moveInviteToSession revalidates the window against the target session.",
+    "artifact": null
+   }
+  ],
+  "result_fingerprints": [
+   "admin-data/session-quota-race"
+  ],
+  "unresolved": [],
+  "hardening_notes": [],
+  "unit_read_paths": [
+   "apps/admin/src/api.js",
+   "packages/core/src/mockup-bulk.js",
+   "db/migrations/0015_mockup_sessions.sql",
+   "db/migrations/0017_session_packages.sql",
+   "db/migrations/0007_pendaftaran_and_mockup.sql"
+  ]
+ },
+ {
+  "coverage_id": "apps%2Fadmin%2Fsrc%2Fapi.js%23questions%20sections%20settings::apps%2Fadmin%2Fsrc%2Fapi.js%23test%20bank%20validation::apps%2Fadmin%2Fsrc%2Fapi.js::ATTACK-CLASSES.md%23Injection",
+  "canonical_refs": {
+   "surface": "apps/admin/src/api.js#questions sections settings",
+   "boundary": "apps/admin/src/api.js#test bank validation",
+   "subsystem": "apps/admin/src/api.js",
+   "attack_class": "ATTACK-CLASSES.md#Injection"
+  },
+  "surface": "apps/admin/src/api.js#questions sections settings",
+  "boundary": "apps/admin/src/api.js#test bank validation",
+  "subsystem": "apps/admin/src/api.js",
+  "attack_class": "ATTACK-CLASSES.md#Injection",
+  "starting_paths": [
+   "apps/admin/src/api.js"
+  ],
+  "ordinary_attack_class_block": "ATTACK-CLASSES.md#Injection",
+  "selected_companion_blocks": [],
+  "excluded_blocks": [],
+  "prior_status": "none",
+  "attempts": [],
+  "wave": 1,
+  "status": "candidate",
+  "agent_id": "hunter-admin-data",
+  "reviewed_paths": [
+   "apps/admin/src/api.js",
+   "packages/core/src/rich.js",
+   "packages/core/src/node-server.js",
+   "apps/web/student/src/screens.jsx",
+   "apps/web/src/api.js"
+  ],
+  "local_checks": [
+   {
+    "agent_id": "hunter-admin-data",
+    "reviewed_paths": [
+     "apps/admin/src/api.js"
+    ],
+    "invariant": "question and section text length caps, option dedupe, and key-in-options hold for every write path.",
+    "method": "source",
+    "result": "pass: prompt capped at 1000, passage at 20000, accepted answers at 300 each with case-insensitive dedupe, options case-insensitive dedupe with the key required to be a filled option, sections capped at 500 per range endpoint with from <= to.",
+    "artifact": null
+   },
+   {
+    "agent_id": "hunter-admin-data",
+    "reviewed_paths": [
+     "apps/admin/src/api.js",
+     "apps/web/src/api.js",
+     "apps/web/student/src/screens.jsx",
+     "packages/core/src/node-server.js",
+     "apps/admin/src/api.js"
+    ],
+    "invariant": "audioUrl and imageUrl starting with '/' are same-origin paths.",
+    "method": "source",
+    "result": "fail as defense-in-depth gap: startsWith(\"/\") accepts the protocol-relative form //evil.com/x.mp3 and //evil.com/x.png. These values flow verbatim into the student runner's audio and image src. The load is then blocked only by the CSPs on both apps, so nothing is fetched today, but the same-origin intent of the validator is not enforced at the data layer and would silently break if either CSP were relaxed. Candidate: admin-data/protocol-relative-asset-urls.",
+    "artifact": null
+   },
+   {
+    "agent_id": "hunter-admin-data",
+    "reviewed_paths": [
+     "packages/core/src/rich.js",
+     "apps/admin/src/api.js"
+    ],
+    "invariant": "passage rich text cannot embed a foreign image or script.",
+    "method": "source",
+    "result": "pass: the IMAGE regex requires a path starting with a slash and absolute URLs stay literal text; rendering goes through React elements with no innerHTML, so no script injection exists. The same //host caveat applies and only the img-src CSP stops the request.",
+    "artifact": null
+   },
+   {
+    "agent_id": "hunter-admin-data",
+    "reviewed_paths": [
+     "apps/admin/src/api.js"
+    ],
+    "invariant": "the up/down action fragment from the route regex cannot alter SQL.",
+    "method": "source",
+    "result": "pass: 'up' and 'down' come from the route alternation (1668), selecting only the comparison operator between two fixed templates; all values are bound. Settings writes re-validate every numeric range and restrict sections mode and audioUrl writes to the ielts-mockup key.",
+    "artifact": null
+   }
+  ],
+  "result_fingerprints": [
+   "admin-data/protocol-relative-asset-urls"
+  ],
+  "unresolved": [],
+  "hardening_notes": [],
+  "unit_read_paths": [
+   "apps/admin/src/api.js",
+   "packages/core/src/rich.js",
+   "packages/core/src/node-server.js",
+   "apps/web/student/src/screens.jsx",
+   "apps/web/src/api.js"
+  ]
+ },
+ {
+  "coverage_id": "apps%2Fadmin%2Fsrc%2Fapi.js%23speaking%20review%20and%20audio::apps%2Fadmin%2Fsrc%2Fapi.js%23session-gated%20audio%20range%20serving::apps%2Fadmin%2Fsrc%2Fapi.js::ATTACK-CLASSES.md%23Access%20control",
+  "canonical_refs": {
+   "surface": "apps/admin/src/api.js#speaking review and audio",
+   "boundary": "apps/admin/src/api.js#session-gated audio range serving",
+   "subsystem": "apps/admin/src/api.js",
+   "attack_class": "ATTACK-CLASSES.md#Access control"
+  },
+  "surface": "apps/admin/src/api.js#speaking review and audio",
+  "boundary": "apps/admin/src/api.js#session-gated audio range serving",
+  "subsystem": "apps/admin/src/api.js",
+  "attack_class": "ATTACK-CLASSES.md#Access control",
+  "starting_paths": [
+   "apps/admin/src/api.js",
+   "packages/core/src/speaking.js"
+  ],
+  "ordinary_attack_class_block": "ATTACK-CLASSES.md#Access control",
+  "selected_companion_blocks": [],
+  "excluded_blocks": [],
+  "prior_status": "none",
+  "attempts": [
+   {
+    "wave": 1,
+    "status": "covered",
+    "agent_id": "hunter-admin-data",
+    "reviewed_paths": [
+     "apps/admin/src/api.js",
+     "packages/core/src/speaking.js",
+     "apps/web/src/api.js"
+    ],
+    "local_checks": [
+     {
+      "agent_id": "hunter-admin-data",
+      "reviewed_paths": [
+       "apps/admin/src/api.js"
+      ],
+      "invariant": "Range handling cannot read out of bounds, crash, or serve swapped or negative ranges.",
+      "method": "source",
+      "result": "pass: the regex admits only digits, so negative and non-numeric values never match; suffix form clamps start to max(0, size-N); end clamped to min(size-1, ...); start >= size or start > end returns 416 with a correct Content-Range; huge digit strings fall into the 416 path; subarray stays in bounds. Content-Type comes from the whitelisted audio_mime with nosniff and no-store.",
+      "artifact": null
+     },
+     {
+      "agent_id": "hunter-admin-data",
+      "reviewed_paths": [
+       "apps/admin/src/api.js"
+      ],
+      "invariant": "manual grade and state transitions are gated on the recording's actual state, atomically.",
+      "method": "source",
+      "result": "pass: gradeSpeaking gates on status='failed' OR (graded AND needs_review) both in JS and in the UPDATE ... WHERE clause with RETURNING, so a concurrent change yields 409 rather than a double grade; CEFR values come from the whitelist and IELTS from a 0-9 half-step check. retry and skip re-check status='failed' in SQL; reviewed re-checks status='graded'.",
+      "artifact": null
+     }
+    ],
+    "result_fingerprints": [],
+    "unresolved": [],
+    "reassignment_reason": "The Range-handling check covered only the placement audio handler; the parallel mockup speaking-answers audio route has no check anywhere."
+   }
+  ],
+  "wave": 2,
+  "status": "covered",
+  "agent_id": "hunter-wave2-reopen-audio",
+  "reviewed_paths": [
+   "apps/admin/src/api.js",
+   "apps/web/src/api.js",
+   "packages/core/src/speaking.js",
+   "packages/core/src/speaking-mockup-worker.js",
+   "apps/admin/client/src/views/Test.jsx"
+  ],
+  "local_checks": [
+   {
+    "agent_id": "hunter-wave2-reopen-audio",
+    "reviewed_paths": [
+     "apps/admin/src/api.js",
+     "apps/web/src/api.js",
+     "packages/core/src/speaking.js"
+    ],
+    "invariant": "The mockup audio route serves only whitelisted stored mimes, behind the session gate, and fails closed on purged audio.",
+    "method": "source",
+    "result": "PASS. The route is behind the same session gate as the placement route. The upload path normalizes the student Content-Type through the whitelist before the row is written, so the handler serves only a value from that closed set (falling back to audio/webm), with nosniff and no-store. Id validation is digit-only plus a Number cast; the purge sets audio NULL and the handler 404s on missing bytes, failing closed. Range support is absent on this handler, which is a UX parity gap, not a boundary failure: serving 200 in response to a Range request is legal HTTP, bounded at 3 MB, behind a session. The dashboard renders the audio element only from has_audio and status, never shipping bytes in the bootstrap.",
+    "artifact": null
+   }
+  ],
+  "result_fingerprints": [],
+  "unresolved": [],
+  "hardening_notes": [],
+  "unit_read_paths": [
+   "apps/admin/src/api.js",
+   "apps/web/src/api.js",
+   "packages/core/src/speaking.js",
+   "packages/core/src/speaking-mockup-worker.js",
+   "apps/admin/client/src/views/Test.jsx"
+  ]
+ },
+ {
+  "coverage_id": "apps%2Fadmin%2Fsrc%2Fapi.js%23students%20and%20pendaftaran::apps%2Fadmin%2Fsrc%2Fapi.js%23uniqueness%2Benrollment%20checks::apps%2Fadmin%2Fsrc%2Fapi.js::ATTACK-CLASSES.md%23Business%20logic",
+  "canonical_refs": {
+   "surface": "apps/admin/src/api.js#students and pendaftaran",
+   "boundary": "apps/admin/src/api.js#uniqueness+enrollment checks",
+   "subsystem": "apps/admin/src/api.js",
+   "attack_class": "ATTACK-CLASSES.md#Business logic"
+  },
+  "surface": "apps/admin/src/api.js#students and pendaftaran",
+  "boundary": "apps/admin/src/api.js#uniqueness+enrollment checks",
+  "subsystem": "apps/admin/src/api.js",
+  "attack_class": "ATTACK-CLASSES.md#Business logic",
+  "starting_paths": [
+   "apps/admin/src/api.js",
+   "packages/core/src/store.js",
+   "packages/core/src/pendaftaran.js"
+  ],
+  "ordinary_attack_class_block": "ATTACK-CLASSES.md#Business logic",
+  "selected_companion_blocks": [
+   "DATA-ISOLATION-AND-LIFECYCLE.md#Core discipline"
+  ],
+  "excluded_blocks": [],
+  "prior_status": "none",
+  "attempts": [],
+  "wave": 1,
+  "status": "candidate",
+  "agent_id": "hunter-admin-data",
+  "reviewed_paths": [
+   "apps/admin/src/api.js",
+   "packages/core/src/pendaftaran.js",
+   "packages/core/src/store.js",
+   "db/migrations/0001_init.sql",
+   "db/migrations/0007_pendaftaran_and_mockup.sql"
+  ],
+  "local_checks": [
+   {
+    "agent_id": "hunter-admin-data",
+    "reviewed_paths": [
+     "apps/admin/src/api.js",
+     "db/migrations/0001_init.sql"
+    ],
+    "invariant": "identityPatch builds its SET clause only from the fixed key-to-column map with bound values, so no crafted patch can write outside the map.",
+    "method": "source",
+    "result": "pass: the loop iterates a hardcoded key-to-column array; data comes from readStudentInput which only emits whitelisted keys; values are bound. No column can be injected.",
+    "artifact": null
+   },
+   {
+    "agent_id": "hunter-admin-data",
+    "reviewed_paths": [
+     "apps/admin/src/api.js",
+     "db/migrations/0001_init.sql"
+    ],
+    "invariant": "email uniqueness is enforced atomically.",
+    "method": "source",
+    "result": "fail: assertUnique (678-687) is check-then-act and students.email has only a non-unique index (0001_init.sql:127), unlike whatsapp (unique at 126). Two concurrent createStudent calls with the same email both pass the check and both insert; the DB accepts duplicates. The public contact step (store.js upsertStudentFromContact, WHERE whatsapp = ? OR email = ?) then matches by email alone, so a stranger's placement attempt can link to the wrong student row. Candidate: admin-data/duplicate-email-race.",
+    "artifact": null
+   },
+   {
+    "agent_id": "hunter-admin-data",
+    "reviewed_paths": [
+     "apps/admin/src/api.js",
+     "packages/core/src/pendaftaran.js"
+    ],
+    "invariant": "the student mirror always reflects the latest non-cancelled registration.",
+    "method": "source",
+    "result": "pass with a benign race note: updatePendaftaran re-reads all rows and substitutes the in-flight status before recomputing latestPendaftaran; two concurrent edits to two different rows of one student can leave the mirror one edit behind, but the next edit resyncs it and no cross-student data can be written.",
+    "artifact": null
+   },
+   {
+    "agent_id": "hunter-admin-data",
+    "reviewed_paths": [
+     "apps/admin/src/api.js"
+    ],
+    "invariant": "program/duration/period/class references are validated to belong together before the student row stores them.",
+    "method": "source",
+    "result": "pass: checkEnrollment verifies program existence, duration ownership, class program+period match, and stage-terdaftar completeness on every create and update path.",
+    "artifact": null
+   }
+  ],
+  "result_fingerprints": [
+   "admin-data/duplicate-email-race"
+  ],
+  "unresolved": [],
+  "hardening_notes": [],
+  "unit_read_paths": [
+   "apps/admin/src/api.js",
+   "packages/core/src/pendaftaran.js",
+   "packages/core/src/store.js",
+   "db/migrations/0001_init.sql",
+   "db/migrations/0007_pendaftaran_and_mockup.sql"
+  ]
+ },
+ {
+  "coverage_id": "apps%2Fadmin%2Fsrc%2Fapi.js%23students%20delete::apps%2Fadmin%2Fsrc%2Fapi.js%23student%20deletion%20cascade::apps%2Fadmin%2Fsrc%2Fapi.js::ATTACK-CLASSES.md%23Feature%20abuse%20and%20data%20leakage",
+  "canonical_refs": {
+   "surface": "apps/admin/src/api.js#students delete",
+   "boundary": "apps/admin/src/api.js#student deletion cascade",
+   "subsystem": "apps/admin/src/api.js",
+   "attack_class": "ATTACK-CLASSES.md#Feature abuse and data leakage"
+  },
+  "surface": "apps/admin/src/api.js#students delete",
+  "boundary": "apps/admin/src/api.js#student deletion cascade",
+  "subsystem": "apps/admin/src/api.js",
+  "attack_class": "ATTACK-CLASSES.md#Feature abuse and data leakage",
+  "starting_paths": [
+   "apps/admin/src/api.js"
+  ],
+  "ordinary_attack_class_block": "ATTACK-CLASSES.md#Feature abuse and data leakage",
+  "selected_companion_blocks": [
+   "DATA-ISOLATION-AND-LIFECYCLE.md#Core discipline"
+  ],
+  "excluded_blocks": [],
+  "prior_status": "none",
+  "attempts": [],
+  "wave": 1,
+  "status": "covered",
+  "agent_id": "hunter-admin-data",
+  "reviewed_paths": [
+   "apps/admin/src/api.js",
+   "db/migrations/0004_certificates.sql",
+   "db/migrations/0015_mockup_sessions.sql",
+   "db/migrations/0018_speaking_bank.sql",
+   "apps/web/src/api.js",
+   "packages/core/src/store.js"
+  ],
+  "local_checks": [
+   {
+    "agent_id": "hunter-admin-data",
+    "reviewed_paths": [
+     "apps/admin/src/api.js",
+     "db/migrations/0004_certificates.sql"
+    ],
+    "invariant": "deleting a student removes personal data while the placement statistics and the certificate number register survive intact.",
+    "method": "source",
+    "result": "pass: the cascade nulls speaking audio/transcript/provider_response/student_id, deletes non-placement answers and attempts, nulls name/email/whatsapp on kept placement attempts, deletes wa_messages, activities, invites, and the student row in one batch. Certificates keep their rows with student_id SET NULL, so numbers stay accounted for. What survives on a kept placement attempt is non-identifying by design: violation_log, device label, bands, question_ids, and result_token; the result link reads name from the attempt, which was nulled, and never resolves to a student row.",
+    "artifact": null
+   },
+   {
+    "agent_id": "hunter-admin-data",
+    "reviewed_paths": [
+     "apps/admin/src/api.js",
+     "db/migrations/0015_mockup_sessions.sql",
+     "packages/core/src/store.js"
+    ],
+    "invariant": "a lead recreated from the same WhatsApp after deletion does not inherit the deleted student's records.",
+    "method": "source",
+    "result": "pass: placement attempts carry student_id = NULL after the cascade, so a new student created from the same WhatsApp gets a fresh id and links to nothing old. The mockup queue rows follow their invites via ON DELETE CASCADE, so no queue row with a plaintext token survives a student deletion.",
+    "artifact": null
+   },
+   {
+    "agent_id": "hunter-admin-data",
+    "reviewed_paths": [
+     "apps/admin/src/api.js"
+    ],
+    "invariant": "bulk delete runs the same statements as the single delete.",
+    "method": "source",
+    "result": "pass: bulkStudents reuses deleteStudentStatements per id inside one batch; ids are bound parameters, so no injection and no weaker path than the single delete.",
+    "artifact": null
+   }
+  ],
+  "result_fingerprints": [],
+  "unresolved": [],
+  "hardening_notes": [],
+  "unit_read_paths": [
+   "apps/admin/src/api.js",
+   "db/migrations/0004_certificates.sql",
+   "db/migrations/0015_mockup_sessions.sql",
+   "db/migrations/0018_speaking_bank.sql",
+   "apps/web/src/api.js"
+  ]
+ },
+ {
+  "coverage_id": "apps%2Fadmin%2Fsrc%2Fcertificates.js%23PDF%20upload%20and%20send::apps%2Fadmin%2Fsrc%2Fcertificates.js%23%25PDF%20magic%20check::apps%2Fadmin%2Fsrc%2Fcertificates.js::ATTACK-CLASSES.md%23Resource%20and%20file%20handling",
+  "canonical_refs": {
+   "surface": "apps/admin/src/certificates.js#PDF upload and send",
+   "boundary": "apps/admin/src/certificates.js#%PDF magic check",
+   "subsystem": "apps/admin/src/certificates.js",
+   "attack_class": "ATTACK-CLASSES.md#Resource and file handling"
+  },
+  "surface": "apps/admin/src/certificates.js#PDF upload and send",
+  "boundary": "apps/admin/src/certificates.js#%PDF magic check",
+  "subsystem": "apps/admin/src/certificates.js",
+  "attack_class": "ATTACK-CLASSES.md#Resource and file handling",
+  "starting_paths": [
+   "apps/admin/src/certificates.js"
+  ],
+  "ordinary_attack_class_block": "ATTACK-CLASSES.md#Resource and file handling",
+  "selected_companion_blocks": [],
+  "excluded_blocks": [],
+  "prior_status": "none",
+  "attempts": [],
+  "wave": 1,
+  "status": "covered",
+  "agent_id": "hunter-certs",
+  "reviewed_paths": [
+   "apps/admin/src/certificates.js",
+   "apps/admin/server.js",
+   "apps/admin/src/api.js",
+   "apps/admin/public/admin/assets/certificate-page.js",
+   "apps/admin/client/src/menus.jsx"
+  ],
+  "local_checks": [
+   {
+    "agent_id": "hunter-certs",
+    "reviewed_paths": [
+     "apps/admin/src/certificates.js",
+     "apps/admin/server.js",
+     "apps/admin/src/api.js"
+    ],
+    "invariant": "A file served from /cert-file/<token> cannot execute scripts in a browser, and nothing above the 5 MB store cap is ever persisted.",
+    "method": "source",
+    "result": "Holds at source level with an honest caveat. The magic check plus the 6 MB transport cap plus the explicit 5 MB rejection mean a non-PDF-prefixed file is refused and a 5 to 6 MB file is rejected before the BYTEA write; the Browser Run render path applies the same checks. Served bytes always go out as application/pdf with nosniff and the admin CSP, so a polyglot cannot be content-sniffed into HTML. Embedded PDF JavaScript does not execute in the built-in viewers of current Chrome, Edge, Firefox, and Safari. The controlling fact is the principal: the only writer is a sessioned, origin-checked admin who can already control every byte of a document they are authorized to send, and the unauthenticated reader needs the 192-bit token.",
+    "artifact": null
+   }
+  ],
+  "result_fingerprints": [],
+  "unresolved": [],
+  "hardening_notes": [],
+  "unit_read_paths": [
+   "apps/admin/src/certificates.js",
+   "apps/admin/server.js",
+   "apps/admin/src/api.js",
+   "apps/admin/public/admin/assets/certificate-page.js",
+   "apps/admin/client/src/menus.jsx"
+  ]
+ },
+ {
+  "coverage_id": "apps%2Fadmin%2Fsrc%2Fcertificates.js%23PDF%20upload%20and%20send::apps%2Fadmin%2Fsrc%2Fcertificates.js%23cert-file%20token::apps%2Fadmin%2Fsrc%2Fcertificates.js::ATTACK-CLASSES.md%23Access%20control",
+  "canonical_refs": {
+   "surface": "apps/admin/src/certificates.js#PDF upload and send",
+   "boundary": "apps/admin/src/certificates.js#cert-file token",
+   "subsystem": "apps/admin/src/certificates.js",
+   "attack_class": "ATTACK-CLASSES.md#Access control"
+  },
+  "surface": "apps/admin/src/certificates.js#PDF upload and send",
+  "boundary": "apps/admin/src/certificates.js#cert-file token",
+  "subsystem": "apps/admin/src/certificates.js",
+  "attack_class": "ATTACK-CLASSES.md#Access control",
+  "starting_paths": [
+   "apps/admin/src/certificates.js",
+   "apps/admin/src/api.js"
+  ],
+  "ordinary_attack_class_block": "ATTACK-CLASSES.md#Access control",
+  "selected_companion_blocks": [
+   "WEB-PROTOCOL-AND-AUTH.md#API-key exposure and unsafe transport"
+  ],
+  "excluded_blocks": [],
+  "prior_status": "none",
+  "attempts": [],
+  "wave": 1,
+  "status": "covered",
+  "agent_id": "hunter-certs",
+  "reviewed_paths": [
+   "apps/admin/src/certificates.js",
+   "apps/admin/src/api.js",
+   "packages/core/src/http.js",
+   "packages/core/src/crypto.js",
+   "apps/admin/server.js",
+   "db/migrations/0019_certificate_send.sql",
+   "apps/admin/client/src/menus.jsx"
+  ],
+  "local_checks": [
+   {
+    "agent_id": "hunter-certs",
+    "reviewed_paths": [
+     "apps/admin/src/certificates.js",
+     "apps/admin/src/api.js",
+     "packages/core/src/http.js",
+     "packages/core/src/crypto.js",
+     "db/migrations/0019_certificate_send.sql"
+    ],
+    "invariant": "The certificate PDF is only reachable by holders of the unguessable token, and the token cannot be enumerated, injected into, or leaked outside the intended recipients.",
+    "method": "source",
+    "result": "Holds. certificatePdfByToken does an exact equality lookup and returns null for a missing row or bytes, which becomes a plain 404; the route regex accepts 20 to 80 base64url characters and the token is randomToken(24), 192 bits, so enumeration is infeasible. The response is no-store with nosniff and the admin CSP. CRLF injection into Content-Disposition is impossible: pdf_name is produced by text() (which collapses all whitespace including CR and LF) or the number-derived default which strips everything but word characters and dashes; the serve path strips double quotes. The token is stored plaintext with a unique partial index, returned only to the sessioned admin in the upload JSON, never logged, and never in the bootstrap payload. The only token distribution is the WhatsApp fileUrl to AttCos, the designed recipient.",
+    "artifact": null
+   }
+  ],
+  "result_fingerprints": [],
+  "unresolved": [],
+  "hardening_notes": [],
+  "unit_read_paths": [
+   "apps/admin/src/certificates.js",
+   "apps/admin/src/api.js",
+   "packages/core/src/http.js",
+   "packages/core/src/crypto.js",
+   "apps/admin/server.js",
+   "db/migrations/0019_certificate_send.sql",
+   "apps/admin/client/src/menus.jsx"
+  ]
+ },
+ {
+  "coverage_id": "apps%2Fadmin%2Fsrc%2Fcertificates.js%23issue%20and%20number::apps%2Fadmin%2Fsrc%2Fcertificates.js%23counter%20transaction::apps%2Fadmin%2Fsrc%2Fcertificates.js::ATTACK-CLASSES.md%23Business%20logic",
+  "canonical_refs": {
+   "surface": "apps/admin/src/certificates.js#issue and number",
+   "boundary": "apps/admin/src/certificates.js#counter transaction",
+   "subsystem": "apps/admin/src/certificates.js",
+   "attack_class": "ATTACK-CLASSES.md#Business logic"
+  },
+  "surface": "apps/admin/src/certificates.js#issue and number",
+  "boundary": "apps/admin/src/certificates.js#counter transaction",
+  "subsystem": "apps/admin/src/certificates.js",
+  "attack_class": "ATTACK-CLASSES.md#Business logic",
+  "starting_paths": [
+   "apps/admin/src/certificates.js"
+  ],
+  "ordinary_attack_class_block": "ATTACK-CLASSES.md#Business logic",
+  "selected_companion_blocks": [],
+  "excluded_blocks": [],
+  "prior_status": "none",
+  "attempts": [],
+  "wave": 1,
+  "status": "covered",
+  "agent_id": "hunter-certs",
+  "reviewed_paths": [
+   "apps/admin/src/certificates.js",
+   "packages/core/src/db.js",
+   "db/migrations/0004_certificates.sql",
+   "tests/smoke.mjs",
+   "packages/core/src/store.js"
+  ],
+  "local_checks": [
+   {
+    "agent_id": "hunter-certs",
+    "reviewed_paths": [
+     "apps/admin/src/certificates.js",
+     "packages/core/src/db.js"
+    ],
+    "invariant": "The certificate number register never hands out the same number twice, and a failed issue never loses or reuses a number.",
+    "method": "source",
+    "result": "Holds. issueCertificate takes the number and inserts inside env.DB.transaction; the helper runs BEGIN, work, COMMIT, and ROLLBACK on any throw, so the 23505 catch that converts the unique violation into a 409 still propagates and the counter increment rolls back with the insert. Two simultaneous issues serialize on the counter row through the ON CONFLICT arbiter lock; the unique index is the final guard. periodKey plus numberFormatProblem enforce that a yearly reset format contains {tahun} and a monthly one {tahun} plus a month token, so a number cannot repeat in a later period. The advisory clash check is a read-then-insert that can miss a concurrent identical type, but the unique number index still prevents the duplicate register outcome.",
+    "artifact": null
+   }
+  ],
+  "result_fingerprints": [],
+  "unresolved": [],
+  "hardening_notes": [],
+  "unit_read_paths": [
+   "apps/admin/src/certificates.js",
+   "packages/core/src/db.js",
+   "db/migrations/0004_certificates.sql",
+   "tests/smoke.mjs",
+   "packages/core/src/store.js"
+  ]
+ },
+ {
+  "coverage_id": "apps%2Fadmin%2Fsrc%2Fcertificates.js%23print%20page%20HTML::apps%2Fadmin%2Fsrc%2Fcertificates.js%23fillTemplate%20escapeHtml::apps%2Fadmin%2Fsrc%2Fcertificates.js::ATTACK-CLASSES.md%23Injection",
+  "canonical_refs": {
+   "surface": "apps/admin/src/certificates.js#print page HTML",
+   "boundary": "apps/admin/src/certificates.js#fillTemplate escapeHtml",
+   "subsystem": "apps/admin/src/certificates.js",
+   "attack_class": "ATTACK-CLASSES.md#Injection"
+  },
+  "surface": "apps/admin/src/certificates.js#print page HTML",
+  "boundary": "apps/admin/src/certificates.js#fillTemplate escapeHtml",
+  "subsystem": "apps/admin/src/certificates.js",
+  "attack_class": "ATTACK-CLASSES.md#Injection",
+  "starting_paths": [
+   "apps/admin/src/certificates.js",
+   "packages/core/src/email.js"
+  ],
+  "ordinary_attack_class_block": "ATTACK-CLASSES.md#Injection",
+  "selected_companion_blocks": [
+   "CLIENT-SIDE.md#Core discipline"
+  ],
+  "excluded_blocks": [],
+  "prior_status": "none",
+  "attempts": [],
+  "wave": 1,
+  "status": "covered",
+  "agent_id": "hunter-certs",
+  "reviewed_paths": [
+   "apps/admin/src/certificates.js",
+   "packages/core/src/email.js",
+   "apps/admin/src/api.js",
+   "apps/admin/public/admin/assets/certificate-page.js",
+   "apps/admin/certificates/certificate-of-completion.html",
+   "packages/core/src/http.js"
+  ],
+  "local_checks": [
+   {
+    "agent_id": "hunter-certs",
+    "reviewed_paths": [
+     "apps/admin/src/certificates.js",
+     "packages/core/src/email.js",
+     "apps/admin/src/api.js",
+     "apps/admin/public/admin/assets/certificate-page.js",
+     "apps/admin/certificates/certificate-of-completion.html"
+    ],
+    "invariant": "Every dynamic value interpolated into the printable certificate page is escaped, and no replacement step can reinterpret $ patterns.",
+    "method": "source",
+    "result": "Holds. fillTemplate replaces {{key}} with a callback returning escapeHtml(values[key] ?? ''), escaping ampersand, angle brackets, double quotes, and apostrophes. Every structural replace uses a replacement function, so a dollar sign in a name or number is never read as a pattern. In barHtml, info and note are interpolated raw by design and both call sites pre-escape; note is only ever a literal. The remaining dynamic values are escaped or structurally confined: pdfName, email, whatsapp via escapeHtml, data-pdf is a boolean, data-cert-id passed the route regex and a database equality lookup, and the back link is encodeURIComponent-wrapped. readDetails enforces clamping and ISO dates. certificate-page.js uses only textContent and encodeURIComponent, never innerHTML, and the page carries the admin CSP.",
+    "artifact": null
+   }
+  ],
+  "result_fingerprints": [],
+  "unresolved": [],
+  "hardening_notes": [],
+  "unit_read_paths": [
+   "apps/admin/src/certificates.js",
+   "packages/core/src/email.js",
+   "apps/admin/src/api.js",
+   "apps/admin/public/admin/assets/certificate-page.js",
+   "apps/admin/certificates/certificate-of-completion.html",
+   "packages/core/src/http.js"
+  ]
+ },
+ {
+  "coverage_id": "apps%2Fadmin%2Fsrc%2Fcertificates.js%23send%20whatsapp::apps%2Fadmin%2Fsrc%2Fcertificates.js%23url.origin%20derivation::apps%2Fadmin%2Fsrc%2Fcertificates.js::ATTACK-CLASSES.md%23Chained%20vulnerabilities%20and%20trust%20boundaries",
+  "canonical_refs": {
+   "surface": "apps/admin/src/certificates.js#send whatsapp",
+   "boundary": "apps/admin/src/certificates.js#url.origin derivation",
+   "subsystem": "apps/admin/src/certificates.js",
+   "attack_class": "ATTACK-CLASSES.md#Chained vulnerabilities and trust boundaries"
+  },
+  "surface": "apps/admin/src/certificates.js#send whatsapp",
+  "boundary": "apps/admin/src/certificates.js#url.origin derivation",
+  "subsystem": "apps/admin/src/certificates.js",
+  "attack_class": "ATTACK-CLASSES.md#Chained vulnerabilities and trust boundaries",
+  "starting_paths": [
+   "apps/admin/src/certificates.js",
+   "packages/core/src/whatsapp.js",
+   "packages/core/src/node-server.js"
+  ],
+  "ordinary_attack_class_block": "ATTACK-CLASSES.md#Chained vulnerabilities and trust boundaries",
+  "selected_companion_blocks": [
+   "WEB-PROTOCOL-AND-AUTH.md#Host and forwarded-header trust"
+  ],
+  "excluded_blocks": [],
+  "prior_status": "none",
+  "attempts": [],
+  "wave": 1,
+  "status": "covered",
+  "agent_id": "hunter-certs",
+  "reviewed_paths": [
+   "apps/admin/src/certificates.js",
+   "packages/core/src/node-server.js",
+   "apps/admin/src/api.js",
+   "packages/core/src/whatsapp.js",
+   "apps/admin/server.js"
+  ],
+  "local_checks": [
+   {
+    "agent_id": "hunter-certs",
+    "reviewed_paths": [
+     "apps/admin/src/certificates.js",
+     "packages/core/src/node-server.js",
+     "apps/admin/src/api.js",
+     "packages/core/src/whatsapp.js"
+    ],
+    "invariant": "The WhatsApp document URL is only steerable by a principal who already owns the certificate, and the student message content cannot be injected.",
+    "method": "source",
+    "result": "No cross-principal violation at source level. fileUrl is built from url.origin plus the token, and url.origin comes from the Host or X-Forwarded-Host header when TRUST_PROXY is set. But the only route consuming this URL is behind the session gate and the Origin equality check, so the principal steering the host is an authenticated admin acting on a certificate they manage. The steering moves only the token, never the PDF bytes: AttCos fetches the URL and the file stays on our server, and the admin can already obtain the token directly from the upload response. The link never appears in student-facing message text, which is a fixed sentence whose only variable is the first word of a name; the media filename rides inside JSON.stringify in the AttCos call, and the number is digit-only. The related question of whether a client-supplied X-Forwarded-Host survives the edge proxy belongs to the host-trust unit and is runtime-dependent.",
+    "artifact": null
+   }
+  ],
+  "result_fingerprints": [],
+  "unresolved": [
+   "Whether Render's edge proxy overwrites or appends a client-supplied X-Forwarded-Host, which decides if the first() value in node-server.js:79 is attacker-chosen; this primarily affects checkOrigin and is runtime-dependent."
+  ],
+  "hardening_notes": [],
+  "unit_read_paths": [
+   "apps/admin/src/certificates.js",
+   "packages/core/src/node-server.js",
+   "apps/admin/src/api.js",
+   "packages/core/src/whatsapp.js",
+   "apps/admin/server.js"
+  ]
+ },
+ {
+  "coverage_id": "apps%2Fadmin%2Fsrc%2Finvite-queue.js%23queue%20drain::apps%2Fadmin%2Fsrc%2Finvite-queue.js%23claimNext%20row%20claim::apps%2Fadmin%2Fsrc%2Finvite-queue.js::ATTACK-CLASSES.md%23Business%20logic",
+  "canonical_refs": {
+   "surface": "apps/admin/src/invite-queue.js#queue drain",
+   "boundary": "apps/admin/src/invite-queue.js#claimNext row claim",
+   "subsystem": "apps/admin/src/invite-queue.js",
+   "attack_class": "ATTACK-CLASSES.md#Business logic"
+  },
+  "surface": "apps/admin/src/invite-queue.js#queue drain",
+  "boundary": "apps/admin/src/invite-queue.js#claimNext row claim",
+  "subsystem": "apps/admin/src/invite-queue.js",
+  "attack_class": "ATTACK-CLASSES.md#Business logic",
+  "starting_paths": [
+   "apps/admin/src/invite-queue.js",
+   "apps/admin/src/api.js",
+   "apps/admin/server.js"
+  ],
+  "ordinary_attack_class_block": "ATTACK-CLASSES.md#Business logic",
+  "selected_companion_blocks": [
+   "RESOURCE-EXHAUSTION-AND-AVAILABILITY.md#Core discipline"
+  ],
+  "excluded_blocks": [],
+  "prior_status": "none",
+  "attempts": [],
+  "wave": 2,
+  "status": "candidate",
+  "agent_id": "hunter-wave2-admin-queue",
+  "reviewed_paths": [
+   "apps/admin/src/invite-queue.js",
+   "apps/admin/src/api.js",
+   "apps/admin/server.js",
+   "packages/core/src/delivery.js",
+   "packages/core/src/db.js",
+   "packages/core/src/whatsapp.js"
+  ],
+  "local_checks": [
+   {
+    "agent_id": "hunter-wave2-admin-queue",
+    "reviewed_paths": [
+     "apps/admin/src/invite-queue.js",
+     "packages/core/src/delivery.js"
+    ],
+    "invariant": "One channel send per queue row: a row is sent by exactly one drain once.",
+    "method": "source",
+    "result": "FAILS cross-process. claimNext does a bare SELECT for the next eligible row, then two unconditional UPDATEs in one batch, returning row.queue_id without checking whether either UPDATE changed a row (no RETURNING, changes ignored). If a second process's SELECT for the same head row lands between the first process's SELECT and its claim UPDATE commit, both return the same queue_id, both fetchRow, both see the statuses the first claim wrote, and both send both channels. The per-process draining flag only serializes drains within one process; it is not a cross-process lease. delivery.js solves the same problem with a single atomic UPDATE ... WHERE (lease IS NULL OR lease < now) RETURNING and treats a no-row return as claimed-elsewhere.",
+    "artifact": null
+   },
+   {
+    "agent_id": "hunter-wave2-admin-queue",
+    "reviewed_paths": [
+     "apps/admin/src/invite-queue.js",
+     "apps/admin/server.js"
+    ],
+    "invariant": "A boot-time requeue must not re-enqueue a row a live process is currently sending or has already sent.",
+    "method": "source",
+    "result": "FAILS at deploy overlap. resetStaleInviteSends blindly flips every 'sending' row back to 'pending' with no lease column, no age check, and no process ownership, then startInviteQueueWorker immediately drains. Render keeps the old instance serving for about 60 seconds after a deploy switches traffic, and the old instance's stop path clears the sweep timer but never awaits an in-flight drainInviteQueue promise before DB.close() and process.exit(0). Two duplicate paths: (a) old instance mid-send on a row, new instance boots, resets, claims, and sends again; (b) old instance completed the vendor call but was killed before the 'sent' UPDATE committed, so the send was delivered and the new instance re-sends. In both, the student receives two identical paid invite messages and the shared Cloudflare daily quota is charged twice for one row. resetStaleInviteSends is only safe under the single-process assumption in its own comment, which the deploy overlap breaks.",
+    "artifact": null
+   },
+   {
+    "agent_id": "hunter-wave2-admin-queue",
+    "reviewed_paths": [
+     "apps/admin/src/invite-queue.js",
+     "apps/admin/src/api.js"
+    ],
+    "invariant": "A pause pressed mid-drain stops further rows from being sent.",
+    "method": "source",
+    "result": "HOLDS. queue_paused is re-read inside claimNext's SELECT on every iteration, not latched at drain start, so a pause takes effect at the next claim.",
+    "artifact": null
+   },
+   {
+    "agent_id": "hunter-wave2-admin-queue",
+    "reviewed_paths": [
+     "apps/admin/src/api.js",
+     "apps/admin/src/invite-queue.js"
+    ],
+    "invariant": "The channel retry flow cannot resurrect a row another drain is currently sending, and the plaintext plain_token is erased as soon as it is no longer needed.",
+    "method": "source",
+    "result": "WEAK. retryInviteChannel resets a channel to 'pending' with an unconditional UPDATE with no guard against the row currently being 'sending' in a concurrent drain. Token erasure fires only when email is sent/dilewati AND wa sent; a row whose email exhausted MAX_ATTEMPTS as 'failed' keeps the plaintext invite token in the queue table indefinitely. Both are recorded as hardening; the erasure gap duplicates the wave-1 admin-data/plain-token-persistence candidate.",
+    "artifact": null
+   }
+  ],
+  "result_fingerprints": [
+   "wave2/invite-queue-drain-race"
+  ],
+  "unresolved": [],
+  "unit_read_paths": [
+   "apps/admin/src/invite-queue.js",
+   "apps/admin/src/api.js",
+   "apps/admin/server.js",
+   "packages/core/src/delivery.js",
+   "packages/core/src/db.js",
+   "packages/core/src/whatsapp.js"
+  ],
+  "hardening_notes": []
+ },
+ {
+  "coverage_id": "apps%2Fweb%2Fresult%2Fsrc%23report%20render::apps%2Fweb%2Fresult%2Fsrc%2FApp.jsx%23token%20poll::apps%2Fweb%2Fresult%2Fsrc::ATTACK-CLASSES.md%23Wildcard",
+  "canonical_refs": {
+   "surface": "apps/web/result/src#report render",
+   "boundary": "apps/web/result/src/App.jsx#token poll",
+   "subsystem": "apps/web/result/src",
+   "attack_class": "ATTACK-CLASSES.md#Wildcard"
+  },
+  "surface": "apps/web/result/src#report render",
+  "boundary": "apps/web/result/src/App.jsx#token poll",
+  "subsystem": "apps/web/result/src",
+  "attack_class": "ATTACK-CLASSES.md#Wildcard",
+  "starting_paths": [
+   "apps/web/result/src/App.jsx",
+   "apps/web/result/src/report.js"
+  ],
+  "ordinary_attack_class_block": "ATTACK-CLASSES.md#Wildcard",
+  "selected_companion_blocks": [
+   "CLIENT-SIDE.md#Core discipline"
+  ],
+  "excluded_blocks": [],
+  "prior_status": "none",
+  "attempts": [],
+  "wave": 1,
+  "status": "covered",
+  "agent_id": "hunter-client",
+  "reviewed_paths": [
+   "apps/web/result/src/App.jsx",
+   "apps/web/result/src/report.js",
+   "packages/core/src/store.js",
+   "apps/web/src/api.js",
+   "apps/web/server.js",
+   "packages/core/src/node-server.js",
+   "apps/admin/src/api.js"
+  ],
+  "local_checks": [
+   {
+    "agent_id": "hunter-client",
+    "reviewed_paths": [
+     "apps/web/result/src/App.jsx",
+     "apps/web/server.js",
+     "packages/core/src/node-server.js"
+    ],
+    "invariant": "The private result token in the URL must not leak via Referer, cache, or storage, and the poll loop must stop cleanly.",
+    "method": "source",
+    "result": "PASS. The /hasil shell is served with Cache-Control no-store plus Referrer-Policy strict-origin-when-cross-origin and STRICT_CSP. Cross-origin navigations from the report send only the origin, never the token query, and outbound links use target=_blank rel=noopener, which suppresses the referer entirely. connect-src 'self' confines the poll to the same origin, and the token is embedded with encodeURIComponent. The poll effect uses the stopped flag plus clearTimeout cleanup. No localStorage, sessionStorage, postMessage, or innerHTML anywhere in the result source.",
+    "artifact": null
+   },
+   {
+    "agent_id": "hunter-client",
+    "reviewed_paths": [
+     "apps/web/result/src/App.jsx",
+     "apps/web/result/src/report.js"
+    ],
+    "invariant": "The speaking transcript, AI criterion comments, and every result string must render as React text nodes, never as markup.",
+    "method": "source",
+    "result": "PASS. All result content flows through buildReport into plain strings that App.jsx renders as JSX text children and style width percentages. The placement speaking aspects and the mockup writing criteria comments land in text nodes; the report page never renders the raw transcript at all. No dangerouslySetInnerHTML exists in the result bundle source.",
+    "artifact": null
+   },
+   {
+    "agent_id": "hunter-client",
+    "reviewed_paths": [
+     "apps/web/result/src/App.jsx",
+     "apps/web/result/src/report.js",
+     "packages/core/src/store.js",
+     "apps/web/src/api.js",
+     "apps/admin/src/api.js"
+    ],
+    "invariant": "Admin-set program_url and program_image must not become a javascript: href or an off-origin image on the student-facing report.",
+    "method": "source",
+    "result": "PASS. Two boundaries hold them: the dashboard's updateLevels route updates only min_score and max_score, so program_url and program_image are not writable through any admin API and retain their migration-seeded https values; and even a directly edited row could not execute, because a javascript: href is blocked by the page CSP in evergreen browsers and an off-origin image is blocked by img-src. The profile CTA href is always a wa.me link, so no scheme smuggling exists.",
+    "artifact": null
+   }
+  ],
+  "result_fingerprints": [],
+  "unresolved": [],
+  "hardening_notes": [],
+  "unit_read_paths": [
+   "apps/web/result/src/App.jsx",
+   "apps/web/result/src/report.js",
+   "packages/core/src/store.js",
+   "apps/web/src/api.js",
+   "apps/web/server.js",
+   "packages/core/src/node-server.js"
+  ]
+ },
+ {
+  "coverage_id": "apps%2Fweb%2Fserver.js%23runner%20shell::packages%2Fcore%2Fsrc%2Fnode-server.js%23CSP%20headers::packages%2Fcore%2Fsrc%2Fnode-server.js::ATTACK-CLASSES.md%23Feature%20abuse%20and%20data%20leakage",
+  "canonical_refs": {
+   "surface": "apps/web/server.js#runner shell",
+   "boundary": "packages/core/src/node-server.js#CSP headers",
+   "subsystem": "packages/core/src/node-server.js",
+   "attack_class": "ATTACK-CLASSES.md#Feature abuse and data leakage"
+  },
+  "surface": "apps/web/server.js#runner shell",
+  "boundary": "packages/core/src/node-server.js#CSP headers",
+  "subsystem": "packages/core/src/node-server.js",
+  "attack_class": "ATTACK-CLASSES.md#Feature abuse and data leakage",
+  "starting_paths": [
+   "packages/core/src/node-server.js",
+   "apps/web/server.js"
+  ],
+  "ordinary_attack_class_block": "ATTACK-CLASSES.md#Feature abuse and data leakage",
+  "selected_companion_blocks": [
+   "CLIENT-SIDE.md#Core discipline"
+  ],
+  "excluded_blocks": [],
+  "prior_status": "none",
+  "attempts": [],
+  "wave": 1,
+  "status": "covered",
+  "agent_id": "hunter-web-shells",
+  "reviewed_paths": [
+   "packages/core/src/node-server.js",
+   "apps/web/server.js",
+   "apps/web/student/src/main.jsx",
+   "apps/web/public/assets/app-OK27X525.js",
+   "apps/web/public/hasil/assets/report-PCR66MS2.js",
+   "apps/web/result/src/report.js",
+   "apps/web/result/src/App.jsx"
+  ],
+  "local_checks": [
+   {
+    "agent_id": "hunter-web-shells",
+    "reviewed_paths": [
+     "packages/core/src/node-server.js",
+     "apps/web/server.js"
+    ],
+    "invariant": "The runner and report shells load only same-origin script and style, with no CSP escape in the committed bundles.",
+    "method": "source",
+    "result": "Held. STRICT_CSP (node-server.js:32) is default-src 'self' with script-src 'self', no unsafe-inline, no unsafe-eval, no blob: in script-src (blob: only under media-src). PAGE_HEADERS (apps/web/server.js:19) attaches the CSP plus nosniff, X-Frame-Options DENY, and frame-ancestors 'none' to every page and static file. Binary greps of the committed bundles find zero eval(, new Function, data:text, blob: script, and zero inline style attributes; the 'javascript:' hits are React error strings and the innerHTML hits are React internals, not app sinks.",
+    "artifact": null
+   },
+   {
+    "agent_id": "hunter-web-shells",
+    "reviewed_paths": [
+     "apps/web/result/src/App.jsx",
+     "apps/web/result/src/report.js",
+     "packages/core/src/node-server.js"
+    ],
+    "invariant": "No part of the runner or the result report loads remote content, and the img-src titiknolenglish.com allowance cannot be abused to exfiltrate or track.",
+    "method": "source",
+    "result": "Held. The report's only outbound links are wa.me CTA links (rendered with rel=noopener target=blank) and program cards whose url and image come from the levels table, edited only by the admin team; student input never reaches an href or src. connect-src 'self' blocks any fetch beacon from student-controlled data; img-src is limited to 'self', data:, and https://titiknolenglish.com. No remote script, style, or font is loaded anywhere.",
+    "artifact": null
+   },
+   {
+    "agent_id": "hunter-web-shells",
+    "reviewed_paths": [
+     "apps/web/server.js",
+     "packages/core/src/node-server.js"
+    ],
+    "invariant": "The result token in /hasil?token=<secret> does not leak through the Referer header, and the microphone is only usable by the page itself.",
+    "method": "source",
+    "result": "Held. BASE_HEADERS sets Referrer-Policy: strict-origin-when-cross-origin, attached to the report shell, the runner shell, and every static response. Off-site links from /hasil?token=... send only the origin, never the query string. The report shell carries meta robots noindex. Permissions-Policy is camera=(), microphone=(self), geolocation=() on page headers; error responses fall back to microphone=(), the safe direction.",
+    "artifact": null
+   }
+  ],
+  "result_fingerprints": [],
+  "unresolved": [],
+  "hardening_notes": [],
+  "unit_read_paths": [
+   "packages/core/src/node-server.js",
+   "apps/web/server.js",
+   "apps/web/student/src/main.jsx",
+   "apps/web/public/assets/app-OK27X525.js",
+   "apps/web/public/hasil/assets/report-PCR66MS2.js",
+   "apps/web/result/src/report.js",
+   "apps/web/result/src/App.jsx"
+  ]
+ },
+ {
+  "coverage_id": "apps%2Fweb%2Fserver.js%23static%20serving::packages%2Fcore%2Fsrc%2Fnode-server.js%23staticResponse%20traversal%20guard::packages%2Fcore%2Fsrc%2Fnode-server.js::ATTACK-CLASSES.md%23Resource%20and%20file%20handling",
+  "canonical_refs": {
+   "surface": "apps/web/server.js#static serving",
+   "boundary": "packages/core/src/node-server.js#staticResponse traversal guard",
+   "subsystem": "packages/core/src/node-server.js",
+   "attack_class": "ATTACK-CLASSES.md#Resource and file handling"
+  },
+  "surface": "apps/web/server.js#static serving",
+  "boundary": "packages/core/src/node-server.js#staticResponse traversal guard",
+  "subsystem": "packages/core/src/node-server.js",
+  "attack_class": "ATTACK-CLASSES.md#Resource and file handling",
+  "starting_paths": [
+   "packages/core/src/node-server.js",
+   "apps/web/server.js"
+  ],
+  "ordinary_attack_class_block": "ATTACK-CLASSES.md#Resource and file handling",
+  "selected_companion_blocks": [],
+  "excluded_blocks": [],
+  "prior_status": "none",
+  "attempts": [],
+  "wave": 1,
+  "status": "covered",
+  "agent_id": "hunter-web-shells",
+  "reviewed_paths": [
+   "packages/core/src/node-server.js",
+   "apps/web/server.js",
+   "apps/web/public"
+  ],
+  "local_checks": [
+   {
+    "agent_id": "hunter-web-shells",
+    "reviewed_paths": [
+     "packages/core/src/node-server.js",
+     "apps/web/server.js"
+    ],
+    "invariant": "An anonymous visitor cannot reach any file outside apps/web/public with a crafted URL.",
+    "method": "source",
+    "result": "Held. staticResponse (node-server.js:35-55) decodes once with decodeURIComponent, rejects NUL bytes after decode (38), then resolves and enforces two-layer containment: file = resolve(base, '.' + rel) and file.startsWith(base + sep) (41). resolve() collapses dot segments and walks .. on both separators, so percent-encoded backslash, double-encoded ../, mixed separators, and dot-segment collapse all end outside base+sep and return 404. Absolute Windows drive paths and UNC shares fail the same startsWith test. A hypothetical sibling directory fails because containment demands base + sep. apps/web/public contains only hashed assets, logos, audio, the 18 examiner videos, and manifests; no .env-adjacent file is reachable.",
+    "artifact": null
+   },
+   {
+    "agent_id": "hunter-web-shells",
+    "reviewed_paths": [
+     "packages/core/src/node-server.js",
+     "apps/web/server.js"
+    ],
+    "invariant": "Static responses are served with correct method handling and non-guessable cache behavior for the large media assets.",
+    "method": "source",
+    "result": "Held with notes. HEAD handled by sendResponse (99-109): full body read then dropped, content-length preserved. No Range support: whole file read into memory per request, a bandwidth nit. Cache-Control defaults to public, max-age=300 for non-HTML (51); hashed app assets get 300 seconds instead of far-future immutable. favicon gets 86400 (apps/web/server.js:79).",
+    "artifact": null
+   }
+  ],
+  "result_fingerprints": [],
+  "unresolved": [],
+  "hardening_notes": [],
+  "unit_read_paths": [
+   "packages/core/src/node-server.js",
+   "apps/web/server.js",
+   "apps/web/public"
+  ]
+ },
+ {
+  "coverage_id": "apps%2Fweb%2Fsrc%2Fapi.js%23POST%20%2Fapi%2Fattempts::apps%2Fweb%2Fsrc%2Fapi.js%23attempt%20creation::apps%2Fweb%2Fsrc%2Fapi.js::ATTACK-CLASSES.md%23Resource%20and%20file%20handling",
+  "canonical_refs": {
+   "surface": "apps/web/src/api.js#POST /api/attempts",
+   "boundary": "apps/web/src/api.js#attempt creation",
+   "subsystem": "apps/web/src/api.js",
+   "attack_class": "ATTACK-CLASSES.md#Resource and file handling"
+  },
+  "surface": "apps/web/src/api.js#POST /api/attempts",
+  "boundary": "apps/web/src/api.js#attempt creation",
+  "subsystem": "apps/web/src/api.js",
+  "attack_class": "ATTACK-CLASSES.md#Resource and file handling",
+  "starting_paths": [
+   "apps/web/src/api.js",
+   "packages/core/src/db.js"
+  ],
+  "ordinary_attack_class_block": "ATTACK-CLASSES.md#Resource and file handling",
+  "selected_companion_blocks": [
+   "RESOURCE-EXHAUSTION-AND-AVAILABILITY.md#Core discipline"
+  ],
+  "excluded_blocks": [],
+  "prior_status": "none",
+  "attempts": [],
+  "wave": 1,
+  "status": "covered",
+  "agent_id": "hunter-web-public",
+  "reviewed_paths": [
+   "apps/web/src/api.js",
+   "packages/core/src/speaking.js",
+   "packages/core/src/node-server.js"
+  ],
+  "local_checks": [
+   {
+    "agent_id": "hunter-web-public",
+    "reviewed_paths": [
+     "apps/web/src/api.js",
+     "packages/core/src/speaking.js"
+    ],
+    "invariant": "Anonymous attempt creation must bound the storage and background work one request can cause.",
+    "method": "source",
+    "result": "One request stores exactly one attempts row (question id list JSON, speaking pick JSON, 300-char UA) and triggers one purgeExpiredAttempts sweep, a DELETE scan over in_progress rows. There is no rate limit, IP cap, or bot check anywhere on the route, and the sweep runs on every creation. The purge only removes rows past expires_at+60, so each junk row lives at least the configured test duration. Documented as a known limit in AGENTS.md; recorded as hardening, not a candidate.",
+    "artifact": null
+   }
+  ],
+  "result_fingerprints": [],
+  "unresolved": [],
+  "hardening_notes": [],
+  "unit_read_paths": [
+   "apps/web/src/api.js",
+   "packages/core/src/speaking.js",
+   "packages/core/src/node-server.js"
+  ]
+ },
+ {
+  "coverage_id": "apps%2Fweb%2Fsrc%2Fapi.js%23POST%20%2Fapi%2Fattempts::apps%2Fweb%2Fsrc%2Fapi.js%23consent%2Binvite%20validation::apps%2Fweb%2Fsrc%2Fapi.js::ATTACK-CLASSES.md%23Injection",
+  "canonical_refs": {
+   "surface": "apps/web/src/api.js#POST /api/attempts",
+   "boundary": "apps/web/src/api.js#consent+invite validation",
+   "subsystem": "apps/web/src/api.js",
+   "attack_class": "ATTACK-CLASSES.md#Injection"
+  },
+  "surface": "apps/web/src/api.js#POST /api/attempts",
+  "boundary": "apps/web/src/api.js#consent+invite validation",
+  "subsystem": "apps/web/src/api.js",
+  "attack_class": "ATTACK-CLASSES.md#Injection",
+  "starting_paths": [
+   "apps/web/src/api.js",
+   "packages/core/src/http.js",
+   "packages/core/src/store.js"
+  ],
+  "ordinary_attack_class_block": "ATTACK-CLASSES.md#Injection",
+  "selected_companion_blocks": [
+   "DATA-ISOLATION-AND-LIFECYCLE.md#Core discipline"
+  ],
+  "excluded_blocks": [],
+  "prior_status": "none",
+  "attempts": [],
+  "wave": 1,
+  "status": "covered",
+  "agent_id": "hunter-web-public",
+  "reviewed_paths": [
+   "apps/web/src/api.js",
+   "packages/core/src/http.js",
+   "packages/core/src/store.js",
+   "packages/core/src/db.js"
+  ],
+  "local_checks": [
+   {
+    "agent_id": "hunter-web-public",
+    "reviewed_paths": [
+     "apps/web/src/api.js",
+     "packages/core/src/store.js"
+    ],
+    "invariant": "Attempt creation must not let consent or invite fields reach SQL or storage unparameterized.",
+    "method": "source",
+    "result": "All consent and invite values flow only through env.DB.prepare(...).bind(...) or the sha256Hex(token) lookup. The only dynamic SQL fragment is the conditional 'AND p.id = ?' in resolvePackage, whose value stays a bind parameter. consent.version is compared by equality; body.invite is stringified then hashed. No string concatenation of request data into SQL found.",
+    "artifact": null
+   }
+  ],
+  "result_fingerprints": [],
+  "unresolved": [],
+  "hardening_notes": [],
+  "unit_read_paths": [
+   "apps/web/src/api.js",
+   "packages/core/src/http.js",
+   "packages/core/src/store.js",
+   "packages/core/src/db.js"
+  ]
+ },
+ {
+  "coverage_id": "apps%2Fweb%2Fsrc%2Fapi.js%23POST%20%2Fapi%2Fattempts::packages%2Fcore%2Fsrc%2Fstore.js%23attempt%20UUID%20bearer::apps%2Fweb%2Fsrc%2Fapi.js::ATTACK-CLASSES.md%23Business%20logic",
+  "canonical_refs": {
+   "surface": "apps/web/src/api.js#POST /api/attempts",
+   "boundary": "packages/core/src/store.js#attempt UUID bearer",
+   "subsystem": "apps/web/src/api.js",
+   "attack_class": "ATTACK-CLASSES.md#Business logic"
+  },
+  "surface": "apps/web/src/api.js#POST /api/attempts",
+  "boundary": "packages/core/src/store.js#attempt UUID bearer",
+  "subsystem": "apps/web/src/api.js",
+  "attack_class": "ATTACK-CLASSES.md#Business logic",
+  "starting_paths": [
+   "apps/web/src/api.js",
+   "packages/core/src/store.js",
+   "packages/core/src/speaking-bank.js"
+  ],
+  "ordinary_attack_class_block": "ATTACK-CLASSES.md#Business logic",
+  "selected_companion_blocks": [],
+  "excluded_blocks": [],
+  "prior_status": "none",
+  "attempts": [],
+  "wave": 1,
+  "status": "covered",
+  "agent_id": "hunter-web-public",
+  "reviewed_paths": [
+   "apps/web/src/api.js",
+   "packages/core/src/http.js",
+   "packages/core/src/store.js",
+   "packages/core/src/db.js"
+  ],
+  "local_checks": [
+   {
+    "agent_id": "hunter-web-public",
+    "reviewed_paths": [
+     "apps/web/src/api.js",
+     "packages/core/src/store.js"
+    ],
+    "invariant": "Attempt creation must not let consent or invite fields reach SQL or storage unparameterized.",
+    "method": "source",
+    "result": "All consent and invite values flow only through env.DB.prepare(...).bind(...) (apps/web/src/api.js:228-239) or sha256Hex(token) lookup (157-169). The only dynamic SQL fragment is the conditional 'AND p.id = ?' in resolvePackage (101-106), whose value stays a bind parameter. consent.version is compared by equality; body.invite is stringified then hashed. No string concatenation of request data into SQL found.",
+    "artifact": null
+   }
+  ],
+  "result_fingerprints": [],
+  "unresolved": [],
+  "hardening_notes": [],
+  "unit_read_paths": [
+   "apps/web/src/api.js",
+   "packages/core/src/http.js",
+   "packages/core/src/store.js",
+   "packages/core/src/db.js"
+  ]
+ },
+ {
+  "coverage_id": "apps%2Fweb%2Fsrc%2Fapi.js%23all%20public%20routes::packages%2Fcore%2Fsrc%2Fhttp.js%23body%20caps::apps%2Fweb%2Fsrc%2Fapi.js::ATTACK-CLASSES.md%23Resource%20and%20file%20handling",
+  "canonical_refs": {
+   "surface": "apps/web/src/api.js#all public routes",
+   "boundary": "packages/core/src/http.js#body caps",
+   "subsystem": "apps/web/src/api.js",
+   "attack_class": "ATTACK-CLASSES.md#Resource and file handling"
+  },
+  "surface": "apps/web/src/api.js#all public routes",
+  "boundary": "packages/core/src/http.js#body caps",
+  "subsystem": "apps/web/src/api.js",
+  "attack_class": "ATTACK-CLASSES.md#Resource and file handling",
+  "starting_paths": [
+   "packages/core/src/http.js",
+   "packages/core/src/node-server.js",
+   "apps/web/server.js"
+  ],
+  "ordinary_attack_class_block": "ATTACK-CLASSES.md#Resource and file handling",
+  "selected_companion_blocks": [
+   "RESOURCE-EXHAUSTION-AND-AVAILABILITY.md#Core discipline"
+  ],
+  "excluded_blocks": [],
+  "prior_status": "none",
+  "attempts": [],
+  "wave": 1,
+  "status": "covered",
+  "agent_id": "hunter-web-public",
+  "reviewed_paths": [
+   "packages/core/src/http.js",
+   "packages/core/src/node-server.js",
+   "apps/web/server.js",
+   "apps/web/src/api.js"
+  ],
+  "local_checks": [
+   {
+    "agent_id": "hunter-web-public",
+    "reviewed_paths": [
+     "packages/core/src/http.js",
+     "packages/core/src/node-server.js",
+     "apps/web/server.js",
+     "apps/web/src/api.js"
+    ],
+    "invariant": "Public body caps must bound actual bytes received on every route, including multibyte and chunked bodies.",
+    "method": "source",
+    "result": "readJson checks content-length then text.length (http.js:26-36), counting UTF-16 code units, not bytes: a 4-byte-per-char body of 16K chars can be up to 64KB of bytes and still pass the 16K limit. The real byte bound is the transport layer: node-server.js readBody (61-74) enforces MAX_BODY_BYTES 256KB or the route override, and apps/web/server.js:84 raises it only for the two speaking paths, after which handlers re-check audio bytes. Chunked bodies are byte-capped at transport. Every sink slices (name 80, email 160, essay 20000, text 300) or discards the content, so no storage sink stores the excess. Recorded as hardening: make readJson byte-aware.",
+    "artifact": null
+   }
+  ],
+  "result_fingerprints": [],
+  "unresolved": [],
+  "hardening_notes": [],
+  "unit_read_paths": [
+   "packages/core/src/http.js",
+   "packages/core/src/node-server.js",
+   "apps/web/server.js",
+   "apps/web/src/api.js"
+  ]
+ },
+ {
+  "coverage_id": "apps%2Fweb%2Fsrc%2Fapi.js%23contact::apps%2Fweb%2Fsrc%2Fapi.js%23result%20delivery%20channels::packages%2Fcore%2Fsrc%2Fdelivery.js::ATTACK-CLASSES.md%23Feature%20abuse%20and%20data%20leakage",
+  "canonical_refs": {
+   "surface": "apps/web/src/api.js#contact",
+   "boundary": "apps/web/src/api.js#result delivery channels",
+   "subsystem": "packages/core/src/delivery.js",
+   "attack_class": "ATTACK-CLASSES.md#Feature abuse and data leakage"
+  },
+  "surface": "apps/web/src/api.js#contact",
+  "boundary": "apps/web/src/api.js#result delivery channels",
+  "subsystem": "packages/core/src/delivery.js",
+  "attack_class": "ATTACK-CLASSES.md#Feature abuse and data leakage",
+  "starting_paths": [
+   "apps/web/src/api.js",
+   "packages/core/src/delivery.js",
+   "packages/core/src/email.js",
+   "packages/core/src/whatsapp.js"
+  ],
+  "ordinary_attack_class_block": "ATTACK-CLASSES.md#Feature abuse and data leakage",
+  "selected_companion_blocks": [],
+  "excluded_blocks": [],
+  "prior_status": "none",
+  "attempts": [],
+  "wave": 1,
+  "status": "candidate",
+  "agent_id": "hunter-web-public",
+  "reviewed_paths": [
+   "apps/web/src/api.js",
+   "packages/core/src/delivery.js",
+   "packages/core/src/email.js",
+   "packages/core/src/whatsapp.js"
+  ],
+  "local_checks": [
+   {
+    "agent_id": "hunter-web-public",
+    "reviewed_paths": [
+     "apps/web/src/api.js",
+     "packages/core/src/delivery.js"
+    ],
+    "invariant": "A delivered channel must never be re-sent, and per AGENTS.md a failed result send is not retried automatically.",
+    "method": "source",
+    "result": "The CASE guard in saveContact protects only channels whose sent_at stamp exists. delivery.js sets email_sent_at and wa_sent_at to NULL on failure while storing status 'failed: ...', so a replayed contact step resets that failed channel to 'pending' and immediately calls deliverInBackground, which claims and re-sends to the attempt's email and whatsapp columns, which the same replay has just overwritten with attacker-chosen values. Each replay while the send keeps failing produces another outbound email or WhatsApp under the school identity to a newly chosen address, contradicting the documented no-automatic-retry invariant. Candidate: webapi/contact-rearm-failed-channel.",
+    "artifact": null
+   }
+  ],
+  "result_fingerprints": [
+   "webapi/contact-rearm-failed-channel"
+  ],
+  "unresolved": [],
+  "hardening_notes": [],
+  "unit_read_paths": [
+   "apps/web/src/api.js",
+   "packages/core/src/delivery.js",
+   "packages/core/src/email.js",
+   "packages/core/src/whatsapp.js"
+  ]
+ },
+ {
+  "coverage_id": "apps%2Fweb%2Fsrc%2Fapi.js%23contact::packages%2Fcore%2Fsrc%2Fstore.js%23upsertStudentFromContact::apps%2Fweb%2Fsrc%2Fapi.js::ATTACK-CLASSES.md%23Business%20logic",
+  "canonical_refs": {
+   "surface": "apps/web/src/api.js#contact",
+   "boundary": "packages/core/src/store.js#upsertStudentFromContact",
+   "subsystem": "apps/web/src/api.js",
+   "attack_class": "ATTACK-CLASSES.md#Business logic"
+  },
+  "surface": "apps/web/src/api.js#contact",
+  "boundary": "packages/core/src/store.js#upsertStudentFromContact",
+  "subsystem": "apps/web/src/api.js",
+  "attack_class": "ATTACK-CLASSES.md#Business logic",
+  "starting_paths": [
+   "apps/web/src/api.js",
+   "packages/core/src/store.js",
+   "packages/core/src/branches.js"
+  ],
+  "ordinary_attack_class_block": "ATTACK-CLASSES.md#Business logic",
+  "selected_companion_blocks": [
+   "DATA-ISOLATION-AND-LIFECYCLE.md#Core discipline"
+  ],
+  "excluded_blocks": [],
+  "prior_status": "none",
+  "attempts": [],
+  "wave": 1,
+  "status": "covered",
+  "agent_id": "hunter-web-public",
+  "reviewed_paths": [
+   "apps/web/src/api.js",
+   "packages/core/src/store.js",
+   "packages/core/src/branches.js"
+  ],
+  "local_checks": [
+   {
+    "agent_id": "hunter-web-public",
+    "reviewed_paths": [
+     "apps/web/src/api.js",
+     "packages/core/src/store.js"
+    ],
+    "invariant": "The contact step must bind to one student, run only after submit, and mint the result token exactly once.",
+    "method": "source",
+    "result": "Contact requires status submitted and test placement (558-560), so it cannot precede grading. Once attempt.student_id is set, replay reuses that student and never re-upserts (571). result_token set through COALESCE (575-576), so minting cannot be forced repeatedly. Fields: attempt name/email/whatsapp overwritten unconditionally on replay while the student row only gets COALESCE fills (store.js:195), creating an attempt-versus-student contact mismatch; identity by WhatsApp-or-email assertion is the documented architecture, listed as hardening. Branch validated on both sides (551, 556).",
+    "artifact": null
+   }
+  ],
+  "result_fingerprints": [],
+  "unresolved": [],
+  "hardening_notes": [],
+  "unit_read_paths": [
+   "apps/web/src/api.js",
+   "packages/core/src/store.js",
+   "packages/core/src/branches.js"
+  ]
+ },
+ {
+  "coverage_id": "apps%2Fweb%2Fsrc%2Fapi.js%23invite%20routes::apps%2Fweb%2Fsrc%2Fapi.js%23findInvite%20token%20hash::apps%2Fweb%2Fsrc%2Fapi.js::ATTACK-CLASSES.md%23Access%20control",
+  "canonical_refs": {
+   "surface": "apps/web/src/api.js#invite routes",
+   "boundary": "apps/web/src/api.js#findInvite token hash",
+   "subsystem": "apps/web/src/api.js",
+   "attack_class": "ATTACK-CLASSES.md#Access control"
+  },
+  "surface": "apps/web/src/api.js#invite routes",
+  "boundary": "apps/web/src/api.js#findInvite token hash",
+  "subsystem": "apps/web/src/api.js",
+  "attack_class": "ATTACK-CLASSES.md#Access control",
+  "starting_paths": [
+   "apps/web/src/api.js",
+   "packages/core/src/crypto.js"
+  ],
+  "ordinary_attack_class_block": "ATTACK-CLASSES.md#Access control",
+  "selected_companion_blocks": [
+   "WEB-PROTOCOL-AND-AUTH.md#Session fixation and invalidation"
+  ],
+  "excluded_blocks": [],
+  "prior_status": "none",
+  "attempts": [],
+  "wave": 1,
+  "status": "covered",
+  "agent_id": "hunter-web-public",
+  "reviewed_paths": [
+   "apps/web/src/api.js",
+   "packages/core/src/crypto.js"
+  ],
+  "local_checks": [
+   {
+    "agent_id": "hunter-web-public",
+    "reviewed_paths": [
+     "apps/web/src/api.js",
+     "packages/core/src/crypto.js"
+    ],
+    "invariant": "Invite lookup must hash the token, and used, expired, code-locked, and not-yet-open invites must be refused.",
+    "method": "source",
+    "result": "findInvite looks up sha256Hex(token) only (157-169) and refuses used_at (410), code_tries>=3 (423), expired (410), and not-yet-open (423) before any data is returned. Wrong codes increment code_tries atomically via UPDATE...RETURNING (205-208); GETs never touch the counter. Code compare is lowercase-equal with no early-exit oracle. Response leaks only firstName and package name to the token holder; enumeration infeasible. No invariant failure found.",
+    "artifact": null
+   }
+  ],
+  "result_fingerprints": [],
+  "unresolved": [],
+  "hardening_notes": [],
+  "unit_read_paths": [
+   "apps/web/src/api.js",
+   "packages/core/src/crypto.js"
+  ]
+ },
+ {
+  "coverage_id": "apps%2Fweb%2Fsrc%2Fapi.js%23per-attempt%20sub-actions::apps%2Fweb%2Fsrc%2Fapi.js%23markAudioPlayed%20and%20skipSpeaking%20gates::apps%2Fweb%2Fsrc%2Fapi.js::ATTACK-CLASSES.md%23Business%20logic",
+  "canonical_refs": {
+   "surface": "apps/web/src/api.js#per-attempt sub-actions",
+   "boundary": "apps/web/src/api.js#markAudioPlayed and skipSpeaking gates",
+   "subsystem": "apps/web/src/api.js",
+   "attack_class": "ATTACK-CLASSES.md#Business logic"
+  },
+  "surface": "apps/web/src/api.js#per-attempt sub-actions",
+  "boundary": "apps/web/src/api.js#markAudioPlayed and skipSpeaking gates",
+  "subsystem": "apps/web/src/api.js",
+  "attack_class": "ATTACK-CLASSES.md#Business logic",
+  "starting_paths": [
+   "apps/web/src/api.js"
+  ],
+  "ordinary_attack_class_block": "ATTACK-CLASSES.md#Business logic",
+  "selected_companion_blocks": [
+   "DATA-ISOLATION-AND-LIFECYCLE.md#Core discipline"
+  ],
+  "excluded_blocks": [],
+  "prior_status": "none",
+  "attempts": [],
+  "wave": 2,
+  "status": "covered",
+  "agent_id": "hunter-wave2-web-actions",
+  "reviewed_paths": [
+   "apps/web/src/api.js",
+   "apps/admin/src/api.js",
+   "packages/core/src/speaking-result.js",
+   "packages/core/src/speaking-bank.js",
+   "packages/core/src/delivery.js",
+   "apps/web/student/src/App.jsx",
+   "apps/web/student/src/screens.jsx",
+   "db/migrations/0009_question_sections.sql"
+  ],
+  "local_checks": [
+   {
+    "agent_id": "hunter-wave2-web-actions",
+    "reviewed_paths": [
+     "apps/web/src/api.js",
+     "apps/admin/src/api.js",
+     "db/migrations/0009_question_sections.sql",
+     "apps/web/student/src/App.jsx"
+    ],
+    "invariant": "A state marker written by an attempt holder must not be trusted by grading, quota, or cross-attempt logic unless the writing endpoint validates it.",
+    "method": "source",
+    "result": "markAudioPlayed stamps attempt_audio_plays and attempts.audio_played_at with no status gate and validates sectionId only against test_key, not the attempt's package_id. Exhaustive consumer search of both apps: the only readers of attempt_audio_plays are the ON CONFLICT gate inside markAudioPlayed itself and the 0009 backfill; nothing reads the table for scores, limits, or counting. attempts.audio_played_at is read in exactly two places, both informational admin displays; the submit and grading path never reads either value. Every row the endpoint can write is scoped to the caller's own attempt_id, so a wrong-package or post-submit stamp only mislabels the caller's own record or burns the caller's own single-play slot. No grading, paid quota, or other principal's data is affected. Hardening note only.",
+    "artifact": null
+   },
+   {
+    "agent_id": "hunter-wave2-web-actions",
+    "reviewed_paths": [
+     "apps/web/src/api.js",
+     "apps/web/student/src/App.jsx",
+     "packages/core/src/speaking-result.js",
+     "packages/core/src/delivery.js"
+    ],
+    "invariant": "The speaking-skip endpoints may only move the caller's own attempt to a state whose consumers behave as designed.",
+    "method": "source",
+    "result": "Mockup branch: sets speaking_status='skipped' on an in_progress attempt with no answers; this is the designed mic-failure path, reached by the runner's skip button and by finishSpeakingByTime; the only consumer treating 'skipped' as a gate is submitAnswers, where it bypasses the finish-speaking refusal and yields a three-skill result; the effect is limited to the caller's own attempt and can only remove the caller's own Speaking band. Placement branch: the speakingAttempt gate requires status='submitted', so a placement student cannot pre-skip before submitting; after submit, the position-0 marker is final, saveContact delivers immediately, and the aggregate filters it out exactly like an absent recording; the marker cannot collide with a real answer because bank positions sort from the speaking bank and uploads use picked positions. The missing speaking_enabled gate means the write is reachable when speaking is off, but the write is then indistinguishable in every consumer from the no-rows case that already exists when speaking is off. No consumer makes the missing gate matter. Hardening note only.",
+    "artifact": null
+   }
+  ],
+  "result_fingerprints": [],
+  "unresolved": [],
+  "unit_read_paths": [
+   "apps/web/src/api.js",
+   "apps/admin/src/api.js",
+   "packages/core/src/speaking-result.js",
+   "packages/core/src/speaking-bank.js",
+   "packages/core/src/delivery.js",
+   "apps/web/student/src/App.jsx",
+   "apps/web/student/src/screens.jsx",
+   "db/migrations/0009_question_sections.sql"
+  ],
+  "hardening_notes": []
+ },
+ {
+  "coverage_id": "apps%2Fweb%2Fsrc%2Fapi.js%23result%20routes::apps%2Fweb%2Fsrc%2Fapi.js%23result_token%20bearer::apps%2Fweb%2Fsrc%2Fapi.js::ATTACK-CLASSES.md%23Access%20control",
+  "canonical_refs": {
+   "surface": "apps/web/src/api.js#result routes",
+   "boundary": "apps/web/src/api.js#result_token bearer",
+   "subsystem": "apps/web/src/api.js",
+   "attack_class": "ATTACK-CLASSES.md#Access control"
+  },
+  "surface": "apps/web/src/api.js#result routes",
+  "boundary": "apps/web/src/api.js#result_token bearer",
+  "subsystem": "apps/web/src/api.js",
+  "attack_class": "ATTACK-CLASSES.md#Access control",
+  "starting_paths": [
+   "apps/web/src/api.js"
+  ],
+  "ordinary_attack_class_block": "ATTACK-CLASSES.md#Access control",
+  "selected_companion_blocks": [
+   "WEB-PROTOCOL-AND-AUTH.md#Core discipline"
+  ],
+  "excluded_blocks": [],
+  "prior_status": "none",
+  "attempts": [],
+  "wave": 1,
+  "status": "covered",
+  "agent_id": "hunter-web-public",
+  "reviewed_paths": [
+   "apps/web/src/api.js",
+   "packages/core/src/crypto.js"
+  ],
+  "local_checks": [
+   {
+    "agent_id": "hunter-web-public",
+    "reviewed_paths": [
+     "apps/web/src/api.js"
+    ],
+    "invariant": "A result route must return exactly one attempt's result to the bearer and never a placement attempt by id.",
+    "method": "source",
+    "result": "GET /api/results/:token does an equality lookup on the plaintext result_token (774-777), minted once as randomToken(24) (573-576), and refuses non-placement or unsubmitted attempts (779-781). Returns only score, level, speaking aggregates, and program cards. GET /api/attempts/:id/result requires invite_id and testKey in pre/post/ielts-mockup (726-729), so placement attempts answer 404. Enumeration cost is a random 24-byte or UUIDv4 space. No invariant failure found.",
+    "artifact": null
+   }
+  ],
+  "result_fingerprints": [],
+  "unresolved": [],
+  "hardening_notes": [],
+  "unit_read_paths": [
+   "apps/web/src/api.js",
+   "packages/core/src/crypto.js"
+  ]
+ },
+ {
+  "coverage_id": "apps%2Fweb%2Fsrc%2Fapi.js%23speaking%20uploads::apps%2Fweb%2Fsrc%2Fapi.js%23mime%2Bduration%20gates::apps%2Fweb%2Fsrc%2Fapi.js::ATTACK-CLASSES.md%23Resource%20and%20file%20handling",
+  "canonical_refs": {
+   "surface": "apps/web/src/api.js#speaking uploads",
+   "boundary": "apps/web/src/api.js#mime+duration gates",
+   "subsystem": "apps/web/src/api.js",
+   "attack_class": "ATTACK-CLASSES.md#Resource and file handling"
+  },
+  "surface": "apps/web/src/api.js#speaking uploads",
+  "boundary": "apps/web/src/api.js#mime+duration gates",
+  "subsystem": "apps/web/src/api.js",
+  "attack_class": "ATTACK-CLASSES.md#Resource and file handling",
+  "starting_paths": [
+   "apps/web/src/api.js",
+   "packages/core/src/speaking.js"
+  ],
+  "ordinary_attack_class_block": "ATTACK-CLASSES.md#Resource and file handling",
+  "selected_companion_blocks": [
+   "RESOURCE-EXHAUSTION-AND-AVAILABILITY.md#Core discipline"
+  ],
+  "excluded_blocks": [],
+  "prior_status": "none",
+  "attempts": [],
+  "wave": 1,
+  "status": "candidate",
+  "agent_id": "hunter-web-public",
+  "reviewed_paths": [
+   "apps/web/src/api.js",
+   "packages/core/src/speaking.js",
+   "packages/core/src/speaking-mockup-worker.js"
+  ],
+  "local_checks": [
+   {
+    "agent_id": "hunter-web-public",
+    "reviewed_paths": [
+     "apps/web/src/api.js",
+     "packages/core/src/speaking.js",
+     "packages/core/src/speaking-mockup-worker.js"
+    ],
+    "invariant": "A speaking upload must be bounded in size, mime, and duration, and must not trigger unbounded paid scoring calls.",
+    "method": "source",
+    "result": "Placement upload is well gated: mime whitelist (631-632), 1KB to 3MB (634-635), duration clamped 1-120 and checked against the configured minimum (662-667), 2h window (639-641), position bound to the picked set (647-654), replace-while-pending only when status='pending' AND tries=0 AND lease expired (673-682). The mockup route has no duration gate (703, stored unclamped), accepts 1KB/zero-second recordings, and its conflict upsert resets tries, next_attempt_at, and lease while status is 'pending' or 'failed' (708-717), each upload re-triggering a Speechace call (719). Candidate raised: webapi/mockup-speaking-requeue-unbounded.",
+    "artifact": null
+   }
+  ],
+  "result_fingerprints": [
+   "webapi/mockup-speaking-requeue-unbounded"
+  ],
+  "unresolved": [],
+  "hardening_notes": [],
+  "unit_read_paths": [
+   "apps/web/src/api.js",
+   "packages/core/src/speaking.js",
+   "packages/core/src/speaking-mockup-worker.js"
+  ]
+ },
+ {
+  "coverage_id": "apps%2Fweb%2Fsrc%2Fapi.js%23submit%20and%20answers::apps%2Fweb%2Fsrc%2Fapi.js%23answer%20key%20exposure::apps%2Fweb%2Fsrc%2Fapi.js::ATTACK-CLASSES.md%23Feature%20abuse%20and%20data%20leakage",
+  "canonical_refs": {
+   "surface": "apps/web/src/api.js#submit and answers",
+   "boundary": "apps/web/src/api.js#answer key exposure",
+   "subsystem": "apps/web/src/api.js",
+   "attack_class": "ATTACK-CLASSES.md#Feature abuse and data leakage"
+  },
+  "surface": "apps/web/src/api.js#submit and answers",
+  "boundary": "apps/web/src/api.js#answer key exposure",
+  "subsystem": "apps/web/src/api.js",
+  "attack_class": "ATTACK-CLASSES.md#Feature abuse and data leakage",
+  "starting_paths": [
+   "apps/web/src/api.js",
+   "tests/smoke.mjs"
+  ],
+  "ordinary_attack_class_block": "ATTACK-CLASSES.md#Feature abuse and data leakage",
+  "selected_companion_blocks": [],
+  "excluded_blocks": [],
+  "prior_status": "none",
+  "attempts": [],
+  "wave": 1,
+  "status": "covered",
+  "agent_id": "hunter-web-public",
+  "reviewed_paths": [
+   "apps/web/src/api.js",
+   "tests/smoke.mjs"
+  ],
+  "local_checks": [
+   {
+    "agent_id": "hunter-web-public",
+    "reviewed_paths": [
+     "apps/web/src/api.js",
+     "tests/smoke.mjs"
+    ],
+    "invariant": "No public response may carry answer, accepted-answer, or answer-key data.",
+    "method": "source",
+    "result": "Every question-echoing path was enumerated: GET /api/config returns counts and settings only; GET /api/invites/:token adds invite metadata only; POST /api/attempts maps questions to id, skill, prompt, type, part, sectionId, minWords, passage, options, seconds, never answer or accepted; the submit response and both result routes return scores and bands, never per-question keys; the key written to answers.answer_key is only read back by the dashboard. The smoke test asserts the public payload has no answer key. Replay of submit returns only stored aggregates. No leak path found.",
+    "artifact": null
+   }
+  ],
+  "result_fingerprints": [],
+  "unresolved": [],
+  "hardening_notes": [],
+  "unit_read_paths": [
+   "apps/web/src/api.js",
+   "tests/smoke.mjs"
+  ]
+ },
+ {
+  "coverage_id": "apps%2Fweb%2Fsrc%2Fapi.js%23submit%20and%20answers::apps%2Fweb%2Fsrc%2Fapi.js%23server-side%20grading::apps%2Fweb%2Fsrc%2Fapi.js::ATTACK-CLASSES.md%23Injection",
+  "canonical_refs": {
+   "surface": "apps/web/src/api.js#submit and answers",
+   "boundary": "apps/web/src/api.js#server-side grading",
+   "subsystem": "apps/web/src/api.js",
+   "attack_class": "ATTACK-CLASSES.md#Injection"
+  },
+  "surface": "apps/web/src/api.js#submit and answers",
+  "boundary": "apps/web/src/api.js#server-side grading",
+  "subsystem": "apps/web/src/api.js",
+  "attack_class": "ATTACK-CLASSES.md#Injection",
+  "starting_paths": [
+   "apps/web/src/api.js",
+   "packages/core/src/bands.js"
+  ],
+  "ordinary_attack_class_block": "ATTACK-CLASSES.md#Injection",
+  "selected_companion_blocks": [],
+  "excluded_blocks": [],
+  "prior_status": "none",
+  "attempts": [],
+  "wave": 1,
+  "status": "covered",
+  "agent_id": "hunter-web-public",
+  "reviewed_paths": [
+   "apps/web/src/api.js",
+   "packages/core/src/bands.js"
+  ],
+  "local_checks": [
+   {
+    "agent_id": "hunter-web-public",
+    "reviewed_paths": [
+     "apps/web/src/api.js",
+     "packages/core/src/bands.js"
+    ],
+    "invariant": "Grading must iterate only server-stored question ids, slice stored text, and never execute or interpolate answer content.",
+    "method": "source",
+    "result": "rawAnswers is only read as rawAnswers[question.id] where question.id comes from attempt.question_ids or the server question list (410-413). Essays sliced to 20000, text answers to 300 before binding (426, 434); all inserts parameterized with ON CONFLICT upserts. Replay returns stored result without re-grading (391-400), expired submits refused past 15s grace (402-405), mockup cannot skip the speaking block while answers are missing (484-485).",
+    "artifact": null
+   }
+  ],
+  "result_fingerprints": [],
+  "unresolved": [],
+  "hardening_notes": [],
+  "unit_read_paths": [
+   "apps/web/src/api.js",
+   "packages/core/src/bands.js"
+  ]
+ },
+ {
+  "coverage_id": "apps%2Fweb%2Fsrc%2Fapi.js%23violation%20route::apps%2Fweb%2Fsrc%2Fapi.js%23violation_log%20growth::apps%2Fweb%2Fsrc%2Fapi.js::ATTACK-CLASSES.md%23Resource%20and%20file%20handling",
+  "canonical_refs": {
+   "surface": "apps/web/src/api.js#violation route",
+   "boundary": "apps/web/src/api.js#violation_log growth",
+   "subsystem": "apps/web/src/api.js",
+   "attack_class": "ATTACK-CLASSES.md#Resource and file handling"
+  },
+  "surface": "apps/web/src/api.js#violation route",
+  "boundary": "apps/web/src/api.js#violation_log growth",
+  "subsystem": "apps/web/src/api.js",
+  "attack_class": "ATTACK-CLASSES.md#Resource and file handling",
+  "starting_paths": [
+   "apps/web/src/api.js"
+  ],
+  "ordinary_attack_class_block": "ATTACK-CLASSES.md#Resource and file handling",
+  "selected_companion_blocks": [
+   "RESOURCE-EXHAUSTION-AND-AVAILABILITY.md#Core discipline"
+  ],
+  "excluded_blocks": [],
+  "prior_status": "none",
+  "attempts": [],
+  "wave": 1,
+  "status": "candidate",
+  "agent_id": "hunter-web-public",
+  "reviewed_paths": [
+   "apps/web/src/api.js",
+   "packages/core/src/speaking.js"
+  ],
+  "local_checks": [
+   {
+    "agent_id": "hunter-web-public",
+    "reviewed_paths": [
+     "apps/web/src/api.js",
+     "packages/core/src/speaking.js"
+    ],
+    "invariant": "A per-attempt log route must bound how many rows/bytes one attempt can accumulate.",
+    "method": "source",
+    "result": "logViolation (294-306) caps each entry at 200 chars and gates the type against a 5-value set, but there is no cap on accepted requests per attempt. Every accepted POST appends via violation_log = COALESCE(violation_log,'') || entry and increments violations, so the TEXT column grows without bound while the attempt stays in_progress, and each append is a Postgres UPDATE rewriting the whole accumulated log: quadratic total write amplification. The sweep only deletes the row after expires_at+60 (speaking.js:245-252), attempts are free to mint. Candidate raised: webapi/violation-log-unbounded-append.",
+    "artifact": null
+   }
+  ],
+  "result_fingerprints": [
+   "webapi/violation-log-unbounded-append"
+  ],
+  "unresolved": [],
+  "hardening_notes": [],
+  "unit_read_paths": [
+   "apps/web/src/api.js",
+   "packages/core/src/speaking.js"
+  ]
+ },
+ {
+  "coverage_id": "apps%2Fweb%2Fstudent%2Fsrc%23runner%20state::apps%2Fweb%2Fstudent%2Fsrc%2FApp.jsx%23controlled%20inputs::apps%2Fweb%2Fstudent%2Fsrc::ATTACK-CLASSES.md%23Wildcard",
+  "canonical_refs": {
+   "surface": "apps/web/student/src#runner state",
+   "boundary": "apps/web/student/src/App.jsx#controlled inputs",
+   "subsystem": "apps/web/student/src",
+   "attack_class": "ATTACK-CLASSES.md#Wildcard"
+  },
+  "surface": "apps/web/student/src#runner state",
+  "boundary": "apps/web/student/src/App.jsx#controlled inputs",
+  "subsystem": "apps/web/student/src",
+  "attack_class": "ATTACK-CLASSES.md#Wildcard",
+  "starting_paths": [
+   "apps/web/student/src/App.jsx",
+   "apps/web/student/src/screens.jsx",
+   "apps/web/student/src/lib.js"
+  ],
+  "ordinary_attack_class_block": "ATTACK-CLASSES.md#Wildcard",
+  "selected_companion_blocks": [
+   "CLIENT-SIDE.md#Core discipline"
+  ],
+  "excluded_blocks": [],
+  "prior_status": "none",
+  "attempts": [],
+  "wave": 1,
+  "status": "covered",
+  "agent_id": "hunter-client",
+  "reviewed_paths": [
+   "apps/web/student/src/App.jsx",
+   "apps/web/student/src/screens.jsx",
+   "packages/core/src/rich.js",
+   "packages/core/src/node-server.js",
+   "apps/web/server.js",
+   "apps/web/student/src/lib.js"
+  ],
+  "local_checks": [
+   {
+    "agent_id": "hunter-client",
+    "reviewed_paths": [
+     "apps/web/student/src/screens.jsx",
+     "packages/core/src/rich.js"
+    ],
+    "invariant": "The rich passage renderer must build React elements only and never pass passage text through innerHTML; admin-set syntax, unknown HTML in a passage, and image markdown must stay inert.",
+    "method": "source",
+    "result": "PASS. parseRichText returns plain block objects; runNodes maps runs to img, strong, em, u, and text children; RichText renders RichBlock elements. The full app grep for innerHTML/dangerouslySetInnerHTML found no hit under apps/web/student/src. Raw HTML typed by the question author becomes literal text because tagRuns only matches the exact b/i/u pair pattern. The legal modal renders doc.sections as React text. The tested HTML-in-name case stays plain text everywhere because every interpolation is a JSX text node or attribute.",
+    "artifact": null
+   },
+   {
+    "agent_id": "hunter-client",
+    "reviewed_paths": [
+     "packages/core/src/rich.js",
+     "apps/web/student/src/screens.jsx",
+     "packages/core/src/node-server.js",
+     "apps/web/server.js"
+    ],
+    "invariant": "An admin-set passage or section image URL must not reach the student page from a host outside what the CSP img-src allows; verify what the parser allows versus what the CSP allows.",
+    "method": "source",
+    "result": "PASS with a defense-in-depth note. The IMAGE regex requires a leading slash, so http:// and https:// literals stay text, but a protocol-relative //evil.com/x passes and becomes an img src; the section image accepts any admin-set image_url string with no validation. Neither reaches a live sink: the runner shell carries STRICT_CSP whose img-src is 'self' data: https://titiknolenglish.com, so a cross-origin image load is blocked by the browser and an image cannot execute script regardless. The rich.js header comment claiming images only resolve for on-site paths is inaccurate for the //host form, but no invariant breaks because the CSP is the enforcing boundary and the data source is the trusted admin team.",
+    "artifact": null
+   },
+   {
+    "agent_id": "hunter-client",
+    "reviewed_paths": [
+     "apps/web/student/src/App.jsx",
+     "apps/web/student/src/lib.js"
+    ],
+    "invariant": "Browser-side trust decisions: the undangan and hasil query tokens, location reads, window.name, postMessage, and storage must not create an injection or confused-deputy path; controlled inputs must store raw text.",
+    "method": "source",
+    "result": "PASS. The only location reads are URLSearchParams for the undangan and legacy hasil tokens, both passed through encodeURIComponent before embedding. Grep finds no postMessage, window.name, localStorage, sessionStorage, document.cookie, eval, or Function use. answerText stores the raw typed value and uses trim only for the emptiness test. API responses render only through React text nodes, attributes, or the element-building rich parser. The speaking flow query parameters carry plan numbers and config positions, not free text.",
+    "artifact": null
+   }
+  ],
+  "result_fingerprints": [],
+  "unresolved": [],
+  "hardening_notes": [],
+  "unit_read_paths": [
+   "apps/web/student/src/App.jsx",
+   "apps/web/student/src/screens.jsx",
+   "packages/core/src/rich.js",
+   "packages/core/src/node-server.js",
+   "apps/web/server.js"
+  ]
+ },
+ {
+  "coverage_id": "packages%2Fcore%2Fsrc%2Fdb.js%23prepare%20bind%20batch::packages%2Fcore%2Fsrc%2Fdb.js%23parameterized%20SQL::packages%2Fcore%2Fsrc%2Fdb.js::ATTACK-CLASSES.md%23Injection",
+  "canonical_refs": {
+   "surface": "packages/core/src/db.js#prepare bind batch",
+   "boundary": "packages/core/src/db.js#parameterized SQL",
+   "subsystem": "packages/core/src/db.js",
+   "attack_class": "ATTACK-CLASSES.md#Injection"
+  },
+  "surface": "packages/core/src/db.js#prepare bind batch",
+  "boundary": "packages/core/src/db.js#parameterized SQL",
+  "subsystem": "packages/core/src/db.js",
+  "attack_class": "ATTACK-CLASSES.md#Injection",
+  "starting_paths": [
+   "packages/core/src/db.js",
+   "packages/core/src/store.js",
+   "apps/admin/src/api.js"
+  ],
+  "ordinary_attack_class_block": "ATTACK-CLASSES.md#Injection",
+  "selected_companion_blocks": [],
+  "excluded_blocks": [],
+  "prior_status": "none",
+  "attempts": [],
+  "wave": 1,
+  "status": "covered",
+  "agent_id": "hunter-core",
+  "reviewed_paths": [
+   "packages/core/src/db.js",
+   "packages/core/src/store.js",
+   "packages/core/src/migrate.js",
+   "apps/admin/src/api.js",
+   "apps/web/src/api.js",
+   "tools/mockup/e2e-full.mjs"
+  ],
+  "local_checks": [
+   {
+    "agent_id": "hunter-core",
+    "reviewed_paths": [
+     "packages/core/src/db.js"
+    ],
+    "invariant": "A ? inside a quoted SQL string never becomes a $n placeholder, and bind data never re-enters SQL text.",
+    "method": "source",
+    "result": "Holds. Quote-skipping traced against SQL-standard escapes; backslash-escaped quotes and jsonb operators would mis-parse but a repo-wide grep finds none in any prepare() call. Bind values travel as pg parameters and are never stringified into SQL, so $n or quotes in data cannot corrupt anything. normalize() maps undefined to null and booleans to 0/1.",
+    "artifact": null
+   },
+   {
+    "agent_id": "hunter-core",
+    "reviewed_paths": [
+     "packages/core/src/db.js",
+     "packages/core/src/db.js",
+     "packages/core/src/db.js",
+     "packages/core/src/migrate.js"
+    ],
+    "invariant": "Mixed-write batches are one transaction, read-only batches parallelize safely, a mid-transaction application throw rolls back, and raw multi-statement SQL is reachable only from committed migration files.",
+    "method": "source",
+    "result": "Holds. Mixed batches run BEGIN/loop/COMMIT on one client with ROLLBACK on throw. Read-only detection parallelizes only SELECTs; even zero-bind statements pass an empty params array, keeping pg on the extended protocol where multi-statement text is refused; no data-modifying CTE exists in any batch call. transaction() rolls back on any throw. exec() has no callers anywhere; the only raw multi-statement SQL is migrate.js reading committed migration files inside one advisory-locked transaction.",
+    "artifact": null
+   },
+   {
+    "agent_id": "hunter-core",
+    "reviewed_paths": [
+     "apps/admin/src/api.js",
+     "packages/core/src/store.js",
+     "tools/mockup/e2e-full.mjs"
+    ],
+    "invariant": "Every template-literal SQL interpolation in the repo is a developer constant or a placeholder list, never user input.",
+    "method": "source",
+    "result": "Holds. identityPatch builds SET keys from a hardcoded map; IN lists are ids.map(() => \"?\") joined; questionAction interpolates an operator chosen from a whitelisted route regex. No user-controlled string reaches SQL text.",
+    "artifact": null
+   }
+  ],
+  "result_fingerprints": [],
+  "unresolved": [],
+  "hardening_notes": [],
+  "unit_read_paths": [
+   "packages/core/src/db.js",
+   "packages/core/src/store.js",
+   "packages/core/src/migrate.js",
+   "apps/admin/src/api.js",
+   "apps/web/src/api.js",
+   "tools/mockup/e2e-full.mjs"
+  ]
+ },
+ {
+  "coverage_id": "packages%2Fcore%2Fsrc%2Fdelivery.js%23result%20outbox::packages%2Fcore%2Fsrc%2Fdelivery.js%23delivery%20lease::packages%2Fcore%2Fsrc%2Fdelivery.js::ATTACK-CLASSES.md%23Chained%20vulnerabilities%20and%20trust%20boundaries",
+  "canonical_refs": {
+   "surface": "packages/core/src/delivery.js#result outbox",
+   "boundary": "packages/core/src/delivery.js#delivery lease",
+   "subsystem": "packages/core/src/delivery.js",
+   "attack_class": "ATTACK-CLASSES.md#Chained vulnerabilities and trust boundaries"
+  },
+  "surface": "packages/core/src/delivery.js#result outbox",
+  "boundary": "packages/core/src/delivery.js#delivery lease",
+  "subsystem": "packages/core/src/delivery.js",
+  "attack_class": "ATTACK-CLASSES.md#Chained vulnerabilities and trust boundaries",
+  "starting_paths": [
+   "packages/core/src/delivery.js",
+   "apps/admin/src/invite-queue.js"
+  ],
+  "ordinary_attack_class_block": "ATTACK-CLASSES.md#Chained vulnerabilities and trust boundaries",
+  "selected_companion_blocks": [],
+  "excluded_blocks": [],
+  "prior_status": "none",
+  "attempts": [],
+  "wave": 1,
+  "status": "covered",
+  "agent_id": "hunter-core",
+  "reviewed_paths": [
+   "packages/core/src/delivery.js",
+   "packages/core/src/email.js",
+   "packages/core/src/whatsapp.js",
+   "packages/core/src/speaking-result.js",
+   "apps/web/src/api.js"
+  ],
+  "local_checks": [
+   {
+    "agent_id": "hunter-core",
+    "reviewed_paths": [
+     "packages/core/src/delivery.js",
+     "packages/core/src/delivery.js"
+    ],
+    "invariant": "Two servers never double-send a result within the 90s lease, and a failed channel never blocks the other.",
+    "method": "source",
+    "result": "Holds. The claim is an atomic conditional UPDATE on (lease IS NULL OR lease < now) with RETURNING, so the old and new instance during a deploy cannot both claim. Lease steal requires >90s clock skew between two Render instances of the same host type behind NTP; not a realistic path. The post-crash lease-expiry resend (one message can arrive twice) is documented and accepted. The two channels are sent with Promise.all and their statuses written in independent statements in one batch, so an email failure stores failed while WhatsApp still stores sent; a failed channel blocks nothing.",
+    "artifact": null
+   },
+   {
+    "agent_id": "hunter-core",
+    "reviewed_paths": [
+     "packages/core/src/delivery.js",
+     "apps/web/src/api.js"
+    ],
+    "invariant": "A late writer after a lease expiry cannot corrupt the outbox.",
+    "method": "source",
+    "result": "Holds with a benign edge. The final batch writes statuses without re-checking the lease, so a stalled server can overwrite a reclaimed attempt's statuses, but the values written are for the same attempt and the same pending channels; the reclaiming server already sent them, so the overwrite records the same outcome. Worst case remains the documented duplicate send, not a lost or wrong result.",
+    "artifact": null
+   }
+  ],
+  "result_fingerprints": [],
+  "unresolved": [],
+  "hardening_notes": [],
+  "unit_read_paths": [
+   "packages/core/src/delivery.js",
+   "packages/core/src/email.js",
+   "packages/core/src/whatsapp.js",
+   "packages/core/src/speaking-result.js"
+  ]
+ },
+ {
+  "coverage_id": "packages%2Fcore%2Fsrc%2Fmailer.js%23email%20build::packages%2Fcore%2Fsrc%2Femail.js%23escapeHtml::packages%2Fcore%2Fsrc%2Femail.js::ATTACK-CLASSES.md%23Injection",
+  "canonical_refs": {
+   "surface": "packages/core/src/mailer.js#email build",
+   "boundary": "packages/core/src/email.js#escapeHtml",
+   "subsystem": "packages/core/src/email.js",
+   "attack_class": "ATTACK-CLASSES.md#Injection"
+  },
+  "surface": "packages/core/src/mailer.js#email build",
+  "boundary": "packages/core/src/email.js#escapeHtml",
+  "subsystem": "packages/core/src/email.js",
+  "attack_class": "ATTACK-CLASSES.md#Injection",
+  "starting_paths": [
+   "packages/core/src/email.js",
+   "packages/core/src/mailer.js"
+  ],
+  "ordinary_attack_class_block": "ATTACK-CLASSES.md#Injection",
+  "selected_companion_blocks": [],
+  "excluded_blocks": [],
+  "prior_status": "none",
+  "attempts": [],
+  "wave": 1,
+  "status": "covered",
+  "agent_id": "hunter-core",
+  "reviewed_paths": [
+   "packages/core/src/email.js",
+   "packages/core/src/speaking-result.js",
+   "packages/core/src/mailer.js",
+   "packages/core/src/legal.js"
+  ],
+  "local_checks": [
+   {
+    "agent_id": "hunter-core",
+    "reviewed_paths": [
+     "packages/core/src/email.js",
+     "packages/core/src/email.js"
+    ],
+    "invariant": "Every interpolation into the email HTML is escaped, including a hostile Speechace transcript, and the plain-text fallback carries no HTML.",
+    "method": "source",
+    "result": "Holds. Student name, level label, description, program, subject, campus address, result URL in both href and body, invite fields, and certificate fields are all escapeHtml'd at their interpolation points. The speaking transcript from a compromised or buggy vendor is double-guarded: cleanText strips tags and collapses whitespace, and speakingHtml escapes again at the interpolation point. Aspect labels are constants and scores are rounded numbers. The WhatsApp CTA URL builds its free-text part with encodeURIComponent. The plain-text fallback interpolates raw values, correct for text/plain. No unescaped interpolation was found in any of the three builders.",
+    "artifact": null
+   }
+  ],
+  "result_fingerprints": [],
+  "unresolved": [],
+  "hardening_notes": [],
+  "unit_read_paths": [
+   "packages/core/src/email.js",
+   "packages/core/src/speaking-result.js",
+   "packages/core/src/mailer.js",
+   "packages/core/src/legal.js"
+  ]
+ },
+ {
+  "coverage_id": "packages%2Fcore%2Fsrc%2Fnode-server.js%23request%20URL%20construction::packages%2Fcore%2Fsrc%2Fnode-server.js%23TRUST_PROXY%20forwarded-header%20handling::packages%2Fcore%2Fsrc%2Fnode-server.js::WEB-PROTOCOL-AND-AUTH.md%23Host%20and%20forwarded-header%20trust",
+  "canonical_refs": {
+   "surface": "packages/core/src/node-server.js#request URL construction",
+   "boundary": "packages/core/src/node-server.js#TRUST_PROXY forwarded-header handling",
+   "subsystem": "packages/core/src/node-server.js",
+   "attack_class": "WEB-PROTOCOL-AND-AUTH.md#Host and forwarded-header trust"
+  },
+  "surface": "packages/core/src/node-server.js#request URL construction",
+  "boundary": "packages/core/src/node-server.js#TRUST_PROXY forwarded-header handling",
+  "subsystem": "packages/core/src/node-server.js",
+  "attack_class": "WEB-PROTOCOL-AND-AUTH.md#Host and forwarded-header trust",
+  "starting_paths": [
+   "packages/core/src/node-server.js",
+   "apps/admin/src/api.js",
+   "apps/admin/src/certificates.js"
+  ],
+  "ordinary_attack_class_block": null,
+  "selected_companion_blocks": [
+   "WEB-PROTOCOL-AND-AUTH.md#Core discipline"
+  ],
+  "excluded_blocks": [],
+  "prior_status": "none",
+  "attempts": [],
+  "wave": 2,
+  "status": "candidate",
+  "agent_id": "hunter-wave2-host-trust",
+  "reviewed_paths": [
+   "packages/core/src/node-server.js",
+   "packages/core/src/env.js",
+   "apps/admin/src/api.js",
+   "apps/admin/src/certificates.js",
+   "apps/admin/server.js",
+   "apps/web/server.js",
+   "apps/web/src/api.js",
+   "packages/core/src/delivery.js",
+   "apps/admin/src/invite-queue.js",
+   ".env.example"
+  ],
+  "local_checks": [
+   {
+    "agent_id": "hunter-wave2-host-trust",
+    "reviewed_paths": [
+     "packages/core/src/node-server.js",
+     "packages/core/src/env.js"
+    ],
+    "invariant": "When TRUST_PROXY is truthy, x-forwarded-proto and x-forwarded-host are read with first(), so an appended client value ahead of the proxy value wins; the result feeds the URL used by both apps.",
+    "method": "source",
+    "result": "Verified. first() splits on comma and trims, so with an appending edge the client-supplied element is chosen; with an overwriting edge only the edge value exists. With TRUST_PROXY unset the headers are ignored and the scheme falls back to socket.encrypted, which is false behind Render's TLS termination.",
+    "artifact": null
+   },
+   {
+    "agent_id": "hunter-wave2-host-trust",
+    "reviewed_paths": [
+     "apps/admin/src/api.js",
+     "apps/admin/src/certificates.js",
+     "apps/web/src/api.js",
+     "apps/web/server.js",
+     "packages/core/src/delivery.js",
+     "apps/admin/src/invite-queue.js"
+    ],
+    "invariant": "Every consumer of request.url protocol, origin, or host is enumerated.",
+    "method": "source",
+    "result": "Exhaustive grep: admin secureFor (the Secure cookie flag on login, logout, and setup), admin checkOrigin (exact Origin equality against url.origin, called before every /api/admin route including login and setup), the certificate WhatsApp fileUrl (the URL AttCos fetches), and the admin page redirects (Location host mirrors the forwarded host). The web app uses only url.pathname and all outbound student links come from env.PUBLIC_WEB_URL, never from the request URL, so the public test app has no exposure through this chain.",
+    "artifact": null
+   },
+   {
+    "agent_id": "hunter-wave2-host-trust",
+    "reviewed_paths": [
+     "apps/admin/src/api.js"
+    ],
+    "invariant": "checkOrigin cannot be satisfied by a browser cross-site without also passing SameSite=Strict cookie rules, except on routes that need no session.",
+    "method": "source",
+    "result": "If an attacker controls both forwarded headers, url.origin equals any Origin the attacker sends, so checkOrigin passes, but every route after the session gate requires the cookie, which SameSite=Strict keeps browsers from sending cross-site. The only pre-auth writes are POST login (credentials still required, lockout after five failures) and POST setup (closed once any admin exists, gated by the setup code). Header control alone yields no unauthenticated state change; its real value is the session-required certificate fileUrl steering, the Secure flag downgrade, and Location host reflection.",
+    "artifact": null
+   },
+   {
+    "agent_id": "hunter-wave2-host-trust",
+    "reviewed_paths": [
+     "apps/admin/src/api.js",
+     "packages/core/src/env.js",
+     ".env.example"
+    ],
+    "invariant": "The Secure cookie flag derives from the same forwarded-proto chain, so its correctness depends on both TRUST_PROXY being set and the edge not letting a client downgrade the proto.",
+    "method": "source",
+    "result": "If TRUST_PROXY is unset on Render, socket.encrypted is false behind the edge, secureFor returns false, and the cookie is issued without Secure; checkOrigin would then reject every dashboard write, which would have been noticed, so TRUST_PROXY=1 is almost certainly set. If it is set but a client can inject proto http ahead of the edge value, the Secure flag is dropped on demand. .env.example ships TRUST_PROXY=0 and the Render environment list does not name TRUST_PROXY, so the live value is a deployment fact. Candidates: wave2/proxy-host-header-trust, wave2/trust-proxy-secure-cookie, wave2/direct-port-reachability.",
+    "artifact": null
+   }
+  ],
+  "result_fingerprints": [
+   "wave2/proxy-host-header-trust",
+   "wave2/trust-proxy-secure-cookie",
+   "wave2/direct-port-reachability"
+  ],
+  "unresolved": [
+   "Whether Render's edge overwrites or appends client-supplied X-Forwarded-Host and X-Forwarded-Proto before they reach the app.",
+   "Whether TRUST_PROXY=1 is actually set on both Render services.",
+   "Whether anything but Render's proxy can reach the app port directly, since the server binds 0.0.0.0."
+  ],
+  "unit_read_paths": [
+   "packages/core/src/node-server.js",
+   "packages/core/src/env.js",
+   "apps/admin/src/api.js",
+   "apps/admin/src/certificates.js",
+   "apps/admin/server.js",
+   "apps/web/server.js",
+   "apps/web/src/api.js",
+   "packages/core/src/delivery.js",
+   "apps/admin/src/invite-queue.js",
+   ".env.example"
+  ],
+  "hardening_notes": []
+ },
+ {
+  "coverage_id": "packages%2Fcore%2Fsrc%2Foutbound%20integrations::packages%2Fcore%2Fsrc%2Fspeaking.js%23query-string%20api%20key::packages%2Fcore%2Fsrc%2Fspeaking.js::ATTACK-CLASSES.md%23Cryptography%20and%20secrets",
+  "canonical_refs": {
+   "surface": "packages/core/src/outbound integrations",
+   "boundary": "packages/core/src/speaking.js#query-string api key",
+   "subsystem": "packages/core/src/speaking.js",
+   "attack_class": "ATTACK-CLASSES.md#Cryptography and secrets"
+  },
+  "surface": "packages/core/src/outbound integrations",
+  "boundary": "packages/core/src/speaking.js#query-string api key",
+  "subsystem": "packages/core/src/speaking.js",
+  "attack_class": "ATTACK-CLASSES.md#Cryptography and secrets",
+  "starting_paths": [
+   "packages/core/src/speaking.js",
+   "packages/core/src/writing.js",
+   "packages/core/src/mailer.js"
+  ],
+  "ordinary_attack_class_block": "ATTACK-CLASSES.md#Cryptography and secrets",
+  "selected_companion_blocks": [
+   "WEB-PROTOCOL-AND-AUTH.md#API-key exposure and unsafe transport"
+  ],
+  "excluded_blocks": [],
+  "prior_status": "none",
+  "attempts": [],
+  "wave": 1,
+  "status": "covered",
+  "agent_id": "hunter-core",
+  "reviewed_paths": [
+   "packages/core/src/speaking.js",
+   "packages/core/src/speaking-result.js",
+   "packages/core/src/whatsapp.js",
+   "packages/core/src/mailer.js",
+   "packages/core/src/writing.js",
+   "apps/web/src/api.js",
+   "packages/core/src/delivery.js"
+  ],
+  "local_checks": [
+   {
+    "agent_id": "hunter-core",
+    "reviewed_paths": [
+     "packages/core/src/speaking.js"
+    ],
+    "invariant": "The Speechace key, required in the URL query string, never leaks through an error path, a stored column, or a log line.",
+    "method": "source",
+    "result": "Holds for every reachable path. The key is encodeURIComponent'd into the URL and the URL is never logged. The catch block returns an error whose message is classified by classifyFailure: network messages become a fixed Indonesian prefix plus cleaned generic text (fetch failures carry generic text and DNS hostnames, without the query string; timeouts carry no URL). Stored columns receive only classified Indonesian messages or the sliced Gemini body, none of which can contain the key. The log() helper prints submission, request id, http status, tries, ms, quota only. AttCos and Cloudflare keys live in headers; their error paths store vendor response text and status, not headers. Honest residual exposure: the key is visible to Speechace's own access logs and any TLS-terminating proxy on their side, inherent to the endpoint's design; a rotation-policy matter, not a code defect.",
+    "artifact": null
+   }
+  ],
+  "result_fingerprints": [],
+  "unresolved": [],
+  "hardening_notes": [],
+  "unit_read_paths": [
+   "packages/core/src/speaking.js",
+   "packages/core/src/speaking-result.js",
+   "packages/core/src/whatsapp.js",
+   "packages/core/src/mailer.js",
+   "packages/core/src/writing.js",
+   "apps/web/src/api.js",
+   "packages/core/src/delivery.js"
+  ]
+ },
+ {
+  "coverage_id": "packages%2Fcore%2Fsrc%2Foutbound%20integrations::packages%2Fcore%2Fsrc%2Fwhatsapp.js%23AttCos%20call::packages%2Fcore%2Fsrc%2Fwhatsapp.js::ATTACK-CLASSES.md%23Injection",
+  "canonical_refs": {
+   "surface": "packages/core/src/outbound integrations",
+   "boundary": "packages/core/src/whatsapp.js#AttCos call",
+   "subsystem": "packages/core/src/whatsapp.js",
+   "attack_class": "ATTACK-CLASSES.md#Injection"
+  },
+  "surface": "packages/core/src/outbound integrations",
+  "boundary": "packages/core/src/whatsapp.js#AttCos call",
+  "subsystem": "packages/core/src/whatsapp.js",
+  "attack_class": "ATTACK-CLASSES.md#Injection",
+  "starting_paths": [
+   "packages/core/src/whatsapp.js",
+   "packages/core/src/mailer.js",
+   "packages/core/src/writing.js",
+   "packages/core/src/speaking.js"
+  ],
+  "ordinary_attack_class_block": "ATTACK-CLASSES.md#Injection",
+  "selected_companion_blocks": [],
+  "excluded_blocks": [],
+  "prior_status": "none",
+  "attempts": [],
+  "wave": 1,
+  "status": "covered",
+  "agent_id": "hunter-core",
+  "reviewed_paths": [
+   "packages/core/src/whatsapp.js",
+   "packages/core/src/mailer.js",
+   "packages/core/src/writing.js",
+   "packages/core/src/speaking.js",
+   "packages/core/src/speaking-result.js",
+   "apps/web/src/api.js"
+  ],
+  "local_checks": [
+   {
+    "agent_id": "hunter-core",
+    "reviewed_paths": [
+     "packages/core/src/whatsapp.js",
+     "packages/core/src/whatsapp.js"
+    ],
+    "invariant": "The student first name and all message text cannot inject into the AttCos JSON body, and the media and source fields stay in their lanes.",
+    "method": "source",
+    "result": "Holds. to is digit-normalized at input and stripped of a leading + at send; text, including the first name from the contact step, travels only through JSON.stringify, so no header or JSON-structure injection is possible, only message content. The media object passes a caller-built URL and a fixed kind. source is a constant sliced to 80. AttCos's vendor-controlled error message flows into wa.error and is stored sliced to 180 chars; it is rendered only in the staff dashboard and never reaches the student or another JSON body.",
+    "artifact": null
+   },
+   {
+    "agent_id": "hunter-core",
+    "reviewed_paths": [
+     "packages/core/src/mailer.js",
+     "packages/core/src/writing.js"
+    ],
+    "invariant": "The mailer attachments and the Gemini body resist payload-driven structural corruption, and an essay prompt-injection cannot corrupt attempt state.",
+    "method": "source",
+    "result": "Holds for structure. PDF attachments are base64 inside the stringified JSON body; parseAddress only shapes the from field. For Gemini, the system instruction tells the model to treat the essay as data, and generationConfig.responseSchema plus responseMimeType force a JSON object, so a prompt-injected essay cannot freely emit malformed JSON; the response parse strips fences, validates all four criteria for finite bands and string comments, clamps to 0-9 half steps, and throws on anything missing. A student can cheaply force writing_status failed, but the attempt still submits, the overall band simply excludes Writing, and the only cost is a manual re-score press that benefits the student, not the attacker. Error text stored in writing_error embeds at most 200 chars of the Gemini response body, which never echoes the API key.",
+    "artifact": null
+   }
+  ],
+  "result_fingerprints": [],
+  "unresolved": [],
+  "hardening_notes": [],
+  "unit_read_paths": [
+   "packages/core/src/whatsapp.js",
+   "packages/core/src/mailer.js",
+   "packages/core/src/writing.js",
+   "packages/core/src/speaking.js",
+   "packages/core/src/speaking-result.js",
+   "apps/web/src/api.js"
+  ]
+ },
+ {
+  "coverage_id": "packages%2Fcore%2Fsrc%2Fspeaking.js%23scoring%20worker::packages%2Fcore%2Fsrc%2Fspeaking.js%23lease%20and%20retry::packages%2Fcore%2Fsrc%2Fspeaking.js::ATTACK-CLASSES.md%23Business%20logic",
+  "canonical_refs": {
+   "surface": "packages/core/src/speaking.js#scoring worker",
+   "boundary": "packages/core/src/speaking.js#lease and retry",
+   "subsystem": "packages/core/src/speaking.js",
+   "attack_class": "ATTACK-CLASSES.md#Business logic"
+  },
+  "surface": "packages/core/src/speaking.js#scoring worker",
+  "boundary": "packages/core/src/speaking.js#lease and retry",
+  "subsystem": "packages/core/src/speaking.js",
+  "attack_class": "ATTACK-CLASSES.md#Business logic",
+  "starting_paths": [
+   "packages/core/src/speaking.js",
+   "packages/core/src/speaking-mockup-worker.js",
+   "packages/core/src/speaking-result.js"
+  ],
+  "ordinary_attack_class_block": "ATTACK-CLASSES.md#Business logic",
+  "selected_companion_blocks": [],
+  "excluded_blocks": [],
+  "prior_status": "none",
+  "attempts": [],
+  "wave": 1,
+  "status": "candidate",
+  "agent_id": "hunter-core",
+  "reviewed_paths": [
+   "packages/core/src/speaking.js",
+   "packages/core/src/speaking-mockup-worker.js",
+   "packages/core/src/speaking-result.js",
+   "db/migrations/0005_speaking.sql",
+   "db/migrations/0012_mockup_speaking.sql",
+   "apps/web/src/api.js"
+  ],
+  "local_checks": [
+   {
+    "agent_id": "hunter-core",
+    "reviewed_paths": [
+     "packages/core/src/speaking.js",
+     "packages/core/src/speaking-mockup-worker.js"
+    ],
+    "invariant": "Two workers can never double-claim a recording under the 120s lease.",
+    "method": "source",
+    "result": "Mostly holds. The claim is one atomic UPDATE ... WHERE lease_until < now RETURNING, so under Read Committed the second concurrent claimant re-checks the WHERE clause on the committed row and gets nothing. But the final writes are guarded only by status = 'grading' (speaking.js 141, 159), not by lease ownership, unlike checkLater's failure path which does check lease_until. If a worker stalls past its own 120s lease (Neon cold start plus the 15s connection timeout plus a 60s Speechace call can stack), a sweep reclaims the row, and the stalled worker's late UPDATE still matches the new 'grading' state: two Speechace calls for one recording and a last-writer-wins grade of the same audio. No data corruption, but quota double-spend. Candidate: core/speaking-lease-owner-guard.",
+    "artifact": null
+   },
+   {
+    "agent_id": "hunter-core",
+    "reviewed_paths": [
+     "packages/core/src/speaking.js",
+     "packages/core/src/speaking-mockup-worker.js"
+    ],
+    "invariant": "The purge only touches rows older than 30 days and cannot delete fresh audio on clock skew.",
+    "method": "source",
+    "result": "Holds. Cutoff is now - 30*86400 against created_at; skew would need to approach 30 days. Fresh audio untouched. Pending/grading rows older than 30 days are correctly failed with a clear stored error.",
+    "artifact": null
+   },
+   {
+    "agent_id": "hunter-core",
+    "reviewed_paths": [
+     "packages/core/src/speaking.js",
+     "apps/web/src/api.js"
+    ],
+    "invariant": "An in-progress attempt cannot be purged while the student is still inside its timer.",
+    "method": "source",
+    "result": "Holds. The sweep deletes only attempts with expires_at + 60 < now, and expires_at is set at creation as start plus the configured duration. A student inside the timer always has expires_at in the future. The one window is the documented design: after the timer ends the runner auto-submits, and if that request is lost, the grace sweep deletes the attempt on the next new-test start or six-hourly scan. Submit does not check expires_at, so a submission inside the grace window survives any sweep.",
+    "artifact": null
+   }
+  ],
+  "result_fingerprints": [
+   "core/speaking-lease-owner-guard"
+  ],
+  "unresolved": [],
+  "hardening_notes": [],
+  "unit_read_paths": [
+   "packages/core/src/speaking.js",
+   "packages/core/src/speaking-mockup-worker.js",
+   "packages/core/src/speaking-result.js",
+   "db/migrations/0005_speaking.sql",
+   "db/migrations/0012_mockup_speaking.sql",
+   "apps/web/src/api.js"
+  ]
+ },
+ {
+  "coverage_id": "repo%20root%23whole%20tree::repo%20root%23whole%20tree::scripts%20and%20tools::ATTACK-CLASSES.md%23Obvious%20things",
+  "canonical_refs": {
+   "surface": "repo root#whole tree",
+   "boundary": "repo root#whole tree",
+   "subsystem": "scripts and tools",
+   "attack_class": "ATTACK-CLASSES.md#Obvious things"
+  },
+  "surface": "repo root#whole tree",
+  "boundary": "repo root#whole tree",
+  "subsystem": "scripts and tools",
+  "attack_class": "ATTACK-CLASSES.md#Obvious things",
+  "starting_paths": [
+   "scripts/",
+   "tools/",
+   "package.json",
+   ".env.example",
+   ".gitignore"
+  ],
+  "ordinary_attack_class_block": "ATTACK-CLASSES.md#Obvious things",
+  "selected_companion_blocks": [],
+  "excluded_blocks": [],
+  "prior_status": "none",
+  "attempts": [],
+  "wave": 1,
+  "status": "candidate",
+  "agent_id": "hunter-baseline",
+  "reviewed_paths": [
+   "package.json",
+   "package-lock.json",
+   ".env.example",
+   ".gitignore",
+   "README.md",
+   "tikno-english-placement-test-setup.json",
+   "packages",
+   "tests",
+   "packages/core/src/writing.js",
+   "packages/core/src/speaking.js",
+   "apps/web/server.js",
+   "apps/admin/server.js",
+   "packages/core/src/node-server.js",
+   "scripts/start.mjs",
+   ".env",
+   ".env.dev",
+   "scripts/extract-ielts.mjs",
+   "tools/mockup/e2e-full.mjs",
+   "tests/smoke.mjs",
+   "apps/admin/client/src/views/SpeakingBank.jsx",
+   "apps/admin/src/api.js",
+   "apps/web/student/src/App.jsx",
+   "packages/core/src/db.js"
+  ],
+  "local_checks": [
+   {
+    "agent_id": "hunter-baseline",
+    "reviewed_paths": [
+     "scripts",
+     "tools",
+     ".env.example",
+     "README.md",
+     "tikno-english-placement-test-setup.json"
+    ],
+    "invariant": "No hardcoded passwords, API keys, tokens, or private keys in tracked source.",
+    "method": "source",
+    "result": "PASS with one exposure risk. No hardcoded credentials: every key is read from env, empty in .env.example and README. ATTCOS_CHANNEL_ID is a channel identifier committed on purpose, not an auth secret. No BEGIN PRIVATE KEY anywhere. However tikno-english-placement-test-setup.json (9.3 MB session export) sits at the repo root: untracked, NOT covered by .gitignore, and a scan found it embeds the Cloudflare account ID, zone IDs, and the full setup conversation. No API key was found inside it, but one git add -A publishes it to the public repo. Candidate: baseline/session-export-untracked-in-public-repo.",
+    "artifact": null
+   },
+   {
+    "agent_id": "hunter-baseline",
+    "reviewed_paths": [
+     "scripts",
+     "tools",
+     "apps",
+     "packages",
+     "tests"
+    ],
+    "invariant": "No TODO/FIXME/HACK comments referencing security.",
+    "method": "source",
+    "result": "PASS. Zero matches across the tree.",
+    "artifact": null
+   },
+   {
+    "agent_id": "hunter-baseline",
+    "reviewed_paths": [
+     "packages/core/src/writing.js",
+     "packages/core/src/speaking.js",
+     ".env.example"
+    ],
+    "invariant": "Debug or dev mode gates (GEMINI_MOCK, SPEECHACE_MOCK) cannot be enabled by request input.",
+    "method": "source",
+    "result": "PASS. Both flags are read exclusively from process.env. No route, body, query, or header reaches them. Residual risk of mock bands silently emitted if GEMINI_MOCK=1 is left set in production is recorded under hardening.",
+    "artifact": null
+   },
+   {
+    "agent_id": "hunter-baseline",
+    "reviewed_paths": [
+     "db/migrations"
+    ],
+    "invariant": "Migrations seed no admin account, known password, or sensitive personal data.",
+    "method": "source",
+    "result": "PASS on accounts and PII; one content-sensitivity item. No INSERT INTO admin_users exists in any migration. No student names, emails, phone numbers, or tokens are seeded. The sensitive item is content: the IELTS mockup migrations commit the entire paid bank including every accepted answer, readable by anyone because the repo is public. Candidate: baseline/mockup-answer-key-public.",
+    "artifact": null
+   },
+   {
+    "agent_id": "hunter-baseline",
+    "reviewed_paths": [
+     "apps/web/server.js",
+     "apps/admin/server.js",
+     "packages/core/src/node-server.js",
+     "scripts/start.mjs",
+     "package.json"
+    ],
+    "invariant": "No unprotected /debug, /health, /status, or /env endpoint in either server.",
+    "method": "source",
+    "result": "PASS. The web server routes only /api/* plus fixed static shells; the admin server routes /api/admin/* and admin pages. No handler enumerates env, memory, or stack.",
+    "artifact": null
+   },
+   {
+    "agent_id": "hunter-baseline",
+    "reviewed_paths": [
+     ".gitignore",
+     "gitls-filesoutput",
+     ".env",
+     ".env.dev"
+    ],
+    "invariant": "No .env or credentials file is tracked by git in this public repo.",
+    "method": "source",
+    "result": "PASS. Only .env.example is tracked. .gitignore covers .env, .env.*, .dev.vars, admin.sql. Local .env and .env.dev confirmed ignored. Gap: the session export and the preview artifact are untracked but not ignored (candidates/hardening).",
+    "artifact": null
+   },
+   {
+    "agent_id": "hunter-baseline",
+    "reviewed_paths": [
+     "package-lock.json",
+     "package.json"
+    ],
+    "invariant": "Dependencies are lockfile-pinned with install scripts gated.",
+    "method": "source",
+    "result": "PASS on state (no online lookup performed). The lockfile pins the installed tree (react 19.3.1, esbuild 0.28.2, pg 8.23.1). allowScripts gates postinstall to esbuild@0.28.2 only. No advisory claim is made since no network lookup was allowed.",
+    "artifact": null
+   },
+   {
+    "agent_id": "hunter-baseline",
+    "reviewed_paths": [
+     "scripts/extract-ielts.mjs",
+     "scripts/start.mjs",
+     "tools/mockup/e2e-full.mjs",
+     "tests/smoke.mjs",
+     "apps/admin/client/src/views/SpeakingBank.jsx"
+    ],
+    "invariant": "No eval, request-driven exec, vm, or request-driven dynamic import in server or tool code.",
+    "method": "source",
+    "result": "PASS with two honest notes. The only new Function uses are extract-ielts.mjs:24 (evaluates a seed file from the sibling local checkout; operator-run one-shot generator, never network or request input) and tests/smoke.mjs:514 (the repo's own mirror source). spawnSync uses fixed script paths. The one client dynamic import uses a static path. Nothing reachable from a request reaches any of these.",
+    "artifact": null
+   },
+   {
+    "agent_id": "hunter-baseline",
+    "reviewed_paths": [
+     "apps/web/server.js",
+     "apps/admin/src/api.js",
+     "packages/core/src/node-server.js",
+     "apps/web/student/src/App.jsx"
+    ],
+    "invariant": "No CORS wildcard and no open redirect.",
+    "method": "source",
+    "result": "PASS. No Access-Control header is emitted anywhere in the server source, so no cross-origin read is granted. All redirects are fixed paths; the legacy /?hasil= client rewrite is a constant path with the token as an encoded parameter.",
+    "artifact": null
+   },
+   {
+    "agent_id": "hunter-baseline",
+    "reviewed_paths": [
+     "packages/core/src/node-server.js",
+     ".env.example",
+     "packages/core/src/db.js"
+    ],
+    "invariant": "Outbound transport enforces TLS in source; TRUST_PROXY is opt-in.",
+    "method": "source",
+    "result": "PASS. All outbound bases are https. DATABASE_URL ships with sslmode=require plus channel_binding. node-server.js ignores X-Forwarded-* unless TRUST_PROXY is set.",
+    "artifact": null
+   },
+   {
+    "agent_id": "hunter-baseline",
+    "reviewed_paths": [
+     "packages/core/src/node-server.js"
+    ],
+    "invariant": "The 500 handler returns no stack trace or internal message to the client.",
+    "method": "source",
+    "result": "PASS. On an uncaught handler error, startServer logs to the server console only and responds with a fixed generic string; the 413 path likewise sends a fixed string. error.message, stack, and fields never enter the response body.",
+    "artifact": null
+   }
+  ],
+  "result_fingerprints": [
+   "baseline/session-export-untracked-in-public-repo",
+   "baseline/mockup-answer-key-public"
+  ],
+  "unresolved": [],
+  "hardening_notes": [],
+  "unit_read_paths": [
+   "package.json",
+   "package-lock.json",
+   ".env.example",
+   ".gitignore",
+   "README.md",
+   "tikno-english-placement-test-setup.json"
+  ]
+ },
+ {
+  "coverage_id": "repo%20root%23whole%20tree::repo%20root%23whole%20tree::scripts%20and%20tools::ATTACK-CLASSES.md%23Wildcard",
+  "canonical_refs": {
+   "surface": "repo root#whole tree",
+   "boundary": "repo root#whole tree",
+   "subsystem": "scripts and tools",
+   "attack_class": "ATTACK-CLASSES.md#Wildcard"
+  },
+  "surface": "repo root#whole tree",
+  "boundary": "repo root#whole tree",
+  "subsystem": "scripts and tools",
+  "attack_class": "ATTACK-CLASSES.md#Wildcard",
+  "starting_paths": [
+   "scripts/",
+   "tools/"
+  ],
+  "ordinary_attack_class_block": "ATTACK-CLASSES.md#Wildcard",
+  "selected_companion_blocks": [],
+  "excluded_blocks": [],
+  "prior_status": "none",
+  "attempts": [],
+  "wave": 1,
+  "status": "candidate",
+  "agent_id": "hunter-baseline",
+  "reviewed_paths": [
+   "scripts/render.mjs",
+   "scripts/create-admin.mjs",
+   "scripts/extract-ielts.mjs",
+   "scripts/start.mjs",
+   "scripts/migrate.mjs",
+   "scripts/build-react.mjs",
+   "tools/speechace/server.mjs",
+   "tools/speechace/index.html",
+   "tools/speechace/preview-result.mjs",
+   "tools/mockup/e2e-full.mjs",
+   "start.cmd",
+   "package.json",
+   "package-lock.json",
+   ".env.example",
+   ".gitignore",
+   "README.md",
+   "db/migrations/0001_init.sql",
+   "db/migrations/0004_certificates.sql",
+   "db/migrations/0007_pendaftaran_and_mockup.sql",
+   "db/migrations/0008_ielts_mockup.sql",
+   "db/migrations/0015_mockup_sessions.sql",
+   "apps/admin/server.js",
+   "apps/admin/src/api.js",
+   "apps/web/server.js",
+   "apps/web/student/src/App.jsx",
+   "packages/core/src/node-server.js",
+   "packages/core/src/crypto.js",
+   "packages/core/src/writing.js",
+   "packages/core/src/speaking.js",
+   "tikno-english-placement-test-setup.json",
+   "packages",
+   "tests",
+   ".env",
+   ".env.dev",
+   "tests/smoke.mjs",
+   "apps/admin/client/src/views/SpeakingBank.jsx",
+   "packages/core/src/db.js"
+  ],
+  "local_checks": [
+   {
+    "agent_id": "hunter-baseline",
+    "reviewed_paths": [
+     "scripts",
+     "tools",
+     ".env.example",
+     "README.md",
+     "tikno-english-placement-test-setup.json"
+    ],
+    "invariant": "No hardcoded passwords, API keys, tokens, or private keys in tracked source.",
+    "method": "source",
+    "result": "PASS with one exposure risk. No hardcoded credentials: every key is read from env, empty in .env.example and README. ATTCOS_CHANNEL_ID in .env.example is a channel identifier committed on purpose, not an auth secret. No BEGIN PRIVATE KEY anywhere. However tikno-english-placement-test-setup.json (9.3 MB OpenCode session export) sits at the repo root: untracked, NOT covered by .gitignore, and a scan found it embeds the Cloudflare account ID, zone IDs, and the full setup conversation. No API key was found inside it, but one git add -A publishes it to the public repo. Candidate: baseline/session-export-untracked-in-public-repo.",
+    "artifact": null
+   },
+   {
+    "agent_id": "hunter-baseline",
+    "reviewed_paths": [
+     "scripts",
+     "tools",
+     "apps",
+     "packages",
+     "tests"
+    ],
+    "invariant": "No TODO/FIXME/HACK comments referencing security.",
+    "method": "source",
+    "result": "PASS. Zero matches across the tree.",
+    "artifact": null
+   },
+   {
+    "agent_id": "hunter-baseline",
+    "reviewed_paths": [
+     "packages/core/src/writing.js",
+     "packages/core/src/speaking.js",
+     ".env.example"
+    ],
+    "invariant": "Debug or dev mode gates (GEMINI_MOCK, SPEECHACE_MOCK) cannot be enabled by request input.",
+    "method": "source",
+    "result": "PASS. Both flags are read exclusively from process.env. No route, body, query, or header reaches them. The residual risk (mock bands silently emitted if GEMINI_MOCK=1 is left set in production) is recorded under hardening.",
+    "artifact": null
+   },
+   {
+    "agent_id": "hunter-baseline",
+    "reviewed_paths": [
+     "db/migrations/0001_init.sql",
+     "db/migrations/0004_certificates.sql",
+     "db/migrations/0007_pendaftaran_and_mockup.sql",
+     "db/migrations/0015_mockup_sessions.sql",
+     "db/migrations/0008_ielts_mockup.sql"
+    ],
+    "invariant": "Migrations seed no admin account, known password, or sensitive personal data.",
+    "method": "source",
+    "result": "PASS on accounts and PII; one content-sensitivity item. No INSERT INTO admin_users exists in any migration. No student names, emails, phone numbers, or tokens are seeded. The sensitive item is content: the IELTS mockup migrations commit the entire paid bank including every accepted answer, readable by anyone because the repo is public. Candidate: baseline/mockup-answer-key-public.",
+    "artifact": null
+   },
+   {
+    "agent_id": "hunter-baseline",
+    "reviewed_paths": [
+     "apps/web/server.js",
+     "apps/admin/server.js",
+     "packages/core/src/node-server.js",
+     "scripts/start.mjs",
+     "package.json"
+    ],
+    "invariant": "No unprotected /debug, /health, /status, or /env endpoint in either server.",
+    "method": "source",
+    "result": "PASS. The web server routes only /api/* plus fixed static shells; the admin server routes /api/admin/* and admin pages. No handler enumerates env, memory, or stack.",
+    "artifact": null
+   },
+   {
+    "agent_id": "hunter-baseline",
+    "reviewed_paths": [
+     ".gitignore",
+     "gitls-filesoutput",
+     ".env",
+     ".env.dev"
+    ],
+    "invariant": "No .env or credentials file is tracked by git in this public repo.",
+    "method": "source",
+    "result": "PASS. Only .env.example is tracked. .gitignore covers .env, .env.*, .dev.vars, admin.sql. Local .env and .env.dev confirmed ignored. Gap: the session export and the preview artifact are untracked but not ignored (candidates/hardening).",
+    "artifact": null
+   },
+   {
+    "agent_id": "hunter-baseline",
+    "reviewed_paths": [
+     "package-lock.json",
+     "package.json"
+    ],
+    "invariant": "Dependencies are lockfile-pinned with install scripts gated.",
+    "method": "source",
+    "result": "PASS on state (no online lookup performed). The lockfile pins the installed tree (react 19.3.1, esbuild 0.28.2, pg 8.23.1). package.json allowScripts gates postinstall to esbuild@0.28.2 only. No advisory claim is made since no network lookup was allowed.",
+    "artifact": null
+   },
+   {
+    "agent_id": "hunter-baseline",
+    "reviewed_paths": [
+     "scripts/extract-ielts.mjs",
+     "scripts/start.mjs",
+     "tools/mockup/e2e-full.mjs",
+     "tests/smoke.mjs",
+     "apps/admin/client/src/views/SpeakingBank.jsx"
+    ],
+    "invariant": "No eval, request-driven exec, vm, or request-driven dynamic import in server or tool code.",
+    "method": "source",
+    "result": "PASS with two honest notes. The only new Function uses are extract-ielts.mjs:24 (evaluates a seed file from the sibling local checkout; operator-run one-shot generator, never network or request input) and tests/smoke.mjs:514 (the repo's own mirror source). spawnSync uses fixed script paths. The one client dynamic import uses a static path. Nothing reachable from a request reaches any of these.",
+    "artifact": null
+   },
+   {
+    "agent_id": "hunter-baseline",
+    "reviewed_paths": [
+     "apps/web/server.js",
+     "apps/admin/src/api.js",
+     "packages/core/src/node-server.js",
+     "apps/web/student/src/App.jsx"
+    ],
+    "invariant": "No CORS wildcard and no open redirect.",
+    "method": "source",
+    "result": "PASS. No Access-Control header is emitted anywhere, so no cross-origin read is granted. All redirects are fixed paths; the legacy /?hasil= client rewrite is a constant path with the token as an encoded parameter.",
+    "artifact": null
+   },
+   {
+    "agent_id": "hunter-baseline",
+    "reviewed_paths": [
+     "packages/core/src/node-server.js",
+     ".env.example",
+     "packages/core/src/db.js"
+    ],
+    "invariant": "Outbound transport enforces TLS in source; TRUST_PROXY is opt-in.",
+    "method": "source",
+    "result": "PASS. All outbound bases in .env.example and code are https. DATABASE_URL ships with sslmode=require plus channel_binding. node-server.js ignores X-Forwarded-* unless TRUST_PROXY is set.",
+    "artifact": null
+   },
+   {
+    "agent_id": "hunter-baseline",
+    "reviewed_paths": [
+     "packages/core/src/node-server.js"
+    ],
+    "invariant": "The 500 handler returns no stack trace or internal message to the client.",
+    "method": "source",
+    "result": "PASS. On an uncaught handler error, startServer logs to the server console only and responds with a fixed generic string; the 413 path likewise sends a fixed string. error.message, stack, and fields never enter the response body.",
+    "artifact": null
+   }
+  ],
+  "result_fingerprints": [
+   "baseline/session-export-untracked-in-public-repo",
+   "baseline/mockup-answer-key-public"
+  ],
+  "unresolved": [],
+  "hardening_notes": [],
+  "unit_read_paths": [
+   "scripts/render.mjs",
+   "scripts/create-admin.mjs",
+   "scripts/extract-ielts.mjs",
+   "scripts/start.mjs",
+   "scripts/migrate.mjs",
+   "scripts/build-react.mjs",
+   "tools/speechace/server.mjs",
+   "tools/speechace/index.html",
+   "tools/speechace/preview-result.mjs",
+   "tools/mockup/e2e-full.mjs",
+   "start.cmd",
+   "package.json",
+   "package-lock.json",
+   ".env.example",
+   ".gitignore",
+   "README.md",
+   "db/migrations/0001_init.sql",
+   "db/migrations/0004_certificates.sql",
+   "db/migrations/0007_pendaftaran_and_mockup.sql",
+   "db/migrations/0008_ielts_mockup.sql",
+   "db/migrations/0015_mockup_sessions.sql",
+   "apps/admin/server.js",
+   "apps/admin/src/api.js",
+   "apps/web/server.js",
+   "apps/web/student/src/App.jsx",
+   "packages/core/src/node-server.js",
+   "packages/core/src/crypto.js",
+   "packages/core/src/writing.js",
+   "packages/core/src/speaking.js",
+   "tikno-english-placement-test-setup.json"
+  ]
+ }
+]

@@ -1,0 +1,345 @@
+{
+ "units": [
+  {
+   "coverage_id": "apps%2Fadmin%2Fsrc%2Fapi.js%23attempts%20resend-email::apps%2Fadmin%2Fsrc%2Fapi.js%23attemptAction%20resend-email%20channel%20write::apps%2Fadmin%2Fsrc%2Fapi.js::ATTACK-CLASSES.md%23Business%20logic",
+   "disposition": "candidate",
+   "reviewed_paths": [
+    "apps/admin/src/api.js",
+    "packages/core/src/delivery.js",
+    "apps/web/src/api.js"
+   ],
+   "checks": [
+    {
+     "agent_id": "hunter-wave2-admin-parallel",
+     "reviewed_paths": [
+      "apps/admin/src/api.js"
+     ],
+     "invariant": "Exactly one writer sends a given attempt's result email, coordinated through delivery_lease_until; a voided attempt's result is never delivered.",
+     "method": "source",
+     "result": "FAIL on coordination and on the void gate. attemptAction's resend-email branch sends via env.SEND_EMAIL.send and unconditionally writes email_sent_at/email_status without reading email_status, wa_status, or delivery_lease_until, while delivery.js claims the same attempt through the lease and writes the same columns on completion. A press inside a background delivery's claim-to-completion window produces two emails and clobbers the bookkeeping whichever writer finishes last. The branch also never reads voided_at, so a voided placement attempt's full result email (score, level, speaking transcript, private link) can be sent at any time. Gates present: placement, submitted, a.email present, speaking finality. Candidate wave2/resend-email-second-writer.",
+     "artifact": null
+    }
+   ],
+   "candidate_fingerprints": [
+    "wave2/resend-email-second-writer"
+   ],
+   "unresolved": [
+    "Whether any deployed workflow lets a non-operator influence the timing of an admin resend press relative to a background delivery; not derivable from source."
+   ]
+  },
+  {
+   "coverage_id": "apps%2Fadmin%2Fsrc%2Fapi.js%23mockup%20regrade%20routes::apps%2Fadmin%2Fsrc%2Fapi.js%23retryMockupSpeaking%20and%20regradeWriting%20state%20gates::apps%2Fadmin%2Fsrc%2Fapi.js::ATTACK-CLASSES.md%23Business%20logic",
+   "disposition": "covered",
+   "reviewed_paths": [
+    "apps/admin/src/api.js",
+    "packages/core/src/speaking-mockup-worker.js",
+    "apps/web/src/api.js"
+   ],
+   "checks": [
+    {
+     "agent_id": "hunter-wave2-admin-parallel",
+     "reviewed_paths": [
+      "apps/admin/src/api.js"
+     ],
+     "invariant": "Paid third-party scoring is re-armed only under a state gate and within a bounded budget per attempt.",
+     "method": "source",
+     "result": "PARTIAL FAIL within operator authority. retryMockupSpeaking resets every failed row of the attempt at once with no submitted or voided gate, so it can requeue an in_progress attempt's rows mid-interview and a voided attempt's rows at any time; regradeWriting overwrites attempts.bands with the same missing gates. However the principal is an authenticated operator whose per-press cost is bounded by the attempt's own rows (at most 18 speaking answers, 2 essays) and the worker caps tries per row; repeated presses are unbounded in count but every press is an intentional authenticated action of the same authority that already triggers paid Gemini calls in regradeWriting by design. Not a boundary crossing; hardening. Two facts recorded for the report: the admin retry and the student re-upload are one root-cause class with two instances (both reset a speaking_answers row to pending/tries=0 with no attempt budget), and the public mockup result read (web api.js getAttemptResult) never selects voided_at, so a voided attempt's bands stay readable by attempt UUID regardless.",
+     "artifact": null
+    }
+   ],
+   "candidate_fingerprints": [],
+   "unresolved": []
+  },
+  {
+   "coverage_id": "apps%2Fadmin%2Fsrc%2Finvite-queue.js%23queue%20drain::apps%2Fadmin%2Fsrc%2Finvite-queue.js%23claimNext%20row%20claim::apps%2Fadmin%2Fsrc%2Finvite-queue.js::ATTACK-CLASSES.md%23Business%20logic",
+   "disposition": "candidate",
+   "reviewed_paths": [
+    "apps/admin/src/invite-queue.js",
+    "apps/admin/src/api.js",
+    "apps/admin/server.js",
+    "packages/core/src/delivery.js",
+    "packages/core/src/db.js",
+    "packages/core/src/whatsapp.js"
+   ],
+   "checks": [
+    {
+     "agent_id": "hunter-wave2-admin-queue",
+     "reviewed_paths": [
+      "apps/admin/src/invite-queue.js",
+      "packages/core/src/delivery.js"
+     ],
+     "invariant": "One channel send per queue row: a row is sent by exactly one drain once.",
+     "method": "source",
+     "result": "FAILS cross-process. claimNext does a bare SELECT for the next eligible row, then two unconditional UPDATEs in one batch, returning row.queue_id without checking whether either UPDATE changed a row (no RETURNING, changes ignored). If a second process's SELECT for the same head row lands between the first process's SELECT and its claim UPDATE commit, both return the same queue_id, both fetchRow, both see the statuses the first claim wrote, and both send both channels. The per-process draining flag only serializes drains within one process; it is not a cross-process lease. delivery.js solves the same problem with a single atomic UPDATE ... WHERE (lease IS NULL OR lease < now) RETURNING and treats a no-row return as claimed-elsewhere.",
+     "artifact": null
+    },
+    {
+     "agent_id": "hunter-wave2-admin-queue",
+     "reviewed_paths": [
+      "apps/admin/src/invite-queue.js",
+      "apps/admin/server.js"
+     ],
+     "invariant": "A boot-time requeue must not re-enqueue a row a live process is currently sending or has already sent.",
+     "method": "source",
+     "result": "FAILS at deploy overlap. resetStaleInviteSends blindly flips every 'sending' row back to 'pending' with no lease column, no age check, and no process ownership, then startInviteQueueWorker immediately drains. Render keeps the old instance serving for about 60 seconds after a deploy switches traffic, and the old instance's stop path clears the sweep timer but never awaits an in-flight drainInviteQueue promise before DB.close() and process.exit(0). Two duplicate paths: (a) old instance mid-send on a row, new instance boots, resets, claims, and sends again; (b) old instance completed the vendor call but was killed before the 'sent' UPDATE committed, so the send was delivered and the new instance re-sends. In both, the student receives two identical paid invite messages and the shared Cloudflare daily quota is charged twice for one row. resetStaleInviteSends is only safe under the single-process assumption in its own comment, which the deploy overlap breaks.",
+     "artifact": null
+    },
+    {
+     "agent_id": "hunter-wave2-admin-queue",
+     "reviewed_paths": [
+      "apps/admin/src/invite-queue.js",
+      "apps/admin/src/api.js"
+     ],
+     "invariant": "A pause pressed mid-drain stops further rows from being sent.",
+     "method": "source",
+     "result": "HOLDS. queue_paused is re-read inside claimNext's SELECT on every iteration, not latched at drain start, so a pause takes effect at the next claim.",
+     "artifact": null
+    },
+    {
+     "agent_id": "hunter-wave2-admin-queue",
+     "reviewed_paths": [
+      "apps/admin/src/api.js",
+      "apps/admin/src/invite-queue.js"
+     ],
+     "invariant": "The channel retry flow cannot resurrect a row another drain is currently sending, and the plaintext plain_token is erased as soon as it is no longer needed.",
+     "method": "source",
+     "result": "WEAK. retryInviteChannel resets a channel to 'pending' with an unconditional UPDATE with no guard against the row currently being 'sending' in a concurrent drain. Token erasure fires only when email is sent/dilewati AND wa sent; a row whose email exhausted MAX_ATTEMPTS as 'failed' keeps the plaintext invite token in the queue table indefinitely. Both are recorded as hardening; the erasure gap duplicates the wave-1 admin-data/plain-token-persistence candidate.",
+     "artifact": null
+    }
+   ],
+   "candidate_fingerprints": [
+    "wave2/invite-queue-drain-race"
+   ],
+   "unresolved": []
+  },
+  {
+   "coverage_id": "packages%2Fcore%2Fsrc%2Fnode-server.js%23request%20URL%20construction::packages%2Fcore%2Fsrc%2Fnode-server.js%23TRUST_PROXY%20forwarded-header%20handling::packages%2Fcore%2Fsrc%2Fnode-server.js::WEB-PROTOCOL-AND-AUTH.md%23Host%20and%20forwarded-header%20trust",
+   "disposition": "candidate",
+   "reviewed_paths": [
+    "packages/core/src/node-server.js",
+    "packages/core/src/env.js",
+    "apps/admin/src/api.js",
+    "apps/admin/src/certificates.js",
+    "apps/admin/server.js",
+    "apps/web/server.js",
+    "apps/web/src/api.js",
+    "packages/core/src/delivery.js",
+    "apps/admin/src/invite-queue.js",
+    ".env.example"
+   ],
+   "checks": [
+    {
+     "agent_id": "hunter-wave2-host-trust",
+     "reviewed_paths": [
+      "packages/core/src/node-server.js",
+      "packages/core/src/env.js"
+     ],
+     "invariant": "When TRUST_PROXY is truthy, x-forwarded-proto and x-forwarded-host are read with first(), so an appended client value ahead of the proxy value wins; the result feeds the URL used by both apps.",
+     "method": "source",
+     "result": "Verified. first() splits on comma and trims, so with an appending edge the client-supplied element is chosen; with an overwriting edge only the edge value exists. With TRUST_PROXY unset the headers are ignored and the scheme falls back to socket.encrypted, which is false behind Render's TLS termination.",
+     "artifact": null
+    },
+    {
+     "agent_id": "hunter-wave2-host-trust",
+     "reviewed_paths": [
+      "apps/admin/src/api.js",
+      "apps/admin/src/certificates.js",
+      "apps/web/src/api.js",
+      "apps/web/server.js",
+      "packages/core/src/delivery.js",
+      "apps/admin/src/invite-queue.js"
+     ],
+     "invariant": "Every consumer of request.url protocol, origin, or host is enumerated.",
+     "method": "source",
+     "result": "Exhaustive grep: admin secureFor (the Secure cookie flag on login, logout, and setup), admin checkOrigin (exact Origin equality against url.origin, called before every /api/admin route including login and setup), the certificate WhatsApp fileUrl (the URL AttCos fetches), and the admin page redirects (Location host mirrors the forwarded host). The web app uses only url.pathname and all outbound student links come from env.PUBLIC_WEB_URL, never from the request URL, so the public test app has no exposure through this chain.",
+     "artifact": null
+    },
+    {
+     "agent_id": "hunter-wave2-host-trust",
+     "reviewed_paths": [
+      "apps/admin/src/api.js"
+     ],
+     "invariant": "checkOrigin cannot be satisfied by a browser cross-site without also passing SameSite=Strict cookie rules, except on routes that need no session.",
+     "method": "source",
+     "result": "If an attacker controls both forwarded headers, url.origin equals any Origin the attacker sends, so checkOrigin passes, but every route after the session gate requires the cookie, which SameSite=Strict keeps browsers from sending cross-site. The only pre-auth writes are POST login (credentials still required, lockout after five failures) and POST setup (closed once any admin exists, gated by the setup code). Header control alone yields no unauthenticated state change; its real value is the session-required certificate fileUrl steering, the Secure flag downgrade, and Location host reflection.",
+     "artifact": null
+    },
+    {
+     "agent_id": "hunter-wave2-host-trust",
+     "reviewed_paths": [
+      "apps/admin/src/api.js",
+      "packages/core/src/env.js",
+      ".env.example"
+     ],
+     "invariant": "The Secure cookie flag derives from the same forwarded-proto chain, so its correctness depends on both TRUST_PROXY being set and the edge not letting a client downgrade the proto.",
+     "method": "source",
+     "result": "If TRUST_PROXY is unset on Render, socket.encrypted is false behind the edge, secureFor returns false, and the cookie is issued without Secure; checkOrigin would then reject every dashboard write, which would have been noticed, so TRUST_PROXY=1 is almost certainly set. If it is set but a client can inject proto http ahead of the edge value, the Secure flag is dropped on demand. .env.example ships TRUST_PROXY=0 and the Render environment list does not name TRUST_PROXY, so the live value is a deployment fact. Candidates: wave2/proxy-host-header-trust, wave2/trust-proxy-secure-cookie, wave2/direct-port-reachability.",
+     "artifact": null
+    }
+   ],
+   "candidate_fingerprints": [
+    "wave2/proxy-host-header-trust",
+    "wave2/trust-proxy-secure-cookie",
+    "wave2/direct-port-reachability"
+   ],
+   "unresolved": [
+    "Whether Render's edge overwrites or appends client-supplied X-Forwarded-Host and X-Forwarded-Proto before they reach the app.",
+    "Whether TRUST_PROXY=1 is actually set on both Render services.",
+    "Whether anything but Render's proxy can reach the app port directly, since the server binds 0.0.0.0."
+   ]
+  },
+  {
+   "coverage_id": "apps%2Fweb%2Fsrc%2Fapi.js%23per-attempt%20sub-actions::apps%2Fweb%2Fsrc%2Fapi.js%23markAudioPlayed%20and%20skipSpeaking%20gates::apps%2Fweb%2Fsrc%2Fapi.js::ATTACK-CLASSES.md%23Business%20logic",
+   "disposition": "covered",
+   "reviewed_paths": [
+    "apps/web/src/api.js",
+    "apps/admin/src/api.js",
+    "packages/core/src/speaking-result.js",
+    "packages/core/src/speaking-bank.js",
+    "packages/core/src/delivery.js",
+    "apps/web/student/src/App.jsx",
+    "apps/web/student/src/screens.jsx",
+    "db/migrations/0009_question_sections.sql"
+   ],
+   "checks": [
+    {
+     "agent_id": "hunter-wave2-web-actions",
+     "reviewed_paths": [
+      "apps/web/src/api.js",
+      "apps/admin/src/api.js",
+      "db/migrations/0009_question_sections.sql",
+      "apps/web/student/src/App.jsx"
+     ],
+     "invariant": "A state marker written by an attempt holder must not be trusted by grading, quota, or cross-attempt logic unless the writing endpoint validates it.",
+     "method": "source",
+     "result": "markAudioPlayed stamps attempt_audio_plays and attempts.audio_played_at with no status gate and validates sectionId only against test_key, not the attempt's package_id. Exhaustive consumer search of both apps: the only readers of attempt_audio_plays are the ON CONFLICT gate inside markAudioPlayed itself and the 0009 backfill; nothing reads the table for scores, limits, or counting. attempts.audio_played_at is read in exactly two places, both informational admin displays; the submit and grading path never reads either value. Every row the endpoint can write is scoped to the caller's own attempt_id, so a wrong-package or post-submit stamp only mislabels the caller's own record or burns the caller's own single-play slot. No grading, paid quota, or other principal's data is affected. Hardening note only.",
+     "artifact": null
+    },
+    {
+     "agent_id": "hunter-wave2-web-actions",
+     "reviewed_paths": [
+      "apps/web/src/api.js",
+      "apps/web/student/src/App.jsx",
+      "packages/core/src/speaking-result.js",
+      "packages/core/src/delivery.js"
+     ],
+     "invariant": "The speaking-skip endpoints may only move the caller's own attempt to a state whose consumers behave as designed.",
+     "method": "source",
+     "result": "Mockup branch: sets speaking_status='skipped' on an in_progress attempt with no answers; this is the designed mic-failure path, reached by the runner's skip button and by finishSpeakingByTime; the only consumer treating 'skipped' as a gate is submitAnswers, where it bypasses the finish-speaking refusal and yields a three-skill result; the effect is limited to the caller's own attempt and can only remove the caller's own Speaking band. Placement branch: the speakingAttempt gate requires status='submitted', so a placement student cannot pre-skip before submitting; after submit, the position-0 marker is final, saveContact delivers immediately, and the aggregate filters it out exactly like an absent recording; the marker cannot collide with a real answer because bank positions sort from the speaking bank and uploads use picked positions. The missing speaking_enabled gate means the write is reachable when speaking is off, but the write is then indistinguishable in every consumer from the no-rows case that already exists when speaking is off. No consumer makes the missing gate matter. Hardening note only.",
+     "artifact": null
+    }
+   ],
+   "candidate_fingerprints": [],
+   "unresolved": []
+  },
+  {
+   "coverage_id": "apps%2Fadmin%2Fclient%2Fsrc%23bootstrap%20cache::apps%2Fadmin%2Fclient%2Fsrc%2Fbootstrap-cache.js%23sessionStorage%20PII%20persistence::apps%2Fadmin%2Fclient%2Fsrc::ATTACK-CLASSES.md%23Feature%20abuse%20and%20data%20leakage",
+   "disposition": "covered",
+   "reviewed_paths": [
+    "apps/admin/client/src/bootstrap-cache.js",
+    "apps/admin/client/src/store.js",
+    "apps/admin/client/src/App.jsx",
+    "apps/admin/client/src/login-main.jsx",
+    "apps/admin/src/api.js",
+    "apps/admin/src/certificates.js"
+   ],
+   "checks": [
+    {
+     "agent_id": "hunter-wave2-client-cache",
+     "reviewed_paths": [
+      "apps/admin/client/src/bootstrap-cache.js",
+      "apps/admin/client/src/store.js",
+      "apps/admin/client/src/App.jsx",
+      "apps/admin/client/src/login-main.jsx",
+      "apps/admin/src/api.js",
+      "apps/admin/src/certificates.js"
+     ],
+     "invariant": "The bootstrap cache stores PII only, is cleared on every logout, login, and 401 path, carries no bearer, invite, result, or pdf token, and its TTL never exceeds the session cookie TTL.",
+     "method": "source",
+     "result": "Verified all clearBootstrapCache call sites: login success, the sidebar logout button, any 401 in api(), and a corrupt cached read; closing the tab destroys sessionStorage entirely. The payload carries student names, emails, WhatsApp numbers, branch, birth date, scores, and attempts, but no tokens: invite tokens are only hashed server-side and never returned, certificate pdf_token is deliberately excluded from the bootstrap select, no result_token appears in the payload, and the session cookie is HttpOnly and unreachable from JS. TTL is 12h, equal to the session cookie TTL; the cache is rewritten on every reload, so a mid-session write can outlive a cookie created at session start, but the same tab still renders the identical data in the DOM, so the stale cache crosses no boundary. No realistic less-authorized reader exists. Hardening note only.",
+     "artifact": null
+    }
+   ],
+   "candidate_fingerprints": [],
+   "unresolved": []
+  },
+  {
+   "coverage_id": "apps%2Fadmin%2Fsrc%2Fapi.js%23speaking%20review%20and%20audio::apps%2Fadmin%2Fsrc%2Fapi.js%23session-gated%20audio%20range%20serving::apps%2Fadmin%2Fsrc%2Fapi.js::ATTACK-CLASSES.md%23Access%20control",
+   "disposition": "covered",
+   "reviewed_paths": [
+    "apps/admin/src/api.js",
+    "apps/web/src/api.js",
+    "packages/core/src/speaking.js",
+    "packages/core/src/speaking-mockup-worker.js",
+    "apps/admin/client/src/views/Test.jsx"
+   ],
+   "checks": [
+    {
+     "agent_id": "hunter-wave2-reopen-audio",
+     "reviewed_paths": [
+      "apps/admin/src/api.js",
+      "apps/web/src/api.js",
+      "packages/core/src/speaking.js"
+     ],
+     "invariant": "The mockup audio route serves only whitelisted stored mimes, behind the session gate, and fails closed on purged audio.",
+     "method": "source",
+     "result": "PASS. The route is behind the same session gate as the placement route. The upload path normalizes the student Content-Type through the whitelist before the row is written, so the handler serves only a value from that closed set (falling back to audio/webm), with nosniff and no-store. Id validation is digit-only plus a Number cast; the purge sets audio NULL and the handler 404s on missing bytes, failing closed. Range support is absent on this handler, which is a UX parity gap, not a boundary failure: serving 200 in response to a Range request is legal HTTP, bounded at 3 MB, behind a session. The dashboard renders the audio element only from has_audio and status, never shipping bytes in the bootstrap.",
+     "artifact": null
+    }
+   ],
+   "candidate_fingerprints": [],
+   "unresolved": []
+  },
+  {
+   "coverage_id": "apps%2Fadmin%2Fsrc%2Fapi.js%23login::apps%2Fadmin%2Fsrc%2Fapi.js%23tnec_admin%20cookie::apps%2Fadmin%2Fsrc%2Fapi.js::ATTACK-CLASSES.md%23Business%20logic",
+   "disposition": "candidate",
+   "reviewed_paths": [
+    "apps/admin/src/api.js",
+    "apps/admin/server.js",
+    "packages/core/src/node-server.js",
+    "packages/core/src/env.js"
+   ],
+   "checks": [
+    {
+     "agent_id": "hunter-wave2-reopen-cookie",
+     "reviewed_paths": [
+      "apps/admin/src/api.js"
+     ],
+     "invariant": "Every Set-Cookie site emits the tnec_admin cookie with HttpOnly, SameSite=Strict, Path=/, and Max-Age; the logout expiry keeps the same attributes.",
+     "method": "source",
+     "result": "PASS. sessionCookie is the single builder; exactly three Set-Cookie sites exist (login, logout with Max-Age=0, setup); no Domain attribute is ever emitted, so the cookie is host-only; no other route sets a cookie.",
+     "artifact": null
+    },
+    {
+     "agent_id": "hunter-wave2-reopen-cookie",
+     "reviewed_paths": [
+      "apps/admin/src/api.js",
+      "packages/core/src/node-server.js",
+      "packages/core/src/env.js"
+     ],
+     "invariant": "The Secure flag is derived from the request protocol, which under TRUST_PROXY comes from x-forwarded-proto; the deployed configuration determines whether the flag is present.",
+     "method": "source",
+     "result": "PASS with one deployment fact unverifiable. With TRUST_PROXY set and the edge sending x-forwarded-proto https, the cookie is Secure. If TRUST_PROXY is unset, the protocol derives as http behind the edge, Secure is dropped, and checkOrigin would reject every dashboard write, which would have been noticed; the dashboard demonstrably works, so the deployed config is almost certainly TRUST_PROXY=1 with an https proto. The single fact not confirmable from source is the actual x-forwarded-proto value Render injects and the literal TRUST_PROXY value in the Render env. Candidate wave2/trust-proxy-secure-cookie.",
+     "artifact": null
+    },
+    {
+     "agent_id": "hunter-wave2-reopen-cookie",
+     "reviewed_paths": [
+      "apps/admin/src/api.js"
+     ],
+     "invariant": "Login mints a fresh unpredictable token per session and logout deletes the session row server-side.",
+     "method": "source",
+     "result": "PASS. Every login mints randomToken(32) fresh and stores only its sha256; the client can never inject a chosen token, so fixation is impossible. Logout evicts the cache entry, deletes the row, and clears the cookie.",
+     "artifact": null
+    }
+   ],
+   "candidate_fingerprints": [
+    "wave2/trust-proxy-secure-cookie"
+   ],
+   "unresolved": []
+  }
+ ],
+ "candidates": [],
+ "hardening": [],
+ "uncovered": []
+}
