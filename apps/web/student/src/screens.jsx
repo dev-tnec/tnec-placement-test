@@ -97,7 +97,7 @@ export function RichText({ value, id, className = "" }) {
    reference is the token fragment the student actually holds so the team can find the row. */
 const ERROR_STATES = {
   invite_used: {
-    httpTag: "HTTP 410 • INVITE_REDEEMED",
+    httpTag: "HTTP 410 - INVITE_REDEEMED",
     badge: "Sudah Digunakan",
     title: "Kode akses undangan ini sudah pernah digunakan.",
     lead: "Setiap kode undangan hanya berlaku untuk satu kali pengerjaan sesi ujian. Jika sesi kamu terputus karena kendala teknis, hubungi admin Titik Nol untuk verifikasi ulang.",
@@ -106,7 +106,7 @@ const ERROR_STATES = {
     waText: "Halo Admin TNEC, kode undangan ujian saya tercatat sudah terpakai (Ref: %REF%). Mohon bantuan pengecekan sesi saya.",
   },
   invite_expired: {
-    httpTag: "HTTP 410 • INVITE_EXPIRED",
+    httpTag: "HTTP 410 - INVITE_EXPIRED",
     badge: "Masa Berlaku Habis",
     title: "Tautan atau kode akses ujian ini sudah kedaluwarsa.",
     lead: "Demi keamanan evaluasi dan keakuratan jadwal sesi, tautan undangan hanya berlaku dalam batas waktu tertentu yang tertera pada pesan WhatsApp kamu.",
@@ -115,7 +115,7 @@ const ERROR_STATES = {
     waText: "Halo Admin TNEC, tautan undangan ujian saya sudah kedaluwarsa (Ref: %REF%). Mohon bantuannya untuk pembaruan kode akses.",
   },
   invite_locked: {
-    httpTag: "HTTP 423 • INVITE_LOCKED",
+    httpTag: "HTTP 423 - INVITE_LOCKED",
     badge: "Terkunci Salah Kode",
     title: "Kode akses salah tiga kali, jadi undangan ini terkunci.",
     lead: "Demi keamanan sesi ujian, undangan yang salah memasukkan kode tiga kali otomatis terkunci. Hubungi admin Titik Nol untuk mendapatkan undangan baru.",
@@ -124,7 +124,7 @@ const ERROR_STATES = {
     waText: "Halo Admin TNEC, undangan ujian saya terkunci karena salah kode tiga kali (Ref: %REF%). Mohon dibuatkan undangan baru.",
   },
   invite_not_open_yet: {
-    httpTag: "HTTP 423 • INVITE_NOT_OPEN",
+    httpTag: "HTTP 423 - INVITE_NOT_OPEN",
     badge: "Belum Dibuka",
     title: "Tautan undangan ini belum bisa dibuka.",
     lead: "Sesi ujian kamu sudah dijadwalkan, dan tautan ini baru aktif pada waktu yang tertera pada pesan WhatsApp kamu. Buka kembali tautan ini nanti.",
@@ -133,7 +133,7 @@ const ERROR_STATES = {
     waText: "Halo Admin TNEC, tautan undangan ujian saya belum bisa dibuka (Ref: %REF%). Mohon konfirmasi jadwal sesi saya.",
   },
   invalid: {
-    httpTag: "HTTP 404 • INVITE_NOT_FOUND",
+    httpTag: "HTTP 404 - INVITE_NOT_FOUND",
     badge: "Tautan Tidak Ditemukan",
     title: "Tautan undangan ujian tidak valid atau sudah ditarik.",
     lead: "Pastikan kamu membuka tautan secara utuh langsung dari pesan resmi WhatsApp Titik Nol English Course tanpa ada karakter yang terpotong.",
@@ -327,10 +327,10 @@ export function Intro({ config, invite, consent, onConsent, code, onCode, codeEr
 
   const badge = isInvite ? "Undangan Khusus" : "Placement Test";
   const sessionLabel = isIelts
-    ? `${invite.packageName || "Paket"} • Kandidat: ${invite.firstName}`
+    ? `${invite.packageName || "Paket"} - Kandidat: ${invite.firstName}`
     : isInvite
-      ? `${invite.testName} • Kandidat: ${invite.firstName}`
-      : "Placement Test • Publik";
+      ? `${invite.testName} - Kandidat: ${invite.firstName}`
+      : "Placement Test";
   const eyebrow = isIelts ? "Simulasi IELTS Resmi TNEC" : isInvite ? invite.testName : "Placement Test";
 
   const title = sectionsMode
@@ -392,8 +392,8 @@ export function Intro({ config, invite, consent, onConsent, code, onCode, codeEr
     ? "Masukkan kode akses 6 karakter dari WhatsApp dan setujui pernyataan di bawah."
     : "Baca standar pengawasan di samping dan centang ketiga persetujuan untuk memulai.";
   const consoleMeta = sectionsMode
-    ? `Sesi berjalan ${minutes} menit • Hanya 1 kali kesempatan kirim`
-    : `Durasi ${minutes} menit tanpa jeda • ${isInvite ? "Nilai langsung muncul" : "Hasil dikirim ke Email & WhatsApp"}`;
+    ? `Sesi berjalan ${minutes} menit - Hanya 1 kali kesempatan kirim`
+    : `Durasi ${minutes} menit tanpa jeda - ${isInvite ? "Nilai langsung muncul" : "Hasil dikirim ke Email & WhatsApp"}`;
 
   const rulesLeft = sectionsMode ? [
     `Tes terdiri dari ${total} soal dan esai (Listening ${listeningMin} menit, Reading ${readingMin} menit, Writing ${writingMin} menit, Speaking ${speakingMin} menit). Di Listening, kamu bebas berpindah soal Part 1-4 selama audio diputar.`,
