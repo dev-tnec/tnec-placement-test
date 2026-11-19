@@ -1436,17 +1436,22 @@ async function updateTestSettings(request, env, user, url, key) {
   if (body.totalSeconds !== undefined) { const v = int(body.totalSeconds, { min: 60, max: 10800 }); if (v === null) throw new HttpError(400, "Durasi tes harus antara 1 dan 180 menit."); next.total_seconds = v; }
   if (body.perDefault !== undefined) { const v = int(body.perDefault, { min: 5, max: 180 }); if (v === null) throw new HttpError(400, "Waktu bawaan per soal harus antara 5 dan 180 detik."); next.per_default = v; }
   let sectionChanged = false;
-  for (const [field, column, label] of [
-    ["listeningSeconds", "listening_seconds", "Listening"],
-    ["readingSeconds", "reading_seconds", "Reading"],
-    ["writingSeconds", "writing_seconds", "Writing"],
-    ["speakingBlockSeconds", "speaking_block_seconds", "Speaking"],
+  for (const [field, column, label, min, max] of [
+    ["listeningSeconds", "listening_seconds", "Listening", 60, 10800],
+    ["readingSeconds", "reading_seconds", "Reading", 60, 10800],
+    ["writingSeconds", "writing_seconds", "Writing", 60, 10800],
+    ["speakingBlockSeconds", "speaking_block_seconds", "Speaking", 60, 10800],
+    ["listeningBreakSeconds", "listening_break_seconds", "Jeda Listening", 0, 1800],
+    ["readingBreakSeconds", "reading_break_seconds", "Jeda Reading", 0, 1800],
+    ["writingBreakSeconds", "writing_break_seconds", "Jeda Writing", 0, 1800],
   ]) {
     if (body[field] === undefined) continue;
-    const v = int(body[field], { min: 60, max: 10800 });
-    if (v === null) throw new HttpError(400, `Waktu ${label} harus antara 1 dan 180 menit.`, { field });
+    const v = int(body[field], { min, max });
+    if (v === null) throw new HttpError(400, max === 1800 && min === 0
+      ? `${label} harus antara 0 dan 30 menit.`
+      : `Waktu ${label} harus antara 1 dan 180 menit.`, { field });
     next[column] = v;
-    sectionChanged = true;
+    if (!field.includes("Break")) sectionChanged = true;
   }
   if (sectionChanged || next.time_mode === "sections") {
     const sum = (next.listening_seconds || 0) + (next.reading_seconds || 0) + (next.writing_seconds || 0) + (next.speaking_block_seconds || 0);
@@ -1462,9 +1467,9 @@ async function updateTestSettings(request, env, user, url, key) {
     next.audio_url = url || null;
   }
   readSpeakingSettings(body, key, next);
-  await env.DB.prepare(`UPDATE tests SET time_mode = ?, total_seconds = ?, per_default = ?, listening_seconds = ?, reading_seconds = ?, writing_seconds = ?, speaking_block_seconds = ?, is_open = ?, max_violations = ?, pass_score = ?,
+  await env.DB.prepare(`UPDATE tests SET time_mode = ?, total_seconds = ?, per_default = ?, listening_seconds = ?, reading_seconds = ?, writing_seconds = ?, speaking_block_seconds = ?, listening_break_seconds = ?, reading_break_seconds = ?, writing_break_seconds = ?, is_open = ?, max_violations = ?, pass_score = ?,
       speaking_enabled = ?, speaking_seconds = ?, speaking_min_seconds = ?, speaking_prompt = ?, speaking_dialect = ?, speaking_count = ?, speaking_randomize = ?, auto_submit = ?, audio_url = ?, updated_at = ?, updated_by = ? WHERE key = ?`)
-    .bind(next.time_mode, next.total_seconds, next.per_default, next.listening_seconds ?? null, next.reading_seconds ?? null, next.writing_seconds ?? null, next.speaking_block_seconds ?? null, next.is_open, next.max_violations, next.pass_score,
+    .bind(next.time_mode, next.total_seconds, next.per_default, next.listening_seconds ?? null, next.reading_seconds ?? null, next.writing_seconds ?? null, next.speaking_block_seconds ?? null, next.listening_break_seconds ?? 0, next.reading_break_seconds ?? 0, next.writing_break_seconds ?? 0, next.is_open, next.max_violations, next.pass_score,
       next.speaking_enabled, next.speaking_seconds, next.speaking_min_seconds, next.speaking_prompt, next.speaking_dialect,
       next.speaking_count ?? 1, next.speaking_randomize ?? 0,
       next.auto_submit ?? 0, next.audio_url ?? null, nowSeconds(), user.name, key).run();

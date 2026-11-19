@@ -496,6 +496,9 @@ function SettingsTab({ testKey }) {
     reading: Math.round((st.readingSeconds ?? 3600) / 60),
     writing: Math.round((st.writingSeconds ?? 3600) / 60),
     speaking: Math.round((st.speakingBlockSeconds ?? 900) / 60),
+    listeningBreak: Math.round((st.listeningBreakSeconds ?? 0) / 60),
+    readingBreak: Math.round((st.readingBreakSeconds ?? 0) / 60),
+    writingBreak: Math.round((st.writingBreakSeconds ?? 0) / 60),
   });
   const [pass, setPass] = useState(st.passScore);
   const [openTest, setOpenTest] = useState(st.open);
@@ -515,7 +518,10 @@ function SettingsTab({ testKey }) {
   const sectionDirty = Number(sectionTimes.listening) * 60 !== (st.listeningSeconds ?? 1920)
     || Number(sectionTimes.reading) * 60 !== (st.readingSeconds ?? 3600)
     || Number(sectionTimes.writing) * 60 !== (st.writingSeconds ?? 3600)
-    || Number(sectionTimes.speaking) * 60 !== (st.speakingBlockSeconds ?? 900);
+    || Number(sectionTimes.speaking) * 60 !== (st.speakingBlockSeconds ?? 900)
+    || Number(sectionTimes.listeningBreak) * 60 !== (st.listeningBreakSeconds ?? 0)
+    || Number(sectionTimes.readingBreak) * 60 !== (st.readingBreakSeconds ?? 0)
+    || Number(sectionTimes.writingBreak) * 60 !== (st.writingBreakSeconds ?? 0);
   const recent = db.attempts.filter((a) => a.test === "post" && a.status === "done" && a.startedAt >= Date.now() - 30 * 86400000);
   const passCount = recent.filter((a) => nilaiOf(a) >= Number(pass)).length;
 
@@ -542,8 +548,11 @@ function SettingsTab({ testKey }) {
     clearErrors($("#panel-time"));
     const values = Object.fromEntries(Object.entries(sectionTimes).map(([key, value]) => [key, Number(value)]));
     for (const [key, value] of Object.entries(values)) {
-      if (!Number.isInteger(value) || value < 1 || value > 180) {
-        fieldError(document.getElementById(`set-sec-${key}`), "set-time-err", "Isi menit untuk setiap bagian, 1 sampai 180.");
+      const isBreak = key.endsWith("Break");
+      if (!Number.isInteger(value) || value < (isBreak ? 0 : 1) || value > (isBreak ? 30 : 180)) {
+        fieldError(document.getElementById(`set-sec-${key}`), "set-time-err", isBreak
+          ? "Menit jeda antar bagian harus antara 0 dan 30."
+          : "Isi menit untuk setiap bagian, 1 sampai 180.");
         document.getElementById(`set-sec-${key}`)?.focus();
         return;
       }
@@ -557,8 +566,11 @@ function SettingsTab({ testKey }) {
         readingSeconds: values.reading * 60,
         writingSeconds: values.writing * 60,
         speakingBlockSeconds: values.speaking * 60,
+        listeningBreakSeconds: values.listeningBreak * 60,
+        readingBreakSeconds: values.readingBreak * 60,
+        writingBreakSeconds: values.writingBreak * 60,
       },
-    }), `Waktu per bagian tersimpan: Listening ${values.listening} menit, Reading ${values.reading} menit, Writing ${values.writing} menit, Speaking ${values.speaking} menit.`);
+    }), `Waktu per bagian tersimpan: Listening ${values.listening} menit, Reading ${values.reading} menit, Writing ${values.writing} menit, Speaking ${values.speaking} menit, dengan jeda ${values.listeningBreak}/${values.readingBreak}/${values.writingBreak} menit.`);
     done();
   }
 
@@ -662,6 +674,24 @@ function SettingsTab({ testKey }) {
               <label className="label" htmlFor="set-sec-speaking">Speaking</label>
               <div className="unit-row"><span className="unit"><input className="input tnum" id="set-sec-speaking" type="number" min="1" max="180" value={sectionTimes.speaking} onChange={(e) => setSectionTimes((s) => ({ ...s, speaking: e.target.value }))} /><span>menit</span></span></div>
               <p className="hint">Wawancara 18 pertanyaan, termasuk persiapan Part 2.</p>
+            </div>
+          </div>
+          <p className="panel__desc">Jeda antar bagian</p>
+          <div className="form-grid">
+            <div className="field">
+              <label className="label" htmlFor="set-sec-listeningBreak">Jeda setelah Listening</label>
+              <div className="unit-row"><span className="unit"><input className="input tnum" id="set-sec-listeningBreak" type="number" min="0" max="30" value={sectionTimes.listeningBreak} onChange={(e) => setSectionTimes((s) => ({ ...s, listeningBreak: e.target.value }))} /><span>menit</span></span></div>
+              <p className="hint">0 berarti langsung lanjut tanpa jeda.</p>
+            </div>
+            <div className="field">
+              <label className="label" htmlFor="set-sec-readingBreak">Jeda setelah Reading</label>
+              <div className="unit-row"><span className="unit"><input className="input tnum" id="set-sec-readingBreak" type="number" min="0" max="30" value={sectionTimes.readingBreak} onChange={(e) => setSectionTimes((s) => ({ ...s, readingBreak: e.target.value }))} /><span>menit</span></span></div>
+              <p className="hint">Jeda muncul sebelum Writing dimulai.</p>
+            </div>
+            <div className="field">
+              <label className="label" htmlFor="set-sec-writingBreak">Jeda setelah Writing</label>
+              <div className="unit-row"><span className="unit"><input className="input tnum" id="set-sec-writingBreak" type="number" min="0" max="30" value={sectionTimes.writingBreak} onChange={(e) => setSectionTimes((s) => ({ ...s, writingBreak: e.target.value }))} /><span>menit</span></span></div>
+              <p className="hint">Jeda sebelum wawancara speaking dimulai.</p>
             </div>
           </div>
           <p className="note note--gap">Listening memakai satu audio untuk Part 1 sampai Part 4. Peserta bebas berpindah soal di dalam Listening selama audio diputar.</p>

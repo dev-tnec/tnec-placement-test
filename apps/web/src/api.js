@@ -10,7 +10,7 @@ import { normalizeTextAnswer, bandForRaw, overallBand } from "@tnec/core/bands";
 import { gradeWritingTask, writingBand } from "@tnec/core/writing";
 import { CONSENT_VERSION, PRIVACY, TERMS, WHATSAPP, fillLegal } from "@tnec/core/legal";
 import { whatsappConfigured } from "@tnec/core/whatsapp";
-import { deliverInBackground, runInBackground, EMAIL_SKIPPED } from "@tnec/core/delivery";
+import { deliverInBackground, deliverMockupDone, runInBackground, EMAIL_SKIPPED } from "@tnec/core/delivery";
 import { sha256Hex, randomToken } from "@tnec/core/crypto";
 import { SPEAKING_MAX_BYTES, speakingType, speechaceConfigured, gradeInBackground, purgeExpiredAttempts } from "@tnec/core/speaking";
 import { isFinalStatus, speakingFacts, aggregateSpeakingFacts } from "@tnec/core/speaking-result";
@@ -120,15 +120,16 @@ async function loadSpeakingBank(env) {
 }
 
 // The IELTS mockup uses four section timers: Listening, Reading, Writing, and the speaking
-// interview. The values live on the test row so the dashboard can change them.
+// interview. The values live on the test row so the dashboard can change them. A section can
+// carry a break: the pause a student takes after that section before the next one starts.
 const SECTION_DEFAULTS = { Listening: 1920, Reading: 3600, Writing: 3600, Speaking: 900 };
 function sectionPlan(test) {
   if (test.timeMode !== "sections") return null;
   return [
-    { skill: "Listening", seconds: Number(test.listeningSeconds) || SECTION_DEFAULTS.Listening },
-    { skill: "Reading", seconds: Number(test.readingSeconds) || SECTION_DEFAULTS.Reading },
-    { skill: "Writing", seconds: Number(test.writingSeconds) || SECTION_DEFAULTS.Writing },
-    { skill: "Speaking", seconds: Number(test.speakingBlockSeconds) || SECTION_DEFAULTS.Speaking },
+    { skill: "Listening", seconds: Number(test.listeningSeconds) || SECTION_DEFAULTS.Listening, breakAfter: Number(test.listeningBreakSeconds) || 0 },
+    { skill: "Reading", seconds: Number(test.readingSeconds) || SECTION_DEFAULTS.Reading, breakAfter: Number(test.readingBreakSeconds) || 0 },
+    { skill: "Writing", seconds: Number(test.writingSeconds) || SECTION_DEFAULTS.Writing, breakAfter: Number(test.writingBreakSeconds) || 0 },
+    { skill: "Speaking", seconds: Number(test.speakingBlockSeconds) || SECTION_DEFAULTS.Speaking, breakAfter: 0 },
   ];
 }
 
@@ -534,6 +535,12 @@ async function submitAttempt(request, env, attemptId) {
   }
 
   await env.DB.batch(statements);
+
+  // The mockup completion notification goes out in the background once nothing is left to process.
+  // A pending speaking answer means the band is not final yet; the scoring worker re-triggers then.
+  if (testKey === "ielts-mockup" && attempt.invite_id && attempt.student_id && !speakingPending) {
+    runInBackground(() => deliverMockupDone(env, attemptId));
+  }
 
   // Placement scores stay hidden until the contact step. Invite attempts already
   // belong to a known student, so their result is returned right away.

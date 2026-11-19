@@ -163,5 +163,11 @@ export async function finalizeAttempt(env, attemptId) {
     .bind(JSON.stringify(bands), attemptId).run();
   if (attempt.student_id) {
     await addActivity(env, attempt.student_id, "test", `Speaking IELTS Mockup dinilai otomatis: band ${band}.`, null, { attemptId }, nowSeconds()).run();
+    // The attempt is already submitted, so the completion notification can go out with the final band.
+    const submitted = await env.DB.prepare("SELECT status FROM attempts WHERE id = ?").bind(attemptId).first();
+    if (submitted?.status === "submitted") {
+      const { deliverMockupDone } = await import("./delivery.js");
+      deliverMockupDone(env, attemptId).catch((error) => console.error("mockup done delivery failed", error));
+    }
   }
 }

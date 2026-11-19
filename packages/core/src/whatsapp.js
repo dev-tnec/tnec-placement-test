@@ -73,6 +73,32 @@ export async function sendWhatsApp(env, { to, text, source, media, timeoutMs = T
 const WHATSAPP_MAX = 1000;
 const TRANSCRIPT_IN_WHATSAPP = 300;
 const NO_CERTIFICATE = "_Hasil ini dipakai untuk penempatan kelas dan bukan sertifikat resmi._";
+const NOT_OFFICIAL_BAND = "_Band ini estimasi dari simulasi internal, bukan skor resmi IELTS._";
+
+/** The mockup completion WhatsApp, sent right after the whole mockup is done. */
+export function buildMockupDoneWhatsApp({ name, overall, skills, resultUrl, speakingPending }) {
+  const first = String(name || "").trim().split(/\s+/)[0];
+  const band = (key) => {
+    const found = skills?.find((s) => s.skill === key)?.band;
+    return found === null || found === undefined ? "-" : String(found);
+  };
+  const lines = [
+    `Halo ${first}, IELTS Mockup kamu sudah selesai. Terima kasih!`,
+    "",
+    `Listening: ${band("Listening")}`,
+    `Reading: ${band("Reading")}`,
+    `Writing: ${band("Writing")}`,
+    `Speaking: ${band("Speaking")}`,
+    `Overall: ${overall ?? "-"}`,
+    ...(speakingPending ? ["", "Band speaking masih diproses dan muncul di halaman hasil dalam beberapa menit."] : []),
+    ...(resultUrl ? ["", `Hasil lengkap: ${resultUrl}`] : []),
+    "",
+    "Balas pesan ini kalau ingin membahas hasil kamu.",
+    "",
+    NOT_OFFICIAL_BAND,
+  ].join("\n");
+  return lines.length <= WHATSAPP_MAX ? lines : lines.slice(0, WHATSAPP_MAX);
+}
 
 /**
  * The result with its speaking part, in the format of the PRD. It stays under 1,000 characters:

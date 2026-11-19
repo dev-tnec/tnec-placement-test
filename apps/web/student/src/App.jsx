@@ -50,6 +50,10 @@ export default function App() {
   const [checkUrl, setCheckUrl] = useState(null);
   const [recUrl, setRecUrl] = useState(null);
   const [recBlob, setRecBlob] = useState(null);
+  // The mockup speaking navigator: which interview answers are already sent, as "pi-qi" keys,
+  // plus the flagged ones. The placement bank has one screen per question, so it needs none.
+  const [speakSent, setSpeakSent] = useState(() => new Set());
+  const [speakFlags, setSpeakFlags] = useState(() => new Set());
   const [speakError, setSpeakError] = useState("");
   const [showSkip, setShowSkip] = useState(false);
   const [checkStartHidden, setCheckStartHidden] = useState(false);
@@ -62,6 +66,7 @@ export default function App() {
   const [sectionPlan, setSectionPlan] = useState(null);
   const [sectionIndex, setSectionIndex] = useState(0);
   const [sectionLeft, setSectionLeft] = useState(0);
+  const [breakInfo, setBreakInfo] = useState(null);
   const [speakingLeft, setSpeakingLeft] = useState(null);
 
   const deadline = useRef(0);
@@ -115,11 +120,13 @@ export default function App() {
   const nextRef = useRef(null);
   const prevRef = useRef(null);
   const sectionDeadline = useRef(0);
+  const breakDeadline = useRef(0);
   const sectionLocked = useRef(false);
   const sectionModeRef = useRef(false);
   const sectionIndexRef = useRef(0);
   const sectionPlanRef = useRef(null);
   const endSectionRef = useRef(null);
+  const breakInfoRef = useRef(null);
   const speakingDeadline = useRef(0);
   const speakingLocked = useRef(false);
   const speakingCountRef = useRef(0);
@@ -138,6 +145,7 @@ export default function App() {
     maxStrikesRef.current = maxStrikes;
     mockupRef.current = mockup;
     placementSpeakRef.current = placementSpeak;
+    breakInfoRef.current = breakInfo;
     autoSubmitRef.current = autoSubmit;
   });
 
@@ -441,6 +449,16 @@ export default function App() {
 
   function tick() {
     if (!attemptRef.current) return;
+    if (breakInfoRef.current) {
+      const remaining = Math.max(0, Math.ceil((breakDeadline.current - Date.now()) / 1000));
+      setBreakInfo((current) => (current ? { ...current, seconds: remaining } : current));
+      if (remaining === 0) {
+        const nextIndex = sectionIndexRef.current + 1;
+        const next = sectionPlanRef.current?.[nextIndex];
+        if (next) startSection(nextIndex, next);
+      }
+      return;
+    }
     if (sectionModeRef.current) {
       const remaining = Math.max(0, Math.ceil((sectionDeadline.current - Date.now()) / 1000));
       setSectionLeft(remaining);
@@ -511,14 +529,36 @@ export default function App() {
     const nextIndex = sectionIndexRef.current + 1;
     const next = sectionPlanRef.current[nextIndex];
     if (!next || next.skill === "Speaking") { finishWrittenSection(); return; }
+    // A break between sections: the student rests for the configured seconds, then the next
+    // section timer starts fresh. The answers stay locked with the finished section.
+    const current = sectionPlanRef.current[sectionIndexRef.current];
+    if (current?.breakAfter > 0) {
+      setBreakInfo({ seconds: current.breakAfter, nextSkill: next.skill });
+      breakDeadline.current = Date.now() + current.breakAfter * 1000;
+      announce(`Istirahat ${Math.round(current.breakAfter / 60)} menit sebelum bagian ${next.skill}.`);
+      return;
+    }
+    startSection(nextIndex, next);
+  }
+
+  function startSection(nextIndex, next) {
     sectionIndexRef.current = nextIndex;
     setSectionIndex(nextIndex);
+    setBreakInfo(null);
     const first = attemptRef.current?.questions.findIndex((q) => q.skill === next.skill) ?? -1;
     if (first >= 0) setIndex(first);
     sectionDeadline.current = Date.now() + next.seconds * 1000;
     setSectionLeft(next.seconds);
     sectionLocked.current = false;
     announce(`Bagian ${next.skill} dimulai.`);
+  }
+
+  function skipBreak() {
+    if (!breakInfoRef.current) return;
+    const nextIndex = sectionIndexRef.current + 1;
+    const next = sectionPlanRef.current?.[nextIndex];
+    if (!next) return;
+    startSection(nextIndex, next);
   }
   endSectionRef.current = endSection;
 
@@ -583,7 +623,9 @@ export default function App() {
         return;
       }
       if (speakingOn) {
-        await exitFullscreen();
+        // Fullscreen stays on through the speaking section: the anti-cheat rules and the
+        // keyboard lock keep applying, and the mic screen keeps the student focused.
+        await requestFullscreen();
         enterSpeaking();
       } else {
         setScreen("details");
@@ -652,7 +694,9 @@ export default function App() {
   /* ---------- Anti-cheat ---------- */
 
   function isTesting() {
-    return Boolean(attemptRef.current && !submittedRef.current && !endingRef.current && screenRef.current === "test");
+    // The speaking screen is part of the test: fullscreen, tab, and blur rules keep counting
+    // there, and the timer keeps the same protection, so the student cannot step out mid-interview.
+    return Boolean(attemptRef.current && !submittedRef.current && !endingRef.current && (screenRef.current === "test" || screenRef.current === "speaking"));
   }
   isTestingRef.current = isTesting;
 
@@ -962,6 +1006,8 @@ export default function App() {
           body: recBlob,
         });
         speakingCountRef.current += 1;
+        const current = mockupRef.current;
+        setSpeakSent((prev) => new Set(prev).add(`${current.pi}-${current.qi}`));
         clearRecording();
         advanceMockupSpeaking();
       } else {
@@ -1045,10 +1091,12 @@ export default function App() {
 
   /* ---------- Mockup speaking ---------- */
 
-  function beginMockupSpeaking() {
+  async function beginMockupSpeaking() {
     if (!mockup?.plan) return;
     clearInterval(prepTimer.current);
     prepTimer.current = null;
+    // The interview runs under the same fullscreen rule as the rest of the test.
+    await requestFullscreen();
     const speakingSeconds = sectionPlanRef.current?.find((s) => s.skill === "Speaking")?.seconds || 900;
     speakingDeadline.current = Date.now() + speakingSeconds * 1000;
     setSpeakingLeft(speakingSeconds);
@@ -1082,6 +1130,37 @@ export default function App() {
     clearRecording();
     clearCheck();
     setSendLabel("Lanjut");
+  }
+
+  /* The navigator moves between interview questions. A sent answer cannot be re-recorded (the
+     server refuses a second upload), so those only get a review view of their status. */
+  function goToMockupQuestion(pi, qi) {
+    const current = mockupRef.current;
+    if (!current?.plan) return;
+    if (recorder.current) { showToast("Selesaikan rekaman yang sedang berjalan dulu."); return; }
+    if (current.pi === pi && current.qi === qi) return;
+    setMockupQuestion(pi, qi);
+  }
+
+  function mockupQuestionOffset(delta) {
+    const current = mockupRef.current;
+    if (!current?.plan) return;
+    let { pi, qi } = current;
+    qi += delta;
+    while (qi < 0) { pi -= 1; if (pi < 0) return; qi = current.plan.parts[pi].questions.length - 1; }
+    while (qi >= current.plan.parts[pi].questions.length) { pi += 1; if (pi >= current.plan.parts.length) return; qi = 0; }
+    goToMockupQuestion(pi, qi);
+  }
+
+  function toggleSpeakFlag() {
+    const current = mockupRef.current;
+    if (!current?.plan) return;
+    const key = `${current.pi}-${current.qi}`;
+    setSpeakFlags((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key); else next.add(key);
+      return next;
+    });
   }
 
   async function playMockupVideo() {
@@ -1198,6 +1277,8 @@ export default function App() {
             onFlag={toggleFlag}
             onGoTo={goTo}
             onFinish={() => openSubmit()}
+            breakInfo={breakInfo}
+            onSkipBreak={skipBreak}
             audioSection={audioSection}
             audioPlayed={audioPlayed}
             audioNote={audioNote}
@@ -1226,6 +1307,12 @@ export default function App() {
             noteOverride={noteOverride}
             videoPlaying={videoPlaying}
             speakingLeft={speakingLeft}
+            speakSent={speakSent}
+            speakFlags={speakFlags}
+            onSpeakPrev={() => mockupQuestionOffset(-1)}
+            onSpeakNext={() => mockupQuestionOffset(1)}
+            onSpeakGoTo={goToMockupQuestion}
+            onSpeakFlag={toggleSpeakFlag}
             checkStartRef={checkStartRef}
             answerStartRef={answerStartRef}
             onStartRecording={startRecording}

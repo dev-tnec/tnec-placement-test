@@ -8,8 +8,8 @@ export const MOCKUP_SPEAKING_PARTS = [
     part: 1,
     title: "Part 1: Introduction and interview",
     instruction: "Answer the examiner's questions about yourself.",
-    prepSeconds: 0,
-    speakSeconds: 25,
+    prepSeconds: 5,
+    speakSeconds: 40,
     questions: [
       { no: 1, text: "What is your full name?", video: "/video/speaking/p1-name.mp4" },
       { no: 2, text: "Where are you from?", video: "/video/speaking/p1-where.mp4" },
@@ -50,8 +50,8 @@ export const MOCKUP_SPEAKING_PARTS = [
     part: 3,
     title: "Part 3: Discussion",
     instruction: "Answer the examiner's questions in more detail.",
-    prepSeconds: 0,
-    speakSeconds: 30,
+    prepSeconds: 10,
+    speakSeconds: 60,
     questions: [
       { no: 1, text: "What are the things that make people feel proud?", video: "/video/speaking/p3-proud-things.mp4" },
       { no: 2, text: "Do people often feel proud of themselves?", video: "/video/speaking/p3-proud-people.mp4" },

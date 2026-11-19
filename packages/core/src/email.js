@@ -314,3 +314,76 @@ export function buildCertificateEmail({ name, typeName, number }) {
   ].join("\n");
   return { subject, html, text };
 }
+
+/** The mockup completion email: the bands a student can already see on the result page, sent
+ *  right after the whole mockup including the speaking is done. overall may be null while the
+ *  speaking is still being scored; the email then says the band follows on the result page. */
+export function buildMockupDoneEmail({ name, overall, skills, resultUrl, speakingPending }) {
+  const safeName = escapeHtml(name);
+  const band = overall !== null && overall !== undefined ? String(overall) : "-";
+  const subject = "IELTS Mockup kamu sudah selesai";
+  const row = (label, value) => value === null || value === undefined
+    ? `<tr><td style="padding:10px 12px;border-bottom:1px solid ${BORDER};font-size:14px;color:${GRAY};">${label}</td><td style="padding:10px 12px;border-bottom:1px solid ${BORDER};font-size:14px;font-weight:700;color:${NAVY};text-align:right;">-</td></tr>`
+    : `<tr><td style="padding:10px 12px;border-bottom:1px solid ${BORDER};font-size:14px;color:${GRAY};">${label}</td><td style="padding:10px 12px;border-bottom:1px solid ${BORDER};font-size:14px;font-weight:700;color:${NAVY};text-align:right;">${escapeHtml(String(value))}</td></tr>`;
+  const html = `<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>${escapeHtml(subject)}</title>
+</head>
+<body style="margin:0;padding:0;background:${SURFACE};font-family:Inter,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:${NAVY};">
+  <div style="max-width:600px;margin:0 auto;padding:24px 16px;">
+    <div style="background:${NAVY};border-radius:16px 16px 0 0;padding:28px 32px;">
+      <div style="font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:${YELLOW};font-weight:700;">Titik Nol English Course</div>
+      <h1 style="margin:8px 0 0;font-size:26px;line-height:1.2;color:#FFFFFF;font-weight:800;">IELTS Mockup selesai</h1>
+    </div>
+    <div style="background:#FFFFFF;border:1px solid ${BORDER};border-top:0;border-radius:0 0 16px 16px;padding:32px;">
+      <p style="margin:0 0 20px;font-size:16px;line-height:1.6;">Halo ${safeName},</p>
+      <p style="margin:0 0 24px;font-size:16px;line-height:1.6;color:${GRAY};">
+        Terima kasih sudah menyelesaikan IELTS Mockup dari awal sampai akhir. Berikut ringkasan hasil kamu.
+      </p>
+      <table style="width:100%;border-collapse:collapse;margin:0 0 8px;">
+        ${row("Listening", skills?.find((s) => s.skill === "Listening")?.band)}
+        ${row("Reading", skills?.find((s) => s.skill === "Reading")?.band)}
+        ${row("Writing", skills?.find((s) => s.skill === "Writing")?.band)}
+        ${row("Speaking", skills?.find((s) => s.skill === "Speaking")?.band)}
+        <tr><td style="padding:12px;font-size:15px;font-weight:800;color:${NAVY};">Overall</td><td style="padding:12px;font-size:18px;font-weight:800;color:${NAVY};text-align:right;">${escapeHtml(band)}</td></tr>
+      </table>
+      ${speakingPending ? `<p style="margin:0 0 20px;font-size:14px;line-height:1.65;color:${GRAY};">Band speaking kamu masih diproses dan akan muncul di halaman hasil dalam beberapa menit.</p>` : ""}
+      <a href="${escapeHtml(resultUrl)}" style="display:block;background:${NAVY};color:#FFFFFF;text-decoration:none;text-align:center;font-size:15px;font-weight:700;padding:15px 24px;border-radius:999px;">Lihat hasil lengkap</a>
+      <p style="margin:12px 0 20px;font-size:12px;line-height:1.5;color:${GRAY};word-break:break-all;">${escapeHtml(resultUrl)}</p>
+      <p style="margin:0 0 0;font-size:14px;line-height:1.65;color:${GRAY};">
+        Band ini estimasi dari simulasi internal, bukan skor resmi IELTS. Balas email ini atau
+        hubungi WhatsApp +62 823-3314-3544 kalau ingin membahas hasil kamu.
+      </p>
+    </div>
+    <div style="padding:20px 8px;text-align:center;font-size:12px;line-height:1.6;color:${GRAY};">
+      Titik Nol English Course<br>
+      ${escapeHtml(CAMPUS_ADDRESS)}<br>
+      <span style="color:${NAVY_700};">titiknolenglish.com</span>
+    </div>
+  </div>
+</body>
+</html>`;
+  const lines = [
+    `Halo ${name},`,
+    "",
+    "Terima kasih sudah menyelesaikan IELTS Mockup dari awal sampai akhir. Berikut ringkasan hasil kamu.",
+    "",
+    `Listening: ${skills?.find((s) => s.skill === "Listening")?.band ?? "-"}`,
+    `Reading: ${skills?.find((s) => s.skill === "Reading")?.band ?? "-"}`,
+    `Writing: ${skills?.find((s) => s.skill === "Writing")?.band ?? "-"}`,
+    `Speaking: ${skills?.find((s) => s.skill === "Speaking")?.band ?? "-"}`,
+    `Overall: ${band}`,
+    "",
+    `Hasil lengkap: ${resultUrl}`,
+    "",
+    "Band ini estimasi dari simulasi internal, bukan skor resmi IELTS.",
+    "",
+    "Titik Nol English Course",
+    CAMPUS_ADDRESS,
+    "titiknolenglish.com",
+  ].join("\n");
+  return { subject, html, text: lines };
+}

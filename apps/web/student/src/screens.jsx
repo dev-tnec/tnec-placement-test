@@ -3,6 +3,7 @@ import { CHECK_SECONDS, formatTime, spanText } from "./lib.js";
 import { VoiceNote } from "./voice-note.jsx";
 import { parseRichText } from "@tnec/core/rich";
 import { BRANCHES } from "@tnec/core/branches";
+import { MOCKUP_SPEAKING_TOTAL } from "@tnec/core/speaking-mockup";
 
 const Arrow = () => (
   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
@@ -659,8 +660,18 @@ function isPreLead(invite) {
   return "Tes ini menentukan apakah kamu sudah siap lanjut ke level berikutnya. Hasilnya tercatat di data kelas kamu.";
 }
 
-export function TestScreen({ attempt, index, answers, flagged, perMode, timeLeft, questionLeft, sectionMode, sectionSkill, sectionTotal, sectionPosition, sectionLeft, sectionQuestions, finishLabel, onSectionFinish, onChoose, onAnswerText, onPrev, onNext, onSkip, onFlag, onGoTo, onFinish, audioSection, audioPlayed, audioNote, onPlayAudio, onAudioEnded, audioRef, fsWarning, finishNote }) {
+export function TestScreen({ attempt, index, answers, flagged, perMode, timeLeft, questionLeft, sectionMode, sectionSkill, sectionTotal, sectionPosition, sectionLeft, sectionQuestions, finishLabel, breakInfo, onSkipBreak, onSectionFinish, onChoose, onAnswerText, onPrev, onNext, onSkip, onFlag, onGoTo, onFinish, audioSection, audioPlayed, audioNote, onPlayAudio, onAudioEnded, audioRef, fsWarning, finishNote }) {
   const question = attempt.questions[index];
+  const textAnswerRef = useRef(null);
+  // A typed-answer question grabs the focus as soon as it appears, so the keyboard opens at once
+  // on the phone and typing starts without tapping the field first. Longtext needs no focus steal:
+  // the student reads the task, then taps.
+  useEffect(() => {
+    if (question?.type === "text" && textAnswerRef.current) {
+      const timer = setTimeout(() => textAnswerRef.current?.focus({ preventScroll: true }), 60);
+      return () => clearTimeout(timer);
+    }
+  }, [question?.id, question?.type]);
   if (!question) return null;
   const total = attempt.total;
   const section = question.sectionId ? attempt.sections.find((item) => item.id === question.sectionId) : null;
@@ -725,6 +736,18 @@ export function TestScreen({ attempt, index, answers, flagged, perMode, timeLeft
           </p>
         ) : null}
 
+        {breakInfo ? (
+          <div className="break-card" id="break-card" role="status">
+            <p className="eyebrow">Istirahat</p>
+            <h2 className="break-card__title">Bagian {sectionSkill} selesai.</h2>
+            <p className="break-card__lead">
+              Rehat dulu sebelum bagian {breakInfo.nextSkill} dimulai. Waktu istirahatmu:
+            </p>
+            <p className="break-card__time" id="break-time" role="timer">{formatTime(breakInfo.seconds)}</p>
+            <p className="break-card__note">Jawabanmu sudah tersimpan. Bagian berikutnya terbuka otomatis ketika waktunya habis.</p>
+            <button className="btn btn--primary btn--lg" id="break-skip" type="button" onClick={onSkipBreak}>Lewati istirahat, mulai sekarang</button>
+          </div>
+        ) : (
         <div className="test-grid">
           <div className="test-main">
             {audioSection ? (
@@ -781,7 +804,19 @@ export function TestScreen({ attempt, index, answers, flagged, perMode, timeLeft
                   {question.type === "text" ? (
                     <div className="field answer-field">
                       <label className="label" htmlFor={`q-${question.id}`}>Jawaban kamu</label>
-                      <input className="input" id={`q-${question.id}`} type="text" autoComplete="off" maxLength={300} value={answer || ""} onChange={(event) => onAnswerText(question.id, event.target.value)} />
+                      <input
+                        className="input"
+                        id={`q-${question.id}`}
+                        type="text"
+                        autoComplete="off"
+                        maxLength={300}
+                        value={answer || ""}
+                        ref={textAnswerRef}
+                        // Enter on laptop and phone keyboards sends the answer and moves on,
+                        // so the student never chases the Lanjut button with the mouse.
+                        onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); onNext(); } }}
+                        onChange={(event) => onAnswerText(question.id, event.target.value)}
+                      />
                     </div>
                   ) : question.type === "longtext" ? (
                     <div className="field answer-field">
@@ -863,24 +898,27 @@ export function TestScreen({ attempt, index, answers, flagged, perMode, timeLeft
             </div>
           </aside>
         </div>
+        )}
 
+        {!breakInfo ? (
         <div className="kbd-hint">
           <span className="kbd-hint__group"><kbd>A</kbd><kbd>B</kbd><kbd>C</kbd><kbd>D</kbd><span>untuk memilih</span></span>
           <span className="kbd-hint__group"><kbd>←</kbd><kbd>→</kbd><span>untuk berpindah soal</span></span>
           <span className="kbd-hint__group kbd-hint__enter"><kbd>Enter</kbd><span>lanjut</span></span>
         </div>
+        ) : null}
       </div>
     </section>
   );
 }
 
-export function SpeakingScreen({ stage, mockup, speaking, recording, speakError, showSkip, checkUrl, recUrl, speakBusy, prepLeft, canRecord, sendLabel, checkStartHidden, noteOverride, videoPlaying, speakingLeft, checkStartRef, answerStartRef, onStartRecording, onStop, onRetryCheck, onCheckOk, onRetake, onSend, onSkip, onPlayVideo, onVideoEnded, onVideoError, videoRef, waveContainerRef, onOpenPrivacy, titleRef }) {
+export function SpeakingScreen({ stage, mockup, speaking, recording, speakError, showSkip, checkUrl, recUrl, speakBusy, prepLeft, canRecord, sendLabel, checkStartHidden, noteOverride, videoPlaying, speakingLeft, speakSent, speakFlags, onSpeakPrev, onSpeakNext, onSpeakGoTo, onSpeakFlag, checkStartRef, answerStartRef, onStartRecording, onStop, onRetryCheck, onCheckOk, onRetake, onSend, onSkip, onPlayVideo, onVideoEnded, onVideoError, videoRef, waveContainerRef, onOpenPrivacy, titleRef }) {
   const isMockup = Boolean(mockup?.started);
   const part = mockup?.plan?.parts[mockup.pi];
   const question = part?.questions[mockup.qi];
   const prompt = isMockup ? question?.text || "" : speaking?.prompt || "";
   const stepMeta = isMockup
-    ? `Part ${part?.part || 1} · Pertanyaan ${(mockup?.qi || 0) + 1} dari ${part?.questions.length || 1}`
+    ? `Part ${part?.part || 1} - Pertanyaan ${(mockup?.qi || 0) + 1} dari ${part?.questions.length || 1}`
     : speaking?.total > 1 ? `Pertanyaan ${(speaking?.index ?? 0) + 1} dari ${speaking.total}`
       : "Langkah 2 dari 2";
   const checkLead = isMockup
@@ -890,9 +928,15 @@ export function SpeakingScreen({ stage, mockup, speaking, recording, speakError,
     ? "Dengarkan jawaban kamu. Kalau ada yang kurang jelas, rekam ulang. Kalau sudah pas, kirim rekamannya."
     : isMockup
       ? part?.part === 2
-        ? "Tonton examiner, gunakan 60 detik untuk menyiapkan jawaban, lalu rekam."
+        ? "Bicara 1 sampai 2 menit. Gunakan poin di bawah sebagai panduan."
         : "Tonton pertanyaan dari examiner, lalu rekam jawabanmu. Kamu bisa memutar ulang pertanyaannya sebelum mulai."
       : `Jawab dalam bahasa Inggris selama ${speaking?.minSeconds || 15} sampai ${speaking?.seconds || 45} detik, dalam satu tarikan tanpa membaca teks. Tekan Mulai jawab saat kamu siap.`);
+  const key = isMockup ? `${mockup.pi}-${mockup.qi}` : "";
+  const isSent = isMockup && speakSent.has(key);
+  const isFlagged = isMockup && speakFlags.has(key);
+  const speakLimit = isMockup ? part?.speakSeconds : speaking?.seconds || 45;
+  // The phase strip mirrors the template: Persiapan, Rekam, Dengar ulang, Terkirim.
+  const phase = isSent ? 3 : recUrl ? 2 : recording ? 1 : prepLeft !== null ? 0 : -1;
 
   const speakingTimer = speakingLeft !== null ? (
     <span className={`timer${speakingLeft <= 60 ? " is-warning" : ""}`} role="timer" aria-live="off">
@@ -913,10 +957,46 @@ export function SpeakingScreen({ stage, mockup, speaking, recording, speakError,
     </>
   );
 
+  /* The mockup speaking navigator: every interview question with its state, matching the
+     multiple-choice navigator pattern. The placement flow has no navigator. */
+  const navigator = isMockup && stage === "answer" ? (
+    <aside className="side" aria-labelledby="speak-nav-title">
+      <div className="navigator">
+        <div className="navigator__head">
+          <h2 className="navigator__title" id="speak-nav-title">Daftar jawaban speaking</h2>
+          <p className="navigator__count" id="speak-nav-count">{speakSent.size} dari {MOCKUP_SPEAKING_TOTAL} terkirim</p>
+        </div>
+        <div className="nav-groups" id="speak-nav-groups">
+          {mockup.plan.parts.map((p, pi) => (
+            <div className="nav-group" key={p.part}>
+              <p className="nav-group__title">Part {p.part}</p>
+              <div className="nav-grid">
+                {p.questions.map((q, qi) => {
+                  const qKey = `${pi}-${qi}`;
+                  const sent = speakSent.has(qKey);
+                  const current = pi === mockup.pi && qi === mockup.qi;
+                  return (
+                    <button
+                      key={qKey}
+                      type="button"
+                      className={`nav-btn${sent ? " is-answered" : ""}${current ? " is-current" : ""}${speakFlags.has(qKey) ? " is-flagged" : ""}`}
+                      title={`Soal ${pi * 100 + qi + 1}: ${sent ? "terkirim" : "belum dikirim"}`}
+                      onClick={() => onSpeakGoTo(pi, qi)}
+                    >{pi * 100 + qi + 1}</button>
+                  );
+                })}
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </aside>
+  ) : null;
+
   return (
     <section className="screen" id="screen-speaking" aria-labelledby="speaking-title">
       <div className="wrap wrap--details speak-wrap">
-        <div className="speaking-grid">
+        <div className="speaking-grid speak-grid--wide">
           {stage === "check" ? (
             <div className="question-card" id="speak-check-card">
               <div className="question-card__top">
@@ -956,51 +1036,105 @@ export function SpeakingScreen({ stage, mockup, speaking, recording, speakError,
               </div>
             </div>
           ) : (
-            <div className="question-card" id="speak-answer-card">
-              <div className="question-card__top">
-                <span className="badge">{isMockup ? "IELTS Mockup Speaking" : "Bagian speaking"}</span>
-                <div className="speak-top__meta">
-                  <span className="question-card__meta" id="speaking-step">{stepMeta}</span>
-                  {speakingTimer}
-                </div>
-              </div>
-              <div className="question-card__body">
-                <p className="eyebrow">Pertanyaan speaking</p>
-                {isMockup ? (
-                  <div className="speak-video" id="speak-video-wrap">
-                    <video key={`${mockup?.pi}-${mockup?.qi}`} id="speak-video" ref={videoRef} playsInline preload="metadata" src={question?.video} onEnded={onVideoEnded} onError={onVideoError} />
-                    <button className="btn btn--secondary btn--sm" id="speak-video-play" type="button" onClick={onPlayVideo} disabled={videoPlaying}>Putar pertanyaan</button>
+            <>
+              <div className="speak-main-col">
+                <div className="speak-qhead">
+                  <div className="speak-qhead__chips">
+                    {isMockup && mockup.plan.parts.length > 1 ? <span className="badge badge--solid">Part {part?.part || 1}</span> : null}
+                    <span className="badge">{isMockup ? `Soal ${mockup.pi * 100 + mockup.qi + 1} dari ${MOCKUP_SPEAKING_TOTAL}` : stepMeta}</span>
                   </div>
-                ) : null}
-                <div className="prompt-canvas"><p className="question__prompt" id="speaking-prompt">{prompt}</p></div>
-                {isMockup && part?.cue ? (
-                  <div className="speak-cue" id="speaking-cue">
-                    {part.cue.map((line, i) => <p className={i === 0 ? "speak-cue__title" : "speak-cue__line"} key={line}>{line}</p>)}
-                  </div>
-                ) : null}
-                <p className="speaking-lead" id="speak-note">{answerNote}</p>
-                {prepLeft !== null ? <p className="micro" id="speak-prep">Waktu persiapan: {prepLeft} detik</p> : null}
-                {feedback}
-                <div className="speak-actions">
-                  {canRecord && !recording && !recUrl ? (
-                    <button className="btn btn--primary btn--lg" id="speak-start" ref={answerStartRef} type="button" onClick={() => onStartRecording("answer")} disabled={speakBusy}><Mic /> Mulai jawab</button>
-                  ) : null}
-                  {recording ? (
-                    <button className="btn btn--navy btn--lg" id="speak-stop" type="button" onClick={onStop} disabled={recording.elapsed < (speaking?.min || 1)}><Stop /> Selesai menjawab</button>
+                  {isMockup ? (
+                    <button className={`speak-flag-btn${isFlagged ? " is-on" : ""}`} id="speak-flag" type="button" aria-pressed={isFlagged} onClick={onSpeakFlag}>
+                      <Flag /> {isFlagged ? "Ditandai" : "Tandai soal"}
+                    </button>
                   ) : null}
                 </div>
-                {recUrl ? (
-                  <div className="speak-review" id="speak-review">
-                    <audio id="speak-audio" controls preload="metadata" src={recUrl} />
-                    <div className="speak-review__actions">
-                      <button className="btn btn--secondary" id="speak-retake" type="button" onClick={onRetake} disabled={speakBusy}>Rekam ulang</button>
-                      <button className="btn btn--primary" id="speak-send" type="button" onClick={onSend} disabled={speakBusy}><span id="speak-send-label">{sendLabel}</span> <Arrow /></button>
+                <div className="question-card" id="speak-answer-card">
+                  <div className="question-card__top">
+                    <span className="badge">{isMockup ? "IELTS Mockup Speaking" : "Bagian speaking"}</span>
+                    <div className="speak-top__meta">
+                      <span className="question-card__meta" id="speaking-step">{stepMeta}</span>
+                      {speakingTimer}
                     </div>
                   </div>
+                  <div className="question-card__body">
+                    <h1 className="speaking-title" id="speaking-title" tabIndex={-1} ref={titleRef}>{part?.cue ? "Tugas panjang dari examiner" : "Jawab pertanyaannya"}</h1>
+                    {isMockup ? (
+                      <div className="speak-video" id="speak-video-wrap">
+                        <video key={`${mockup?.pi}-${mockup?.qi}`} id="speak-video" ref={videoRef} playsInline preload="metadata" src={question?.video} onEnded={onVideoEnded} onError={onVideoError} />
+                        <button className="btn btn--secondary btn--sm" id="speak-video-play" type="button" onClick={onPlayVideo} disabled={videoPlaying}>Putar pertanyaan</button>
+                      </div>
+                    ) : null}
+                    <p className="eyebrow">Pertanyaan</p>
+                    <div className="prompt-canvas"><p className="question__prompt" id="speaking-prompt">{prompt}</p></div>
+                    {isMockup && part?.cue ? (
+                      <div className="speak-cue" id="speaking-cue">
+                        {part.cue.map((line, i) => <p className={i === 0 ? "speak-cue__title" : "speak-cue__line"} key={line}>{line}</p>)}
+                      </div>
+                    ) : null}
+                    {!isSent ? (
+                      <>
+                        <div className="speak-phases" aria-hidden="true">
+                          <span className={phase === 0 ? "is-on" : phase > 0 ? "is-done" : ""}>Persiapan</span>
+                          <span className={phase === 1 ? "is-on" : phase > 1 ? "is-done" : ""}>Rekam</span>
+                          <span className={phase === 2 ? "is-on" : phase > 2 ? "is-done" : ""}>Dengar ulang</span>
+                          <span className={phase === 3 ? "is-on" : ""}>Terkirim</span>
+                        </div>
+                        {prepLeft !== null ? (
+                          <div className="speak-prep" id="speak-prep" role="timer">
+                            <span className="speak-prep__ring" style={{ "--p": String(Math.max(0, 100 - (prepLeft / Math.max(1, part?.prepSeconds || speaking?.minSeconds || 1)) * 100)) }}>
+                              <b>{prepLeft}</b>
+                            </span>
+                            <p className="speak-prep__text"><strong>Waktu persiapan</strong> Susun ide jawabanmu. Rekamannya bisa dimulai kapan pun.</p>
+                          </div>
+                        ) : null}
+                        <p className="speaking-lead" id="speak-note">{answerNote}</p>
+                        {feedback}
+                        <div className="speak-actions">
+                          {canRecord && !recording && !recUrl ? (
+                            <button className="btn btn--primary btn--lg" id="speak-start" ref={answerStartRef} type="button" onClick={() => onStartRecording("answer")} disabled={speakBusy}><Mic /> Mulai jawab</button>
+                          ) : null}
+                          {prepLeft !== null && !recording ? (
+                            <button className="btn btn--secondary btn--lg" id="speak-skip-prep" type="button" onClick={() => onStartRecording("answer")} disabled={speakBusy}>Lewati persiapan, rekam sekarang</button>
+                          ) : null}
+                          {recording ? (
+                            <button className="btn btn--navy btn--lg" id="speak-stop" type="button" onClick={onStop} disabled={recording.elapsed < (speaking?.min || 1)}><Stop /> Selesai menjawab</button>
+                          ) : null}
+                        </div>
+                        {recording ? (
+                          <div className="speak-limitbar" aria-hidden="true">
+                            <span style={{ width: `${Math.min(100, ((recording.elapsed || 0) / speakLimit) * 100)}%` }} />
+                          </div>
+                        ) : null}
+                        {recUrl ? (
+                          <div className="speak-review" id="speak-review">
+                            <strong className="speak-review__label">Dengarkan rekamanmu ({formatTime(recording?.elapsed || speakLimit)})</strong>
+                            <audio id="speak-audio" controls preload="metadata" src={recUrl} />
+                            <div className="speak-review__actions">
+                              <button className="btn btn--secondary" id="speak-retake" type="button" onClick={onRetake} disabled={speakBusy}>Rekam ulang</button>
+                              <button className="btn btn--primary" id="speak-send" type="button" onClick={onSend} disabled={speakBusy}><span id="speak-send-label">{sendLabel}</span> <Arrow /></button>
+                            </div>
+                          </div>
+                        ) : null}
+                      </>
+                    ) : (
+                      <div className="speak-sent" role="status">
+                        <Check /> Jawaban terkirim. Pilih soal lain di daftar sebelah, atau tunggu bagian ini selesai.
+                      </div>
+                    )}
+                    <p className="micro speak-privacy">Rekaman dinilai otomatis dan dihapus 30 hari setelah tes. Detailnya ada di <button className="link-inline" type="button" onClick={onOpenPrivacy}>Kebijakan Privasi</button>.</p>
+                  </div>
+                </div>
+                {isMockup ? (
+                  <div className="speak-botnav">
+                    <button className="btn btn--secondary" id="speak-prev" type="button" onClick={onSpeakPrev} disabled={mockup.pi === 0 && mockup.qi === 0}><Back /> Sebelumnya</button>
+                    <span className="speak-botnav__mid">Soal {mockup.pi * 100 + mockup.qi + 1}/{MOCKUP_SPEAKING_TOTAL}</span>
+                    <button className="btn btn--navy" id="speak-next" type="button" onClick={onSpeakNext} disabled={mockup.pi === mockup.plan.parts.length - 1 && mockup.qi === part.questions.length - 1}>Berikutnya <Arrow /></button>
+                  </div>
                 ) : null}
-                <p className="micro speak-privacy">Rekaman dinilai otomatis dan dihapus 30 hari setelah tes. Detailnya ada di <button className="link-inline" type="button" onClick={onOpenPrivacy}>Kebijakan Privasi</button>.</p>
               </div>
-            </div>
+              {navigator}
+            </>
           )}
         </div>
       </div>

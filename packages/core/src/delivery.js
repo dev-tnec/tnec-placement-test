@@ -9,8 +9,8 @@
 
 import { nowSeconds } from "./http.js";
 import { loadLevels, levelFor, publicLevel, addActivity } from "./store.js";
-import { buildResultEmail } from "./email.js";
-import { sendWhatsApp, buildResultWhatsApp, PLACEMENT_LEAD_SOURCE } from "./whatsapp.js";
+import { buildResultEmail, buildMockupDoneEmail } from "./email.js";
+import { sendWhatsApp, buildResultWhatsApp, buildMockupDoneWhatsApp, PLACEMENT_LEAD_SOURCE } from "./whatsapp.js";
 import { isFinalStatus, speakingFacts } from "./speaking-result.js";
 
 // A result with a speaking recording waits until that recording is graded, graded by hand, or
@@ -155,4 +155,63 @@ async function sendResultEmail(env, facts) {
     console.error("email failed", error);
     return { ok: false, status: `failed: ${String(error).slice(0, 180)}` };
   }
+}
+
+/**
+ * The mockup completion notification, sent in the background right after a submitted IELTS mockup
+ * attempt has nothing left to process (writing graded or failed, speaking done or skipped). It
+ * reuses the placement lease column so two servers never send it twice, and it is one-shot: the
+ * channels flip straight to sent or failed, never back to pending.
+ */
+export async function deliverMockupDone(env, attemptId) {
+  const attempt = await env.DB.prepare(
+    "SELECT a.id, a.student_id, a.name, a.email, a.whatsapp, a.bands, a.delivery_lease_until, s.email AS student_email, s.whatsapp AS student_whatsapp FROM attempts a LEFT JOIN students s ON s.id = a.student_id WHERE a.id = ?",
+  ).bind(attemptId).first();
+  if (!attempt || !attempt.student_id) return null;
+  const now = nowSeconds();
+  const claimed = await env.DB.prepare(
+    "UPDATE attempts SET delivery_lease_until = ? WHERE id = ? AND delivery_lease_until IS NULL RETURNING id",
+  ).bind(now + LEASE_SECONDS, attemptId).first();
+  if (!claimed) return null; // another server is sending it, or it was already sent
+  const email = attempt.email || attempt.student_email;
+  const whatsapp = attempt.whatsapp || attempt.student_whatsapp;
+  const stored = attempt.bands ? JSON.parse(attempt.bands) : null;
+  const facts = {
+    name: attempt.name,
+    overall: stored?.overall ?? null,
+    skills: stored?.skills || [],
+    resultUrl: `${env.PUBLIC_WEB_URL}/hasil?attempt=${encodeURIComponent(attemptId)}`,
+    speakingPending: false,
+  };
+  const [mail, wa] = await Promise.all([
+    email ? (async () => {
+      if (!env.SEND_EMAIL) return { ok: false, status: EMAIL_SKIPPED };
+      const { subject, html, text } = buildMockupDoneEmail(facts);
+      try {
+        await env.SEND_EMAIL.send({ from: env.RESULT_FROM_EMAIL || DEFAULT_FROM, to: email, subject, html, text });
+        return { ok: true, status: "sent" };
+      } catch (error) {
+        console.error("mockup done email failed", error);
+        return { ok: false, status: `failed: ${String(error).slice(0, 180)}` };
+      }
+    })() : null,
+    whatsapp ? sendWhatsApp(env, { to: whatsapp, text: buildMockupDoneWhatsApp(facts), timeoutMs: WHATSAPP_TIMEOUT_MS }) : null,
+  ]);
+  const at = nowSeconds();
+  const lines = [];
+  if (mail) {
+    lines.push(addActivity(env, attempt.student_id, "email", mail.ok
+      ? `Email rangkuman IELTS Mockup terkirim ke ${email}.`
+      : `Email rangkuman IELTS Mockup gagal terkirim ke ${email}.`, null, { attemptId }, at));
+  }
+  if (wa) {
+    lines.push(env.DB.prepare("INSERT INTO wa_messages (student_id, to_number, text, status, provider_message_id, error, created_at, created_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?)")
+      .bind(attempt.student_id, whatsapp, buildMockupDoneWhatsApp(facts), wa.status, wa.messageId || null, wa.error || null, at, "Sistem"));
+    lines.push(addActivity(env, attempt.student_id, "wa", wa.ok
+      ? `Rangkuman IELTS Mockup terkirim lewat WhatsApp:\n${buildMockupDoneWhatsApp(facts)}`
+      : `Rangkuman IELTS Mockup gagal terkirim lewat WhatsApp. ${wa.error}`, null, { attemptId }, at));
+  }
+  lines.push(env.DB.prepare("UPDATE attempts SET delivery_lease_until = NULL WHERE id = ?").bind(attemptId));
+  await env.DB.batch(lines);
+  return { email: mail ? mail.status : null, whatsapp: wa ? wa.status : null };
 }
