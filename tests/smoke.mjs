@@ -33,7 +33,7 @@ import {
 import { buildEnv } from "@tnec/core/env";
 import { announceSetup, createAdminHandler } from "../apps/admin/server.js";
 import {
-  BUILT_IN_FIELDS, CERT_DIR, TEMPLATES, certificatePdfHtml, englishDate, formatCertificateNumber, isIsoDate,
+  BUILT_IN_FIELDS, CERT_DIR, TEMPLATES, englishDate, formatCertificateNumber, isIsoDate,
   numberFormatProblem, numberPattern, periodKey, renderCertificateHtml,
 } from "../apps/admin/src/certificates.js";
 
@@ -552,20 +552,18 @@ assert.ok(certHtml.includes('class="cert-void"'), "a cancelled certificate carri
 assert.ok(certHtml.includes('href="logo.css"'), "the template keeps its relative stylesheet links");
 assert.equal(/\{\{\w+\}\}/.test(certHtml), false, "no placeholder is left on the page");
 
-// The PDF render sends the template as one string to Cloudflare, so its own stylesheets and
-// drawings must travel inside it; a relative link or image would load nothing there.
-const pdfHtml = await certificatePdfHtml("completion", {
-  nomor: "1/COMP/TNEC/XI/2026", nama: "Rani", tanggal: "15 November 2026", penanda_tangan: "A", jabatan: "B",
-  program: "General English", nilai_akhir: "87", listening_nilai: "88", listening_grade: "A",
-  speaking_nilai: "85", speaking_grade: "A", reading_nilai: "90", reading_grade: "A",
-  writing_nilai: "84", writing_grade: "B", mulai: "12 August 2026", selesai: "15 November 2026",
-});
-assert.equal(/<link rel="stylesheet"/.test(pdfHtml), false, "the PDF HTML carries no stylesheet link");
-assert.equal(/<img[^>]+src="[^"]+\.svg"/.test(pdfHtml), false, "no SVG image tag is left");
-assert.ok(/<svg[^>]*class="bg"/.test(pdfHtml), "the drawing travels as inline SVG, which Chrome keeps vector");
-assert.equal(/filter="url\(#/.test(pdfHtml), false, "the PDF HTML drops SVG filters, which Chrome rasterizes into megabytes of pixels");
-assert.ok(pdfHtml.includes("@page { size: A4 portrait"), "the template's page size travels with the PDF HTML");
-assert.equal(await certificatePdfHtml("nope", {}), null, "an unknown template has no PDF HTML");
+// The certificate PDF is composed by @react-pdf/renderer inside the admin Node process, so every
+// template must produce a real PDF with the fonts shipped in apps/admin/assets/fonts, and the
+// render path must not call Cloudflare anymore.
+const pdfSamples = await import("@tnec/core/certificate-pdf");
+for (const [key, sample] of Object.entries(pdfSamples.CERTIFICATE_PDF_SAMPLES)) {
+  const bytes = await pdfSamples.renderCertificatePdf(key, sample);
+  assert.equal(bytes.subarray(0, 4).toString("latin1"), "%PDF", `${key} renders a PDF`);
+  assert.ok(bytes.length < 5 * 1024 * 1024, `${key} stays under 5 MB`);
+  const raw = bytes.toString("latin1");
+  assert.ok(!raw.includes("api.cloudflare.com"), `${key} render mentions no Cloudflare endpoint`);
+}
+await assert.rejects(() => pdfSamples.renderCertificatePdf("nope", {}), "an unknown template has no PDF");
 
 // The React test runner build output is committed too, so Render needs no build command.
 // The Node build writes runner-manifest.json, and the web server builds the shell from it.

@@ -1,6 +1,6 @@
 # PRD: Sertifikat PDF dengan @react-pdf/renderer
 
-Status: draf untuk direview. Tanggal: 19 November 2026.
+Status: diterima, diimplementasikan 19 November 2026. Foto 3 x 4 dihapus dari sertifikat sesuai keputusan pemilik.
 
 ## 1. Ringkasan
 

@@ -11,6 +11,7 @@ import { addActivity, newId } from "@tnec/core/store";
 import { escapeHtml, buildCertificateEmail } from "@tnec/core/email";
 import { randomToken } from "@tnec/core/crypto";
 import { sendWhatsApp, whatsappConfigured } from "@tnec/core/whatsapp";
+import { renderCertificatePdf } from "@tnec/core/certificate-pdf";
 
 export const CERT_DIR = resolve(dirname(fileURLToPath(import.meta.url)), "../certificates");
 
@@ -352,75 +353,28 @@ export async function certificateAction(request, env, user, url, id, action) {
 }
 
 /* ===================== Sending the certificate to the student ===================== */
-// The PDF is rendered from the same template the print page uses, by Cloudflare Browser Run, at
-// the moment the team presses send. The upload stays as an override for a hand-made file. The
-// WhatsApp send needs a URL AttCos can fetch, so the row carries a random token and the admin
-// app serves the file at /cert-file/<token>.
+// The PDF is composed by @react-pdf/renderer inside this Node process, per
+// docs/prd-certificate-pdf-react.md, at the moment the team presses send. No browser, no
+// external service. The upload stays as an override for a hand-made file. The WhatsApp send
+// needs a URL AttCos can fetch, so the row carries a random token and the admin app serves
+// the file at /cert-file/<token>.
 
 const PDF_MAX_BYTES = 5 * 1024 * 1024;
-const BROWSER_PDF_API = "https://api.cloudflare.com/client/v4";
-const BROWSER_PDF_TIMEOUT = 45000;
 
-/** The template HTML with its own stylesheets inlined and its drawings turned into inline SVG,
- *  because Browser Run renders the string without a base URL and Chrome rasterizes an <img> SVG
- *  into a heavy image, which makes the PDF slow to open on a phone. */
-export async function certificatePdfHtml(templateKey, values) {
-  const template = TEMPLATES[templateKey];
-  if (!template) return null;
-  let html = fillTemplate(await readFile(resolve(CERT_DIR, template.file), "utf8"), values);
-  for (const match of [...html.matchAll(/<link rel="stylesheet" href="([^"]+)">/g)]) {
-    const css = await readFile(resolve(CERT_DIR, match[1]), "utf8");
-    html = html.replace(match[0], () => `<style>\n${css}\n</style>`);
-  }
-  for (const match of [...html.matchAll(/<img([^>]*?)src="([^"]+\.svg)"([^>]*)>/g)]) {
-    const svg = await readFile(resolve(CERT_DIR, match[2]), "utf8");
-    const cls = ((match[1] + match[3]).match(/class="([^"]*)"/) || [])[1];
-    let inline = svg.replace(/<\?xml[^>]*\?>\s*/, "");
-    // Chrome turns any filtered shape into a heavy raster image (the top sweep alone became
-    // about 3 MB of pixels and made the PDF slow to open on a phone). The shadows are barely
-    // visible on paper, so the PDF drops the filters and keeps the shapes vector; the print
-    // page still carries them.
-    inline = inline.replace(/\s+filter="url\(#[^)]+\)"/g, "");
-    inline = inline.replace(/<svg([^>]*)>/, (_, attrs) => `<svg${attrs}${cls ? ` class="${cls}"` : ""} width="100%" height="100%">`);
-    html = html.replace(match[0], () => inline);
-  }
-  return html;
-}
-
-/** Renders the certificate to a PDF with Cloudflare Browser Run, stores it on the row, and
- *  returns the row with the bytes. A missing token or a failed render is a clear 5xx, and the
- *  team can still upload a PDF by hand. */
+/** Composes the certificate PDF with @react-pdf/renderer, stores it on the row, and returns the
+ *  row with the bytes. A failed render is a clear 5xx, and the team can still upload a PDF by
+ *  hand. */
 async function generateCertificatePdf(env, c, user) {
-  if (!env.CLOUDFLARE_BROWSER_TOKEN) {
-    throw new HttpError(503, "PDF sertifikat belum bisa dibuat otomatis di server ini. Isi CLOUDFLARE_BROWSER_TOKEN, atau unggah PDF-nya dari halaman cetak.");
-  }
   const template = TEMPLATES[c.template];
   if (!template) throw new HttpError(409, "Template sertifikat ini tidak ditemukan, jadi PDF-nya tidak bisa dibuat.");
-  const html = await certificatePdfHtml(c.template, certificateValues(c, template, parseDetails(c.details)));
-  let response;
+  let pdf;
   try {
-    response = await fetch(`${BROWSER_PDF_API}/accounts/${env.CLOUDFLARE_ACCOUNT_ID}/browser-rendering/pdf`, {
-      method: "POST",
-      headers: { Authorization: `Bearer ${env.CLOUDFLARE_BROWSER_TOKEN}`, "Content-Type": "application/json" },
-      body: JSON.stringify({
-        html,
-        pdfOptions: { format: "a4", printBackground: true, preferCSSPageSize: true, margin: { top: 0, right: 0, bottom: 0, left: 0 } },
-        gotoOptions: { waitUntil: "load", timeout: 30000 },
-        actionTimeout: 30000,
-      }),
-      signal: AbortSignal.timeout(BROWSER_PDF_TIMEOUT),
-    });
+    pdf = Buffer.from(await renderCertificatePdf(c.template, certificateValues(c, template, parseDetails(c.details))));
   } catch (error) {
-    throw new HttpError(502, `PDF sertifikat gagal dibuat: ${String(error.message || error).slice(0, 160)}`);
+    throw new HttpError(500, `PDF sertifikat gagal dibuat: ${String(error.message || error).slice(0, 160)}. Unggah PDF-nya dari halaman cetak kalau masih perlu dikirim.`);
   }
-  if (!response.ok) {
-    const data = await response.json().catch(() => null);
-    const message = data?.errors?.[0]?.message || `HTTP ${response.status}`;
-    throw new HttpError(502, `PDF sertifikat gagal dibuat: ${String(message).slice(0, 160)}`);
-  }
-  const pdf = Buffer.from(await response.arrayBuffer());
   if (pdf.length < 4 || pdf.subarray(0, 4).toString("latin1") !== "%PDF") {
-    throw new HttpError(502, "Layanan PDF mengirim berkas yang bukan PDF. Coba lagi.");
+    throw new HttpError(502, "Penyusun PDF mengirim berkas yang bukan PDF. Coba lagi.");
   }
   if (pdf.length > PDF_MAX_BYTES) throw new HttpError(502, "PDF hasil render lebih dari 5 MB, jadi tidak disimpan. Periksa template sertifikatnya.");
   const name = `${c.number.replace(/[^\w-]+/g, "-")}.pdf`;
