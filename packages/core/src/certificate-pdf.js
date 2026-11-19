@@ -167,14 +167,14 @@ function LandscapeCertificate({ values, variant }) {
     h(Text, { style: { position: "absolute", top: mm(68.5), left: 0, right: 0, textAlign: "center", fontSize: 3.3 * MM, fontFamily: "Inter", color: navy } },
       variant === "ielts" ? `No. certificate: ${values.nomor}` : `No. Certificate: ${values.nomor}`),
     h(Text, { style: { position: "absolute", top: mm(76), left: 0, right: 0, textAlign: "center", fontSize: 10.6 * MM, fontFamily: "Gelasio", fontWeight: 400, color: navy } }, "Certificate of Achievement"),
-    // Ribbon with notched ends, drawn as a polygon, with the caption centered inside it.
-    // react-pdf has no verticalAlign, so the caption is one absolutely positioned Text whose
-    // height is the ribbon height and whose lineHeight centers the glyphs, and it carries its
-    // own width so nothing can truncate it into an ellipsis.
+    // Ribbon with notched ends, drawn as a polygon. The caption is a page-level centered Text
+    // like the title above it: left 0, right 0, textAlign center, and a top that puts the
+    // glyph line in the middle of the ribbon (87.3mm plus half the 8.8mm band, minus half the
+    // 3.9mm line). Absolute Text with negative margins does not render in react-pdf.
     h(Svg, { style: { position: "absolute", top: mm(87.3), left: "50%", marginLeft: mm(-31) }, width: mm(62), height: mm(8.8), viewBox: "0 0 62 8.8" },
       h(Polygon, { points: "0,0 62,0 60.45,4.4 62,8.8 0,8.8 1.55,4.4", fill: ribbonFill }),
     ),
-    h(Text, { style: { position: "absolute", top: mm(87.3), left: "50%", marginLeft: mm(-31), width: mm(62), height: mm(8.8), textAlign: "center", lineHeight: mm(8.8), fontSize: 3.9 * MM, color: "#FFFFFF", fontFamily: "Inter" } }, "This is to certify that"),
+    h(Text, { style: { position: "absolute", top: mm(89.6), left: 0, right: 0, textAlign: "center", fontSize: 3.9 * MM, color: "#FFFFFF", fontFamily: "Inter" } }, "This is to certify that"),
     // Score block
     h(View, { style: { position: "absolute", top: mm(98), left: "31.9%", width: "37%" } },
       h(Text, { style: { fontSize: 5.6 * MM, fontWeight: 600, lineHeight: 1.15, paddingBottom: 2.2 * MM, borderBottomWidth: 0.5 * MM, borderBottomColor: navy, textAlign: "center", fontFamily: "Gelasio", color: navy } }, values.nama),
