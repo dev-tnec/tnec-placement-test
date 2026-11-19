@@ -1,0 +1,810 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TNEC - Pratinjau Halaman Speaking</title>
+<!--
+  TNEC Speaking Page Preview (Placement Test & IELTS Mockup)
+  - Built strictly on TNEC brand tokens (Navy #0A1B38, Warm Paper #F4F3F0, Red #E3201F, Yellow #F7B500).
+  - Interactive preview: a mode switcher toggles the placement speaking flow (mic check, then one or more
+    bank questions) and the IELTS Mockup interview (examiner video, Part 2 cue card, preparation timer).
+  - The recording states, the review audio, and the skip path mirror the real runner in
+    apps/web/student/src/screens.jsx, so what you approve here is what gets ported to React.
+-->
+<style>
+:root {
+  --navy-900: #0A1B38;
+  --navy-800: #10264A;
+  --navy-700: #16325C;
+  --navy-600: #22456F;
+  --red-500: #E3201F;
+  --red-600: #C41615;
+  --red-50: #FDECEC;
+  --yellow-400: #F7B500;
+  --yellow-50: #FFF6DC;
+  --white: #FFFFFF;
+  --gray-50: #F4F3F0;
+  --gray-200: #E6E2D9;
+  --gray-300: #EDEAE3;
+  --surface-50: #F7F8FA;
+  --text-primary: #0A1B38;
+  --text-secondary: #5C6B7F;
+  --text-on-dark: #FFFFFF;
+  --text-on-dark-muted: #C3CFE0;
+
+  --font-sans: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, monospace;
+
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-xl: 20px;
+  --radius-pill: 999px;
+
+  --shadow-card: 0 1px 2px rgba(10, 27, 56, .06), 0 8px 24px rgba(10, 27, 56, .06);
+  --shadow-cta: 0 6px 16px rgba(10, 27, 56, .22);
+
+  --gutter: clamp(20px, 4vw, 48px);
+  --ease: cubic-bezier(0.2, 0.6, 0.2, 1);
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+[hidden] { display: none !important; }
+html { -webkit-text-size-adjust: 100%; }
+body {
+  margin: 0;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  background: var(--gray-50);
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+  font-size: 15px;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+}
+h1, h2, h3, p, ol, ul { margin: 0; }
+ol, ul { padding: 0; list-style: none; }
+button { font: inherit; }
+
+:focus-visible { outline: 3px solid rgba(22, 50, 92, .45); outline-offset: 2px; }
+
+/* ---------- Preview switcher ---------- */
+.mode-bar {
+  background: var(--navy-800);
+  border-bottom: 1px solid rgba(255, 255, 255, .1);
+  padding: 10px var(--gutter);
+  color: var(--text-on-dark-muted);
+  font-size: 12px;
+}
+.mode-bar__inner {
+  max-width: 1160px;
+  margin-inline: auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+.mode-bar__label {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  font-size: 11px;
+}
+.mode-bar__dot { width: 7px; height: 7px; border-radius: 50%; background: var(--yellow-400); }
+.mode-toggle {
+  display: inline-flex;
+  background: var(--navy-900);
+  padding: 3px;
+  border-radius: var(--radius-pill);
+  border: 1px solid rgba(255, 255, 255, .14);
+}
+.mode-toggle__btn {
+  border: 0;
+  background: transparent;
+  color: var(--text-on-dark-muted);
+  padding: 6px 14px;
+  border-radius: var(--radius-pill);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 180ms var(--ease);
+}
+.mode-toggle__btn:hover { color: var(--white); }
+.mode-toggle__btn[aria-pressed="true"] {
+  background: var(--white);
+  color: var(--navy-900);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, .25);
+}
+
+.wrap {
+  width: 100%;
+  max-width: 1160px;
+  margin-inline: auto;
+  padding-inline: var(--gutter);
+}
+
+/* ---------- Stage header ---------- */
+.stage-head {
+  padding: 40px var(--gutter) 24px;
+}
+.stage-head__inner {
+  max-width: 720px;
+  margin-inline: auto;
+  text-align: center;
+}
+.stage-head__badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 6px 12px;
+  border-radius: var(--radius-pill);
+  background: rgba(10, 27, 56, .06);
+  color: var(--navy-900);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+.stage-head__title {
+  margin-top: 14px;
+  font-size: clamp(24px, 2.8vw, 30px);
+  font-weight: 800;
+  line-height: 1.15;
+  letter-spacing: -.02em;
+}
+.stage-head__lead {
+  margin-top: 10px;
+  font-size: 15px;
+  line-height: 1.7;
+  color: var(--text-secondary);
+}
+
+/* ---------- Card ---------- */
+.speak-stage { flex: 1 0 auto; padding-bottom: 64px; }
+.speak-grid {
+  max-width: 720px;
+  margin-inline: auto;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+}
+.qcard {
+  background: var(--white);
+  border: 1px solid var(--gray-200);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-card);
+  overflow: hidden;
+}
+.qcard__top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 14px 24px;
+  border-bottom: 1px solid var(--gray-200);
+}
+.badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 6px 12px;
+  border-radius: var(--radius-pill);
+  background: rgba(10, 27, 56, .06);
+  color: var(--navy-900);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+.qcard__meta {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+.qtimer {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+  border: 1px solid var(--gray-200);
+  border-radius: var(--radius-md);
+  background: var(--white);
+  font-variant-numeric: tabular-nums;
+}
+.qtimer strong { font-size: 15px; font-weight: 700; letter-spacing: .02em; }
+.qtimer.is-warning { border-color: var(--red-500); color: var(--red-600); }
+.qcard__body { padding: 24px; }
+
+.eyebrow {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+}
+.prompt-canvas {
+  margin-top: 16px;
+  padding: 20px 24px;
+  border: 1px solid var(--gray-200);
+  border-radius: var(--radius-md);
+  background: var(--surface-50);
+  position: relative;
+}
+.prompt-canvas::after {
+  content: "";
+  position: absolute;
+  top: -1px;
+  right: -1px;
+  width: 18px;
+  height: 18px;
+  border-top: 3px solid var(--yellow-400);
+  border-right: 3px solid var(--yellow-400);
+  border-radius: 0 var(--radius-md) 0 0;
+}
+.prompt-canvas p { font-size: 16px; font-weight: 600; line-height: 1.55; color: var(--navy-900); }
+
+.lead {
+  margin-top: 16px;
+  font-size: 15px;
+  line-height: 1.7;
+  color: var(--text-secondary);
+}
+
+.steps {
+  display: grid;
+  gap: 12px;
+  margin-top: 24px;
+  counter-reset: step;
+}
+.steps li {
+  display: flex;
+  gap: 12px;
+  align-items: baseline;
+  font-size: 15px;
+  line-height: 1.6;
+  counter-increment: step;
+}
+.steps li::before {
+  content: counter(step, decimal-leading-zero);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: .08em;
+  color: var(--text-secondary);
+  flex: 0 0 auto;
+}
+
+/* ---------- Recording row ---------- */
+.rec-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 32px;
+  margin-bottom: 16px;
+  padding: 14px 16px;
+  border: 1px solid var(--red-500);
+  border-radius: var(--radius-md);
+  background: var(--red-50);
+}
+.rec-dot {
+  flex: none;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--red-500);
+  animation: rec-pulse 1s ease-in-out infinite;
+}
+@keyframes rec-pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: .35; transform: scale(.8); }
+}
+.rec-label {
+  flex: none;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1;
+  color: var(--red-600);
+  white-space: nowrap;
+}
+.rec-wave {
+  flex: 1 1 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 24px;
+  min-width: 48px;
+}
+.rec-wave span {
+  width: 4px;
+  border-radius: 2px;
+  background: var(--red-500);
+  animation: wave 1s ease-in-out infinite;
+}
+.rec-wave span:nth-child(1) { height: 8px; animation-delay: 0s; }
+.rec-wave span:nth-child(2) { height: 18px; animation-delay: .12s; }
+.rec-wave span:nth-child(3) { height: 12px; animation-delay: .24s; }
+.rec-wave span:nth-child(4) { height: 22px; animation-delay: .36s; }
+.rec-wave span:nth-child(5) { height: 10px; animation-delay: .48s; }
+.rec-wave span:nth-child(6) { height: 20px; animation-delay: .6s; }
+.rec-wave span:nth-child(7) { height: 14px; animation-delay: .72s; }
+.rec-wave span:nth-child(8) { height: 9px; animation-delay: .84s; }
+@keyframes wave {
+  0%, 100% { transform: scaleY(1); }
+  50% { transform: scaleY(.35); }
+}
+.rec-timer {
+  flex: none;
+  font-size: 22px;
+  font-weight: 800;
+  line-height: 1;
+  letter-spacing: -.02em;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---------- Buttons ---------- */
+.actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-top: 24px;
+}
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 13px 24px;
+  border: 0;
+  border-radius: var(--radius-pill);
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background-color 180ms var(--ease), transform 180ms var(--ease), border-color 180ms var(--ease);
+}
+.btn--primary { background: var(--navy-900); color: var(--white); box-shadow: var(--shadow-cta); }
+.btn--primary:hover:not(:disabled) { background: var(--navy-700); transform: translateY(-1px); }
+.btn--navy { background: var(--navy-700); color: var(--white); }
+.btn--navy:hover:not(:disabled) { background: var(--navy-600); }
+.btn--secondary {
+  background: var(--white);
+  color: var(--navy-900);
+  border: 1px solid var(--gray-200);
+}
+.btn--secondary:hover:not(:disabled) { border-color: var(--navy-900); }
+.btn--lg { padding: 15px 28px; font-size: 15px; }
+.btn:disabled { background: var(--gray-300); color: var(--text-secondary); box-shadow: none; cursor: not-allowed; border-color: var(--gray-300); }
+
+/* ---------- Review audio ---------- */
+.review { margin-top: 24px; }
+.review audio { display: block; width: 100%; }
+.review__actions { display: flex; gap: 12px; flex-wrap: wrap; margin-top: 16px; }
+
+/* ---------- Examiner video (IELTS Mockup) ---------- */
+.examiner {
+  margin-top: 20px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+}
+.examiner__frame {
+  width: 100%;
+  max-width: 420px;
+  aspect-ratio: 16 / 9;
+  border-radius: var(--radius-md);
+  background: var(--navy-900);
+  display: grid;
+  place-items: center;
+  position: relative;
+  overflow: hidden;
+}
+.examiner__frame::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(circle at 50% 40%, rgba(255, 255, 255, .12), transparent 60%),
+    linear-gradient(180deg, transparent 55%, rgba(10, 27, 56, .85));
+}
+.examiner__person {
+  position: relative;
+  width: 108px;
+  height: 108px;
+  border-radius: 50%;
+  background: #C7B49A;
+  border: 4px solid rgba(255, 255, 255, .25);
+}
+.examiner__person::after {
+  content: "";
+  position: absolute;
+  top: 112px;
+  left: 50%;
+  width: 170px;
+  height: 80px;
+  border-radius: 80px 80px 0 0;
+  background: #22456F;
+  transform: translateX(-50%);
+}
+.examiner__play {
+  position: absolute;
+  z-index: 1;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px;
+  border: 0;
+  border-radius: var(--radius-pill);
+  background: rgba(10, 27, 56, .55);
+  color: var(--white);
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  backdrop-filter: blur(4px);
+}
+.examiner__badge {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  z-index: 1;
+  padding: 4px 10px;
+  border-radius: var(--radius-pill);
+  background: rgba(10, 27, 56, .65);
+  color: var(--white);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+
+/* ---------- Part 2 cue card ---------- */
+.cue {
+  margin-top: 16px;
+  padding: 16px 20px;
+  border: 1px solid var(--gray-200);
+  border-radius: var(--radius-md);
+  background: var(--yellow-50);
+}
+.cue__title { margin-bottom: 10px; font-weight: 600; color: var(--navy-900); font-size: 15px; }
+.cue__line { color: var(--text-secondary); font-size: 14px; line-height: 1.7; }
+.cue__list { margin-top: 8px; display: grid; gap: 4px; }
+.cue__list li { display: flex; gap: 8px; font-size: 14px; color: var(--text-secondary); }
+.cue__list li::before { content: "-"; font-weight: 700; color: var(--navy-700); }
+
+/* ---------- Preparation countdown (Part 2) ---------- */
+.prep {
+  margin-top: 16px;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 18px;
+  border: 1px solid var(--gray-200);
+  border-radius: var(--radius-md);
+  background: var(--surface-50);
+}
+.prep__ring {
+  flex: none;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-size: 13px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  color: var(--navy-900);
+  background:
+    conic-gradient(var(--yellow-400) 60%, var(--gray-200) 0);
+}
+.prep__text { font-size: 13px; color: var(--text-secondary); }
+.prep__text strong { color: var(--navy-900); }
+
+/* ---------- Notices ---------- */
+.notice {
+  margin-top: 24px;
+  padding: 14px 18px;
+  border: 1px solid var(--yellow-400);
+  border-radius: var(--radius-md);
+  background: var(--yellow-50);
+  font-size: 14px;
+  color: var(--navy-900);
+}
+.notice--error {
+  border-color: var(--red-500);
+  background: var(--red-50);
+  color: var(--red-600);
+  font-weight: 600;
+}
+
+.privacy {
+  margin-top: 24px;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+.privacy button {
+  border: 0;
+  background: none;
+  padding: 0;
+  color: var(--navy-900);
+  font: inherit;
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+
+/* ---------- Progress rail ---------- */
+.rail {
+  max-width: 720px;
+  margin: 20px auto 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.rail__dot { flex: 1 1 auto; height: 4px; border-radius: 2px; background: var(--gray-200); }
+.rail__dot.is-done { background: var(--navy-900); }
+.rail__dot.is-current { background: var(--yellow-400); }
+.rail__label { margin-left: 8px; font-size: 11px; font-weight: 700; color: var(--text-secondary); white-space: nowrap; }
+
+/* ---------- Responsive ---------- */
+@media (max-width: 767px) {
+  .qcard__body { padding: 16px; }
+  .qcard__top { padding: 12px 16px; }
+  .rec-label { display: none; }
+  .rec-timer { font-size: 18px; }
+  .actions { flex-direction: column; align-items: stretch; }
+  .actions .btn { width: 100%; }
+  .examiner__frame { max-width: 100%; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; }
+}
+</style>
+</head>
+<body>
+
+<div class="mode-bar" role="region" aria-label="Mode Pratinjau">
+  <div class="mode-bar__inner">
+    <span class="mode-bar__label">
+      <span class="mode-bar__dot" aria-hidden="true"></span>
+      <span>Pratinjau Halaman Speaking</span>
+    </span>
+    <div class="mode-toggle" role="group" aria-label="Pilih tipe tes">
+      <button type="button" class="mode-toggle__btn" data-mode="placement" aria-pressed="true">Placement Test</button>
+      <button type="button" class="mode-toggle__btn" data-mode="ielts" aria-pressed="false">IELTS Mockup</button>
+    </div>
+  </div>
+</div>
+
+<header class="stage-head">
+  <div class="wrap">
+    <div class="stage-head__inner">
+      <span class="stage-head__badge" id="stage-badge">Bagian speaking</span>
+      <h1 class="stage-head__title" id="stage-title">Cek dulu suara kamu</h1>
+      <p class="stage-head__lead" id="stage-lead">Rekam sebentar saja, lalu dengarkan hasilnya. Kalau suara kamu terdengar jelas, kamu siap menjawab pertanyaan speaking.</p>
+    </div>
+  </div>
+</header>
+
+<main class="speak-stage">
+  <div class="wrap">
+    <div class="rail" id="rail" aria-hidden="true"></div>
+    <div class="speak-grid">
+      <section class="qcard" aria-labelledby="stage-title">
+        <div class="qcard__top">
+          <span class="badge" id="card-badge">Langkah 1 dari 2</span>
+          <div class="qcard__meta">
+            <span id="card-meta">Sebelum mulai</span>
+            <span class="qtimer" id="card-timer" hidden>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="13" r="8"/><path d="M12 9v4l2.5 2.5M9 2h6"/></svg>
+              <strong id="card-timer-value">15:00</strong>
+            </span>
+          </div>
+        </div>
+        <div class="qcard__body" id="card-body">
+          <!-- Populated by the flow script -->
+        </div>
+      </section>
+    </div>
+  </div>
+</main>
+
+<script>
+(() => {
+  /* The two variants. The flow states mirror the real runner: check, answer, review, and the
+     mockup Part 2 preparation countdown. */
+  const COPY = {
+    placement: {
+      badge: "Bagian speaking",
+      checkLead: "Rekam sebentar saja, lalu dengarkan hasilnya. Kalau suara kamu terdengar jelas, kamu siap menjawab pertanyaan speaking.",
+      answerNote: "Jawab dalam bahasa Inggris selama 15 sampai 45 detik, dalam satu tarikan tanpa membaca teks. Tekan Mulai jawab saat kamu siap.",
+      prompt: "Describe a place you like to visit and explain why you enjoy it.",
+      stepMeta: "Pertanyaan 1 dari 1",
+      reviewNote: "Dengarkan jawaban kamu. Kalau ada yang kurang jelas, rekam ulang. Kalau sudah pas, kirim rekamannya.",
+    },
+    ielts: {
+      badge: "IELTS Mockup Speaking",
+      checkLead: "Rekam sebentar saja, lalu dengarkan hasilnya. Kalau suara kamu terdengar jelas, kamu siap menjawab pertanyaan dari examiner.",
+      answerNote: "Tonton pertanyaan dari examiner, lalu rekam jawabanmu. Kamu bisa memutar ulang pertanyaannya sebelum mulai.",
+      prompt: "What is your full name?",
+      stepMeta: "Part 1 - Pertanyaan 1 dari 11",
+      reviewNote: "Dengarkan jawaban kamu. Kalau ada yang kurang jelas, rekam ulang. Kalau sudah pas, lanjut ke pertanyaan berikutnya.",
+    },
+  };
+
+  const modeBtns = document.querySelectorAll(".mode-toggle__btn");
+  const badge = document.getElementById("stage-badge");
+  const title = document.getElementById("stage-title");
+  const lead = document.getElementById("stage-lead");
+  const cardBadge = document.getElementById("card-badge");
+  const cardMeta = document.getElementById("card-meta");
+  const cardTimer = document.getElementById("card-timer");
+  const cardTimerValue = document.getElementById("card-timer-value");
+  const body = document.getElementById("card-body");
+  const rail = document.getElementById("rail");
+
+  let mode = "placement";
+  let state = "check"; // check | recording | checkReview | answer | answering | review
+
+  const svg = {
+    mic: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="5"/><path d="M12 1v3M12 20v3M4.2 4.2l2.1 2.1M17.7 17.7l2.1 2.1M1 12h3M20 12h3M4.2 19.8l2.1-2.1M17.7 6.3l2.1-2.1"/></svg>',
+    stop: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>',
+    arrow: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg>',
+    play: '<svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M8 5v14l11-7z"/></svg>',
+  };
+
+  function recRow(timerText) {
+    return `
+      <div class="rec-card" id="speak-meter">
+        <span class="rec-dot" aria-hidden="true"></span>
+        <p class="rec-label">Merekam suara kamu</p>
+        <div class="rec-wave" aria-hidden="true">
+          <span></span><span></span><span></span><span></span>
+          <span></span><span></span><span></span><span></span>
+        </div>
+        <p class="rec-timer" role="timer">${timerText}</p>
+      </div>`;
+  }
+
+  function renderCheck() {
+    cardBadge.textContent = "Langkah 1 dari 2";
+    cardMeta.textContent = "Sebelum mulai";
+    cardTimer.hidden = mode === "placement" ? false : false;
+    cardTimerValue.textContent = mode === "placement" ? "15:00" : "15:00";
+    title.textContent = "Cek dulu suara kamu";
+    lead.textContent = COPY[mode].checkLead;
+    body.innerHTML = `
+      <p class="eyebrow">Sebelum mulai</p>
+      <ol class="steps">
+        <li>Tekan <strong>Rekam percobaan</strong> dan izinkan mikrofonnya.</li>
+        <li>Bicara apa saja selama 5 sampai 10 detik, misalnya kenalan singkat kamu.</li>
+        <li>Dengarkan rekamannya. Jelas? Lanjut. Kurang jelas? Cek ulang.</li>
+      </ol>
+      <div class="actions">
+        <button class="btn btn--primary btn--lg" id="demo-check-start">${svg.mic} Rekam percobaan</button>
+      </div>
+      ${state === "recording" ? recRow("00:06") : ""}
+      ${state === "recording" ? `<div class="actions"><button class="btn btn--navy btn--lg" id="demo-check-stop">${svg.stop} Selesai</button></div>` : ""}
+      ${state === "checkReview" ? `
+        <div class="review">
+          <audio controls preload="metadata" src="#"></audio>
+          <div class="review__actions">
+            <button class="btn btn--secondary" id="demo-check-retry">Cek ulang</button>
+            <button class="btn btn--primary" id="demo-check-ok">Suaraku jelas, lanjut ${svg.arrow}</button>
+          </div>
+        </div>` : ""}
+    `;
+    paintRail(0, mode === "placement" ? 2 : 3);
+    const start = document.getElementById("demo-check-start");
+    if (start) start.onclick = () => { state = "recording"; renderCheck(); };
+    const stop = document.getElementById("demo-check-stop");
+    if (stop) stop.onclick = () => { state = "checkReview"; renderCheck(); };
+    const retry = document.getElementById("demo-check-retry");
+    if (retry) retry.onclick = () => { state = "check"; renderCheck(); };
+    const ok = document.getElementById("demo-check-ok");
+    if (ok) ok.onclick = () => { state = "answer"; renderAnswer(); };
+  }
+
+  function renderAnswer() {
+    const isIelts = mode === "ielts";
+    const isCue = isIelts && state === "cue";
+    cardBadge.textContent = isIelts ? COPY.ielts.badge : "Bagian speaking";
+    cardMeta.textContent = isCue ? "Part 2 - Cue card" : COPY[mode].stepMeta;
+    cardTimerValue.textContent = isIelts ? "15:00" : "15:00";
+    title.textContent = isCue ? "Tugas panjang dari examiner" : isIelts ? "Jawab pertanyaan examiner" : "Jawab pertanyaannya";
+    lead.textContent = isCue
+      ? "Tonton examiner, gunakan 60 detik untuk menyiapkan jawaban, lalu rekam."
+      : isIelts ? COPY.ielts.answerNote : COPY.placement.answerNote;
+    body.innerHTML = `
+      <p class="eyebrow">Pertanyaan speaking</p>
+      ${isIelts ? `
+        <div class="examiner">
+          <div class="examiner__frame">
+            <span class="examiner__badge">Examiner</span>
+            <div class="examiner__person" aria-hidden="true"></div>
+            <button class="examiner__play" id="demo-video-play">${svg.play} Putar pertanyaan</button>
+          </div>
+        </div>` : ""}
+      <div class="prompt-canvas">
+        <p>${isCue ? "Describe a difficult task that you completed at work or study that you felt proud of." : COPY[mode].prompt}</p>
+      </div>
+      ${isCue ? `
+        <div class="cue">
+          <p class="cue__title">You should say:</p>
+          <ul class="cue__list">
+            <li>what the task was</li>
+            <li>how you completed it</li>
+            <li>why the task was difficult</li>
+            <li>and why you were proud of completing the task.</li>
+          </ul>
+        </div>
+        <div class="prep">
+          <span class="prep__ring" id="prep-ring">36</span>
+          <p class="prep__text">Waktu persiapan: <strong id="prep-text">36 detik</strong>. Kamu bisa membuat catatan singkat kalau mau.</p>
+        </div>` : ""}
+      <div class="actions">
+        ${state === "answering" ? "" : `<button class="btn btn--primary btn--lg" id="demo-answer-start">${svg.mic} ${isCue ? "Mulai jawaban panjang" : "Mulai jawab"}</button>`}
+      </div>
+      ${state === "answering" ? recRow("00:24") : ""}
+      ${state === "answering" ? `<div class="actions"><button class="btn btn--navy btn--lg" id="demo-answer-stop">${svg.stop} Selesai menjawab</button></div>` : ""}
+      ${state === "review" ? `
+        <div class="review">
+          <audio controls preload="metadata" src="#"></audio>
+          <p class="lead">${COPY[mode].reviewNote}</p>
+          <div class="review__actions">
+            <button class="btn btn--secondary" id="demo-retake">Rekam ulang</button>
+            <button class="btn btn--primary" id="demo-send">${isIelts ? "Kirim jawaban" : "Kirim rekaman"} ${svg.arrow}</button>
+          </div>
+        </div>` : ""}
+      <p class="privacy">Rekaman dinilai otomatis dan dihapus 30 hari setelah tes. Detailnya ada di <button type="button">Kebijakan Privasi</button>.</p>
+    `;
+    paintRail(mode === "placement" ? 1 : 1, mode === "placement" ? 2 : 3);
+    const start = document.getElementById("demo-answer-start");
+    if (start) start.onclick = () => { state = "answering"; renderAnswer(); };
+    const stop = document.getElementById("demo-answer-stop");
+    if (stop) stop.onclick = () => { state = "review"; renderAnswer(); };
+    const retake = document.getElementById("demo-retake");
+    if (retake) retake.onclick = () => { state = "answer"; renderAnswer(); };
+    const send = document.getElementById("demo-send");
+    if (send) send.onclick = () => {
+      if (mode === "placement") {
+        body.innerHTML = `
+          <div class="notice" role="status">Rekaman kamu terkirim. Lanjut ke langkah berikutnya.</div>
+          <div class="actions">
+            <button class="btn btn--primary btn--lg" id="demo-finish">Lengkapi data dan lihat hasil ${svg.arrow}</button>
+          </div>`;
+      } else {
+        state = "cue";
+        renderAnswer();
+      }
+    };
+    const video = document.getElementById("demo-video-play");
+    if (video) video.onclick = () => { video.textContent = "Memutar... 00:04"; setTimeout(() => { video.innerHTML = svg.play + " Putar ulang"; }, 1500); };
+  }
+
+  /* The IELTS rail shows three parts; placement shows two steps. */
+  function paintRail(current, total) {
+    rail.innerHTML = Array.from({ length: total }, (_, i) =>
+      `<span class="rail__dot${i < current ? " is-done" : i === current ? " is-current" : ""}"></span>`
+    ).join("") + `<span class="rail__label">${current + 1}/${total}</span>`;
+  }
+
+  function applyMode(next) {
+    mode = next;
+    state = "check";
+    badge.textContent = next === "ielts" ? COPY.ielts.badge : COPY.placement.badge;
+    modeBtns.forEach((btn) => btn.setAttribute("aria-pressed", btn.dataset.mode === next ? "true" : "false"));
+    renderCheck();
+  }
+
+  modeBtns.forEach((btn) => btn.addEventListener("click", () => applyMode(btn.dataset.mode)));
+  applyMode("placement");
+})();
+</script>
+</body>
+</html>
