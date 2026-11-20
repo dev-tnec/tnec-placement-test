@@ -2124,6 +2124,10 @@ fieldset.field { border: 0; padding: 0; margin: 0; }
    screen, and it scales down on short viewports. */
 .speak-wrap { padding-block: clamp(var(--space-6), 4vh, 40px) var(--space-12); }
 
+/* The answer stage carries the navigator beside the card, so it uses the full wrap width
+   instead of the narrower details width. */
+.speak-wrap-wide { max-width: var(--wrap); }
+
 /* The exam top bar from the reference: brand, section, sent progress, section timer, and the
    fullscreen control, in navy above everything. */
 .speak-topbar {

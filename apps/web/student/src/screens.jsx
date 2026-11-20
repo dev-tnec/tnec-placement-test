@@ -957,37 +957,70 @@ export function SpeakingScreen({ stage, mockup, speaking, recording, speakError,
     </>
   );
 
-  /* The mockup speaking navigator: every interview question with its state, matching the
-     multiple-choice navigator pattern. The placement flow has no navigator. */
-  const navigator = isMockup && stage === "answer" ? (
+  /* The speaking navigator, in the same panel pattern as the multiple-choice sections: a head
+     with the count, the legend, the per-part question grid, and the state of every answer. The
+     placement flow lists its bank questions (the flow is sequential, so they are not clickable);
+     the mockup flow lets the student jump between interview questions. */
+  const speakTotal = isMockup ? MOCKUP_SPEAKING_TOTAL : Math.max(1, speaking?.total || 1);
+  const speakCurrent = isMockup ? null : (speaking?.index ?? 0);
+  const sentCount = isMockup ? speakSent.size : Math.min(speakCurrent, speakTotal);
+  const navigator = stage === "answer" ? (
     <aside className="side" aria-labelledby="speak-nav-title">
       <div className="navigator">
         <div className="navigator__head">
-          <h2 className="navigator__title" id="speak-nav-title">Daftar jawaban speaking</h2>
-          <p className="navigator__count" id="speak-nav-count">{speakSent.size} dari {MOCKUP_SPEAKING_TOTAL} terkirim</p>
+          <h2 className="navigator__title" id="speak-nav-title">Daftar soal speaking</h2>
+          <p className="navigator__count" id="speak-nav-count">{sentCount} dari {speakTotal} terkirim</p>
+        </div>
+        <div className="legend">
+          <span className="legend__item"><span className="dot dot--answered" aria-hidden="true" />Terkirim <strong id="speak-nav-sent">{sentCount}</strong></span>
+          <span className="legend__item"><span className="dot dot--current" aria-hidden="true" />Aktif</span>
+          <span className="legend__item"><span className="dot dot--flagged" aria-hidden="true" />Ditandai <strong id="speak-nav-flag">{speakFlags.size}</strong></span>
         </div>
         <div className="nav-groups" id="speak-nav-groups">
-          {mockup.plan.parts.map((p, pi) => (
-            <div className="nav-group" key={p.part}>
-              <p className="nav-group__title">Part {p.part}</p>
+          {isMockup ? (
+            mockup.plan.parts.map((p, pi) => (
+              <div className="nav-group" key={p.part}>
+                <p className="nav-group__title">Part {p.part}</p>
+                <div className="nav-grid">
+                  {p.questions.map((q, qi) => {
+                    const qKey = `${pi}-${qi}`;
+                    const sent = speakSent.has(qKey);
+                    const current = pi === mockup.pi && qi === mockup.qi;
+                    return (
+                      <button
+                        key={qKey}
+                        type="button"
+                        className={`nav-btn${sent ? " is-answered" : ""}${current ? " is-current" : ""}${speakFlags.has(qKey) ? " is-flagged" : ""}`}
+                        aria-current={current ? "true" : undefined}
+                        aria-label={`Soal ${pi * 100 + qi + 1}${sent ? ", terkirim" : ""}${speakFlags.has(qKey) ? ", ditandai" : ""}`}
+                        onClick={() => onSpeakGoTo(pi, qi)}
+                      >{pi * 100 + qi + 1}</button>
+                    );
+                  })}
+                </div>
+              </div>
+            ))
+          ) : (
+            <div className="nav-group">
+              <p className="nav-group__title">Speaking</p>
               <div className="nav-grid">
-                {p.questions.map((q, qi) => {
-                  const qKey = `${pi}-${qi}`;
-                  const sent = speakSent.has(qKey);
-                  const current = pi === mockup.pi && qi === mockup.qi;
+                {Array.from({ length: speakTotal }, (_, i) => {
+                  const sent = i < speakCurrent;
+                  const current = i === speakCurrent;
                   return (
                     <button
-                      key={qKey}
+                      key={i}
                       type="button"
-                      className={`nav-btn${sent ? " is-answered" : ""}${current ? " is-current" : ""}${speakFlags.has(qKey) ? " is-flagged" : ""}`}
-                      title={`Soal ${pi * 100 + qi + 1}: ${sent ? "terkirim" : "belum dikirim"}`}
-                      onClick={() => onSpeakGoTo(pi, qi)}
-                    >{pi * 100 + qi + 1}</button>
+                      className={`nav-btn${sent ? " is-answered" : ""}${current ? " is-current" : ""}`}
+                      aria-current={current ? "true" : undefined}
+                      aria-label={`Soal ${i + 1}${sent ? ", terkirim" : current ? ", sedang dikerjakan" : ", belum"}`}
+                      disabled
+                    >{i + 1}</button>
                   );
                 })}
               </div>
             </div>
-          ))}
+          )}
         </div>
       </div>
     </aside>
@@ -1007,8 +1040,8 @@ export function SpeakingScreen({ stage, mockup, speaking, recording, speakError,
         ) : null}
         {speakingTimer}
       </header>
-      <div className="wrap wrap--details speak-wrap">
-        <div className={`speaking-grid${isMockup && stage === "answer" ? " speak-grid--wide" : ""}`}>
+      <div className={`wrap${stage === "answer" ? " speak-wrap-wide" : " wrap--details"} speak-wrap`}>
+        <div className={`speaking-grid${stage === "answer" ? " speak-grid--wide" : ""}`}>
           {stage === "check" ? (
             <div className="speak-main-col">
               <div className="speak-qhead">
