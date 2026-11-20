@@ -2223,6 +2223,24 @@ fieldset.field { border: 0; padding: 0; margin: 0; }
   color: var(--text-secondary);
 }
 
+/* The answer card rhythm, matching the reference: title, one lead line, the examiner video, the
+   Pertanyaan label, then the prompt box, each with its own gap. */
+.speak-lead { margin-top: var(--space-2); }
+.speak-eyebrow { margin-top: var(--space-6); display: block; }
+.speak-prompt { margin-top: var(--space-2); }
+
+.speak-zone__title {
+  font-size: var(--text-card);
+  font-weight: 700;
+  color: var(--navy-900);
+}
+
+.speak-audio {
+  display: block;
+  width: 100%;
+  margin-top: var(--space-3);
+}
+
 .speak-steps {
   display: grid;
   gap: var(--space-3);
@@ -2640,7 +2658,7 @@ fieldset.field { border: 0; padding: 0; margin: 0; }
 .answer-field .micro { margin-top: var(--space-2); }
 .micro.is-warning { color: var(--red-600); }
 /* IELTS mockup speaking: the examiner video, the Part 2 cue card, and the preparation timer. */
-.speak-video { margin: 0 0 var(--space-4); display: flex; flex-direction: column; align-items: flex-start; gap: var(--space-2); }
+.speak-video { margin: var(--space-4) 0 var(--space-4); display: flex; flex-direction: column; align-items: flex-start; gap: var(--space-2); }
 .speak-video video { width: 100%; max-width: 420px; border-radius: var(--radius-md); background: var(--navy-900); }
 .speak-cue { margin: var(--space-3) 0; padding: var(--space-3) var(--space-4); border: 1px solid var(--gray-200); border-radius: var(--radius-md); background: var(--surface-50); }
 .speak-cue__title { margin: 0 0 var(--space-2); font-weight: 600; color: var(--navy-900); }

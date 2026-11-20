@@ -1094,14 +1094,15 @@ export function SpeakingScreen({ stage, mockup, speaking, recording, speakError,
                 <div className="question-card" id="speak-answer-card">
                   <div className="question-card__body">
                     <h1 className="speaking-title" id="speaking-title" tabIndex={-1} ref={titleRef}>{part?.cue ? "Tugas panjang dari examiner" : "Jawab pertanyaannya"}</h1>
+                    <p className="speaking-lead speak-lead">{part?.cue ? "Bicara 1 sampai 2 menit. Gunakan poin di bawah sebagai panduan." : "Jawab dengan kalimat lengkap dan beri alasan atau contoh."}</p>
                     {isMockup ? (
                       <div className="speak-video" id="speak-video-wrap">
                         <video key={`${mockup?.pi}-${mockup?.qi}`} id="speak-video" ref={videoRef} playsInline preload="metadata" src={question?.video} onEnded={onVideoEnded} onError={onVideoError} />
                         <button className="btn btn--secondary btn--sm" id="speak-video-play" type="button" onClick={onPlayVideo} disabled={videoPlaying}>Putar pertanyaan</button>
                       </div>
                     ) : null}
-                    <p className="eyebrow">Pertanyaan</p>
-                    <div className="prompt-canvas"><p className="question__prompt" id="speaking-prompt">{prompt}</p></div>
+                    <p className="eyebrow speak-eyebrow">Pertanyaan</p>
+                    <div className="prompt-canvas speak-prompt"><p className="question__prompt" id="speaking-prompt">{prompt}</p></div>
                     {isMockup && part?.cue ? (
                       <div className="speak-cue" id="speaking-cue">
                         {part.cue.map((line, i) => <p className={i === 0 ? "speak-cue__title" : "speak-cue__line"} key={line}>{line}</p>)}
@@ -1156,8 +1157,8 @@ export function SpeakingScreen({ stage, mockup, speaking, recording, speakError,
                         {showSkip ? <button className="btn btn--secondary" id="speak-skip" type="button" onClick={onSkip} disabled={speakBusy}>Lanjut tanpa rekaman</button> : null}
                         {recUrl ? (
                           <div className="speak-zone" id="speak-review">
-                            <strong>Dengarkan rekamanmu</strong>
-                            <audio id="speak-audio" controls preload="metadata" src={recUrl} />
+                            <p className="speak-zone__title">Dengarkan rekamanmu</p>
+                            <audio className="speak-audio" id="speak-audio" controls preload="metadata" src={recUrl} />
                             <div className="speak-actions speak-actions--inzone">
                               <button className="btn btn--secondary" id="speak-retake" type="button" onClick={onRetake} disabled={speakBusy}>Rekam ulang</button>
                               <button className="btn btn--primary" id="speak-send" type="button" onClick={onSend} disabled={speakBusy}><span id="speak-send-label">{sendLabel}</span> <Arrow /></button>
