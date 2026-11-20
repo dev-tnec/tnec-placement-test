@@ -1080,46 +1080,63 @@ export function SpeakingScreen({ stage, mockup, speaking, recording, speakError,
                           <span className={phase === 2 ? "is-on" : phase > 2 ? "is-done" : ""}>Dengar ulang</span>
                           <span className={phase === 3 ? "is-on" : ""}>Terkirim</span>
                         </div>
+                        {canRecord && !recording && !recUrl && prepLeft === null ? (
+                          <div className="speak-zone">
+                            <p><strong>Siap?</strong> Jawab dengan kalimat lengkap dan beri alasan atau contoh. Batas rekaman <strong>{formatTime(speakLimit)}</strong>.</p>
+                            <div className="speak-actions speak-actions--inzone">
+                              <button className="btn btn--rec" id="speak-start" ref={answerStartRef} type="button" onClick={() => onStartRecording("answer")} disabled={speakBusy}><Mic /> Langsung rekam</button>
+                            </div>
+                          </div>
+                        ) : null}
                         {prepLeft !== null ? (
-                          <div className="speak-prep" id="speak-prep" role="timer">
+                          <div className="speak-zone speak-zone--prep" id="speak-prep" role="timer">
                             <span className="speak-prep__ring" style={{ "--p": String(Math.max(0, 100 - (prepLeft / Math.max(1, part?.prepSeconds || speaking?.minSeconds || 1)) * 100)) }}>
                               <b>{prepLeft}</b>
                             </span>
-                            <p className="speak-prep__text"><strong>Waktu persiapan</strong> Susun ide jawabanmu. Rekamannya bisa dimulai kapan pun.</p>
+                            <div className="speak-prep__text"><strong>Waktu persiapan</strong> Susun ide jawabanmu. Rekamannya bisa dimulai kapan pun.</div>
+                            <button className="btn btn--rec" id="speak-skip-prep" type="button" onClick={() => onStartRecording("answer")} disabled={speakBusy}><Mic /> Mulai sekarang</button>
                           </div>
                         ) : null}
-                        <p className="speaking-lead" id="speak-note">{answerNote}</p>
-                        {feedback}
-                        <div className="speak-actions">
-                          {canRecord && !recording && !recUrl ? (
-                            <button className="btn btn--primary btn--lg" id="speak-start" ref={answerStartRef} type="button" onClick={() => onStartRecording("answer")} disabled={speakBusy}><Mic /> Mulai jawab</button>
-                          ) : null}
-                          {prepLeft !== null && !recording ? (
-                            <button className="btn btn--secondary btn--lg" id="speak-skip-prep" type="button" onClick={() => onStartRecording("answer")} disabled={speakBusy}>Lewati persiapan, rekam sekarang</button>
-                          ) : null}
-                          {recording ? (
-                            <button className="btn btn--navy btn--lg" id="speak-stop" type="button" onClick={onStop} disabled={recording.elapsed < (speaking?.min || 1)}><Stop /> Selesai menjawab</button>
-                          ) : null}
-                        </div>
+                        {prepLeft === null && !canRecord && !recording && !recUrl && !speakBusy ? (
+                          <p className="speaking-lead" id="speak-note">{answerNote}</p>
+                        ) : null}
                         {recording ? (
-                          <div className="speak-limitbar" aria-hidden="true">
-                            <span style={{ width: `${Math.min(100, ((recording.elapsed || 0) / speakLimit) * 100)}%` }} />
+                          <div className="speak-zone speak-zone--rec">
+                            <div className="rec-row">
+                              <span className="rec-dot" aria-hidden="true" />
+                              <span className="rec-label">Merekam</span>
+                              <div className="rec-wave" id="rec-wave" ref={waveContainerRef} aria-hidden="true" />
+                              <span className="rec-time" role="timer" aria-live="off">{formatTime(recording?.elapsed || 0)}</span>
+                            </div>
+                            <div className="speak-limitbar" aria-hidden="true">
+                              <span style={{ width: `${Math.min(100, ((recording.elapsed || 0) / speakLimit) * 100)}%` }} />
+                            </div>
+                            <p className="speak-zone__limit">Batas {formatTime(speakLimit)}, rekaman berhenti otomatis.</p>
+                            <div className="speak-actions speak-actions--inzone">
+                              <button className="btn btn--primary" id="speak-stop" type="button" onClick={onStop} disabled={recording.elapsed < (speaking?.min || 1)}><Stop /> Selesai menjawab</button>
+                            </div>
                           </div>
                         ) : null}
+                        {speakError ? <p className="banner banner--warning speak-error" id="speak-error" role="alert">{speakError}</p> : null}
+                        {showSkip ? <button className="btn btn--secondary" id="speak-skip" type="button" onClick={onSkip} disabled={speakBusy}>Lanjut tanpa rekaman</button> : null}
                         {recUrl ? (
-                          <div className="speak-review" id="speak-review">
-                            <strong className="speak-review__label">Dengarkan rekamanmu ({formatTime(recording?.elapsed || speakLimit)})</strong>
+                          <div className="speak-zone" id="speak-review">
+                            <strong>Dengarkan rekamanmu</strong>
                             <audio id="speak-audio" controls preload="metadata" src={recUrl} />
-                            <div className="speak-review__actions">
+                            <div className="speak-actions speak-actions--inzone">
                               <button className="btn btn--secondary" id="speak-retake" type="button" onClick={onRetake} disabled={speakBusy}>Rekam ulang</button>
                               <button className="btn btn--primary" id="speak-send" type="button" onClick={onSend} disabled={speakBusy}><span id="speak-send-label">{sendLabel}</span> <Arrow /></button>
                             </div>
+                            <p className="speak-zone__limit">{isMockup ? "Jawaban yang sudah dikirim tidak bisa diubah, tetapi kamu bisa pindah soal dulu dan kembali lagi sebelum mengirim." : "Jawaban yang sudah dikirim tidak bisa diubah."}</p>
                           </div>
                         ) : null}
                       </>
                     ) : (
-                      <div className="speak-sent" role="status">
-                        <Check /> Jawaban terkirim. Pilih soal lain di daftar sebelah, atau tunggu bagian ini selesai.
+                      <div className="speak-zone speak-zone--done" role="status">
+                        <div className="speak-zone__notice"><Check /> Jawaban terkirim</div>
+                        <div className="speak-actions speak-actions--inzone">
+                          {isMockup ? <button className="btn btn--primary" id="speak-next-q" type="button" onClick={onSpeakNext}><Arrow /> Ke soal berikutnya</button> : null}
+                        </div>
                       </div>
                     )}
                     <p className="micro speak-privacy">Rekaman dinilai otomatis dan dihapus 30 hari setelah tes. Detailnya ada di <button className="link-inline" type="button" onClick={onOpenPrivacy}>Kebijakan Privasi</button>.</p>
