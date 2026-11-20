@@ -1041,6 +1041,19 @@ export function SpeakingScreen({ stage, mockup, speaking, recording, speakError,
         {speakingTimer}
       </header>
       <div className={`wrap${stage === "answer" ? " speak-wrap-wide" : " wrap--details"} speak-wrap`}>
+        {stage === "answer" ? (
+          <div className="speak-qhead speak-qhead--page">
+            <div className="speak-qhead__chips">
+              {isMockup && mockup.plan.parts.length > 1 ? <span className="badge badge--solid">Part {part?.part || 1}</span> : null}
+              <span className="badge">{isMockup ? `Soal ${mockup.pi * 100 + mockup.qi + 1} dari ${MOCKUP_SPEAKING_TOTAL}` : stepMeta}</span>
+            </div>
+            {isMockup ? (
+              <button className={`speak-flag-btn${isFlagged ? " is-on" : ""}`} id="speak-flag" type="button" aria-pressed={isFlagged} onClick={onSpeakFlag}>
+                <Flag /> {isFlagged ? "Ditandai" : "Tandai soal"}
+              </button>
+            ) : null}
+          </div>
+        ) : null}
         <div className={`speaking-grid${stage === "answer" ? " speak-grid--wide" : ""}`}>
           {stage === "check" ? (
             <div className="speak-main-col">
@@ -1080,17 +1093,6 @@ export function SpeakingScreen({ stage, mockup, speaking, recording, speakError,
           ) : (
             <>
               <div className="speak-main-col">
-                <div className="speak-qhead">
-                  <div className="speak-qhead__chips">
-                    {isMockup && mockup.plan.parts.length > 1 ? <span className="badge badge--solid">Part {part?.part || 1}</span> : null}
-                    <span className="badge">{isMockup ? `Soal ${mockup.pi * 100 + mockup.qi + 1} dari ${MOCKUP_SPEAKING_TOTAL}` : stepMeta}</span>
-                  </div>
-                  {isMockup ? (
-                    <button className={`speak-flag-btn${isFlagged ? " is-on" : ""}`} id="speak-flag" type="button" aria-pressed={isFlagged} onClick={onSpeakFlag}>
-                      <Flag /> {isFlagged ? "Ditandai" : "Tandai soal"}
-                    </button>
-                  ) : null}
-                </div>
                 <div className="question-card" id="speak-answer-card">
                   <div className="question-card__body">
                     <h1 className="speaking-title" id="speaking-title" tabIndex={-1} ref={titleRef}>{part?.cue ? "Tugas panjang dari examiner" : "Jawab pertanyaannya"}</h1>

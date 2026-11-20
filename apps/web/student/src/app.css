@@ -2421,6 +2421,10 @@ fieldset.field { border: 0; padding: 0; margin: 0; }
   flex-wrap: wrap;
 }
 
+/* On the answer stage the chip row sits above the grid, so the card and the navigator share the
+   same top edge and the chips line up with the card's left edge. */
+.speak-qhead--page { margin-bottom: var(--space-3); }
+
 .speak-qhead__chips { display: flex; gap: var(--space-2); flex-wrap: wrap; }
 
 .badge--solid { background: var(--navy-900); color: var(--white); }
