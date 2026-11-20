@@ -1316,7 +1316,6 @@ export default function App() {
               goToMockupQuestion(pi, qi);
             }}
             onSpeakFlag={toggleSpeakFlag}
-            onFullscreen={() => requestFullscreen()}
             checkStartRef={checkStartRef}
             answerStartRef={answerStartRef}
             onStartRecording={startRecording}

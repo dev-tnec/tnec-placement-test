@@ -2138,20 +2138,10 @@ fieldset.field { border: 0; padding: 0; margin: 0; }
   color: var(--white);
 }
 
-.speak-topbar__brand {
-  display: inline-flex;
-  align-items: center;
-  gap: 10px;
-  font-size: 14px;
-  font-weight: 800;
-  letter-spacing: -.01em;
-}
-
-.speak-topbar__dot {
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
-  background: var(--red-500);
+.speak-topbar__logo {
+  display: block;
+  width: 92px;
+  height: auto;
 }
 
 .speak-topbar__section {
@@ -2207,22 +2197,6 @@ fieldset.field { border: 0; padding: 0; margin: 0; }
   background: var(--yellow-400);
   transition: width var(--duration-base) var(--ease-standard);
 }
-
-.speak-fs-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 7px 10px;
-  border: 1px solid rgba(255, 255, 255, .2);
-  border-radius: var(--radius-sm);
-  background: transparent;
-  color: var(--white);
-  font-size: 12px;
-  font-weight: 600;
-  cursor: pointer;
-}
-
-.speak-fs-btn:hover { background: rgba(255, 255, 255, .08); }
 
 .speaking-grid {
   display: grid;
@@ -2604,7 +2578,6 @@ fieldset.field { border: 0; padding: 0; margin: 0; }
   .speak-progress { display: none; }
   .speak-topbar { gap: var(--space-3); padding: 10px 16px; }
   .speak-topbar__section { padding-left: var(--space-3); }
-  .speak-fs-btn { padding: 6px 8px; }
   .hero-band { padding-top: 24px; padding-bottom: 112px; }
   .main-stage { margin-top: -76px; padding-bottom: 48px; }
   .status-card__top, .status-card__body { padding: 24px 20px; }

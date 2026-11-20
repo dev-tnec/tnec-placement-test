@@ -912,7 +912,7 @@ export function TestScreen({ attempt, index, answers, flagged, perMode, timeLeft
   );
 }
 
-export function SpeakingScreen({ stage, mockup, speaking, recording, speakError, showSkip, checkUrl, recUrl, speakBusy, prepLeft, canRecord, sendLabel, checkStartHidden, noteOverride, videoPlaying, speakingLeft, speakSent, speakFlags, onSpeakPrev, onSpeakNext, onSpeakGoTo, onSpeakFlag, onFullscreen, checkStartRef, answerStartRef, onStartRecording, onStop, onRetryCheck, onCheckOk, onRetake, onSend, onSkip, onPlayVideo, onVideoEnded, onVideoError, videoRef, waveContainerRef, onOpenPrivacy, titleRef }) {
+export function SpeakingScreen({ stage, mockup, speaking, recording, speakError, showSkip, checkUrl, recUrl, speakBusy, prepLeft, canRecord, sendLabel, checkStartHidden, noteOverride, videoPlaying, speakingLeft, speakSent, speakFlags, onSpeakPrev, onSpeakNext, onSpeakGoTo, onSpeakFlag, checkStartRef, answerStartRef, onStartRecording, onStop, onRetryCheck, onCheckOk, onRetake, onSend, onSkip, onPlayVideo, onVideoEnded, onVideoError, videoRef, waveContainerRef, onOpenPrivacy, titleRef }) {
   const isMockup = Boolean(mockup?.started);
   const part = mockup?.plan?.parts[mockup.pi];
   const question = part?.questions[mockup.qi];
@@ -996,7 +996,7 @@ export function SpeakingScreen({ stage, mockup, speaking, recording, speakError,
   return (
     <section className="screen" id="screen-speaking" aria-labelledby="speaking-title">
       <header className="speak-topbar">
-        <span className="speak-topbar__brand"><span className="speak-topbar__dot" aria-hidden="true" />TNEC</span>
+        <img className="speak-topbar__logo" src="/assets/logo-titik-nol-white.png" alt="Titik Nol English Course" width="92" height="16" />
         <span className="speak-topbar__section"><span>{isMockup ? "IELTS Mockup" : "Placement Test"}</span><strong>Speaking</strong></span>
         <span className="speak-topbar__spacer" />
         {isMockup ? (
@@ -1006,7 +1006,6 @@ export function SpeakingScreen({ stage, mockup, speaking, recording, speakError,
           </span>
         ) : null}
         {speakingTimer}
-        <button className="speak-fs-btn" type="button" onClick={onFullscreen}>Layar penuh</button>
       </header>
       <div className="wrap wrap--details speak-wrap">
         <div className={`speaking-grid${isMockup && stage === "answer" ? " speak-grid--wide" : ""}`}>
