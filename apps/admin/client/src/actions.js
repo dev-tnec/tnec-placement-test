@@ -93,8 +93,8 @@ export async function deleteAttempts(ids, single) {
 }
 
 export async function sendTestLink(s, key) {
-  const t = testOf(key), name = key === "placement" ? "Placement Test" : key === "pre" ? "Pre-test" : key === "post" ? "Post-test" : "IELTS Mockup";
-  const hasQuestions = key === "ielts-mockup" ? t.questions.some((q) => q.status === "aktif") : activeQuestions(t).length;
+  const t = testOf(key), name = key === "placement" ? "Placement Test" : key === "pre" ? "Pre-test" : "Post-test";
+  const hasQuestions = activeQuestions(t).length;
   if (!hasQuestions) {
     toast(`${name} belum punya soal aktif. Aktifkan soal dulu sebelum mengirim tautan.`, { label: "Buka soal", run: () => { location.hash = `#/tes/${key}/soal`; } });
     return;
@@ -104,8 +104,8 @@ export async function sendTestLink(s, key) {
     return;
   }
 
-  async function createInvite(packageId = null) {
-    const r = await api(`/api/admin/students/${s.id}/invite`, { method: "POST", body: { test: key, ...(packageId ? { packageId } : {}) } });
+  async function createInvite() {
+    const r = await api(`/api/admin/students/${s.id}/invite`, { method: "POST", body: { test: key } });
     openWhatsApp(s, {
       title: `Kirim tautan ${name} ke ${firstName(s.name)}`,
       text: testLinkText(s, key, r.link, r.expiresAt, r.code, r.packageName, r.packageTotal),
@@ -113,31 +113,8 @@ export async function sendTestLink(s, key) {
       link: r.link,
       linkHint: key === "placement"
         ? "Tautan umum placement test. Hasilnya masuk ke data siswa ini kalau email atau nomor WhatsApp yang diisi sama."
-        : key === "ielts-mockup"
-          ? `Tautan khusus untuk ${firstName(s.name)}. Paket soal: ${r.packageName}. Kode 6 karakter di bawah ini wajib dimasukkan sebelum tes dimulai, dan tautan berlaku sampai ${r.expiresAt ? new Date(r.expiresAt).toLocaleDateString("id-ID", { day: "numeric", month: "long", year: "numeric" }) : "kedaluwarsa"}.`
-          : `Tautan khusus untuk ${firstName(s.name)}. Hanya bisa dipakai sekali dan berlaku sampai ${r.expiresAt ? new Date(r.expiresAt).toLocaleDateString("id-ID", { day: "numeric", month: "long", year: "numeric" }) : "kedaluwarsa"}.`,
+        : `Tautan khusus untuk ${firstName(s.name)}. Hanya bisa dipakai sekali dan berlaku sampai ${r.expiresAt ? new Date(r.expiresAt).toLocaleDateString("id-ID", { day: "numeric", month: "long", year: "numeric" }) : "kedaluwarsa"}.`,
     });
-  }
-
-  if (key === "ielts-mockup") {
-    const options = [["", "Acak, pilih untuk saya"], ...t.packages
-      .filter((p) => p.active && t.questions.some((q) => q.packageId === p.id && q.status === "aktif"))
-      .map((p) => [p.id, p.name])];
-    openFormDialog({
-      title: `Pilih paket soal untuk ${firstName(s.name)}`,
-      sub: "Siswa akan mendapat paket ini. Pilih Acak kalau sistem yang menentukan.",
-      fields: [{ id: "package", label: "Paket soal", type: "select", value: "", options }],
-      onSubmit: async (values) => {
-        try {
-          await createInvite(values.package || null);
-        } catch (error) {
-          if (!sessionEnded(error)) toast(error.message);
-          return false;
-        }
-        return true;
-      },
-    });
-    return;
   }
 
   try {

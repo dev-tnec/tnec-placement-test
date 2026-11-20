@@ -16,6 +16,7 @@ import {
 import { certFormatProblem, certPeriodLabel, formatCertNumber } from "./cert-number.js";
 import { Icon, OptList, RichToolbar } from "./ui.jsx";
 import { buildInviteWhatsApp, formatWib } from "@tnec/core/mockup-bulk";
+import { branchLabel } from "@tnec/core/branches";
 
 /* ===================== Dialog store ===================== */
 let dlg = null;
@@ -1737,12 +1738,65 @@ function SessionImportDialog({ sessionId }) {
   );
 }
 
-/* One participant by hand. The fields are one CSV row sent to the same import confirm endpoint,
-   so the matching against existing students, the quota, the test window, the random package, and
-   the send queue all follow exactly the bulk import rules. */
+/* One participant. The first screen searches Database Siswa: type a name, number, or email and
+   pick the person; everything else follows the existing student. A link below opens the manual
+   form for someone truly new, which still goes through the same import confirm rules, including
+   the name-mismatch confirmation when the number already belongs to another student. */
 function SessionParticipantDialog({ sessionId }) {
   const s = db.sessions.find((x) => x.id === sessionId);
   const scheduled = s?.windowMode === "terjadwal";
+  const [mode, setMode] = useState("search");
+  const [query, setQuery] = useState("");
+  const [results, setResults] = useState(null);
+  const [picked, setPicked] = useState(null);
+  const [acceptMismatch, setAcceptMismatch] = useState(null);
+
+  useEffect(() => {
+    if (mode !== "search") return undefined;
+    const q = query.trim();
+    if (q.length < 2) { setResults(null); return undefined; }
+    let alive = true;
+    const timer = setTimeout(async () => {
+      try {
+        const r = await api(`/api/admin/mockup/students?q=${encodeURIComponent(q)}`);
+        if (alive) setResults(r.results);
+      } catch { /* the list stays; a retry happens on the next keystroke */ }
+    }, 250);
+    return () => { alive = false; clearTimeout(timer); };
+  }, [query, mode]);
+
+  async function addPicked() {
+    const date = $("#sp-date");
+    const time = $("#sp-time");
+    if (scheduled && (!date.value || !time.value)) {
+      fieldError(null, "sp-sched-err", "Tanggal dan jam tes wajib diisi untuk sesi terjadwal.");
+      date.focus();
+      return;
+    }
+    const field = (v) => { const t = String(v ?? "").trim(); return /[",\r\n]/.test(t) ? `"${t.replace(/"/g, '""')}"` : t; };
+    const cols = scheduled ? "nama,whatsapp,email,tanggal_tes,jam_tes" : "nama,whatsapp,email";
+    const line = scheduled
+      ? [field(picked.name), field(picked.whatsapp), field(picked.email || ""), date.value, time.value]
+      : [field(picked.name), field(picked.whatsapp), field(picked.email || "")];
+    const done = busy($("#sp-add-picked"), "Menambahkan...");
+    try {
+      const r = await api(`/api/admin/mockup/sessions/${sessionId}/import/confirm`, {
+        method: "POST",
+        body: { csv: `${cols}\n${line.join(",")}\n` },
+      });
+      closeDialog("session-participant");
+      await reload();
+      toast(r.created
+        ? `${picked.name} ditambahkan. Tekan "Kirim semua" untuk mengirim undangannya.`
+        : "Peserta ini sudah punya undangan di sesi ini, jadi tidak ada yang ditambahkan.");
+    } catch (error) {
+      // The search-picked student carries their registered name, so a mismatch cannot happen here;
+      // every other error lands in the dialog as-is.
+      fieldError(null, "sp-err", error.message);
+    } finally {
+      done();
+    }
+  }
 
   async function add(e) {
     e.preventDefault();
@@ -1767,7 +1821,9 @@ function SessionParticipantDialog({ sessionId }) {
     try {
       const r = await api(`/api/admin/mockup/sessions/${sessionId}/import/confirm`, {
         method: "POST",
-        body: { csv: `${cols}\n${line.join(",")}\n` },
+        // The single manual row is CSV line 2 (line 1 is the header), so the mismatch acceptance
+        // targets that line number.
+        body: { csv: `${cols}\n${line.join(",")}\n`, ...(acceptMismatch ? { accept: [2] } : {}) },
       });
       closeDialog("session-participant");
       await reload();
@@ -1775,53 +1831,110 @@ function SessionParticipantDialog({ sessionId }) {
         ? `${r.created} peserta ditambahkan${r.studentsNew ? `, ${r.studentsNew} siswa baru` : ""}. Tekan "Kirim semua" untuk mengirim undangannya.`
         : "Peserta ini sudah punya undangan di sesi ini, jadi tidak ada yang ditambahkan.");
     } catch (error) {
-      fieldError(null, "sp-err", error.message);
+      if (error.code === "name_mismatch") {
+        setAcceptMismatch(error.message);
+      } else {
+        fieldError(null, "sp-err", error.message);
+      }
     } finally {
       done();
     }
   }
 
   return (
-    <Modal id="dlg-participant" focus="#sp-name" onClose={closeDialog}>
-      <form className="dialog__form" onSubmit={add} noValidate>
-        <Head title="Tambah peserta" sub={s ? `${s.name}. ${scheduled ? "Sesi terjadwal: peserta ini membawa tanggal dan jam tesnya sendiri." : "Sesi fleksibel: peserta memakai rentang sesi."}` : ""} />
-        <div className="dialog__body">
-          <div className="field">
-            <label className="label" htmlFor="sp-name">Nama</label>
-            <input className="input" id="sp-name" type="text" maxLength="80" autoComplete="off" required />
-            <p className="error" id="sp-name-err" role="alert" hidden></p>
-          </div>
-          <div className="field">
-            <label className="label" htmlFor="sp-wa">Nomor WhatsApp</label>
-            <input className="input" id="sp-wa" type="tel" inputMode="tel" maxLength="20" placeholder="08xxxxxxxxxx" autoComplete="off" required />
-            <p className="hint">Menerima 08, 628, atau +62. Kalau nomor atau emailnya sudah terdaftar, data siswa itu dipakai ulang.</p>
-            <p className="error" id="sp-wa-err" role="alert" hidden></p>
-          </div>
-          <div className="field">
-            <label className="label" htmlFor="sp-email">Email (opsional)</label>
-            <input className="input" id="sp-email" type="email" maxLength="120" autoComplete="off" />
-          </div>
-          {scheduled ? <>
+    <Modal id="dlg-participant" focus="#sp-search" onClose={closeDialog}>
+      <Head title="Tambah peserta" sub={s ? `${s.name}. ${scheduled ? "Sesi terjadwal: peserta membawa tanggal dan jam tesnya sendiri." : "Sesi fleksibel: peserta memakai rentang sesi."}` : ""} />
+      <div className="dialog__body">
+        {mode === "search" ? (
+          <>
             <div className="field">
-              <label className="label" htmlFor="sp-date">Tanggal tes</label>
-              <input className="input" id="sp-date" type="date" required />
+              <label className="label" htmlFor="sp-search">Cari siswa</label>
+              <input className="input" id="sp-search" type="search" placeholder="Nama, nomor WhatsApp, atau email" value={query} onChange={(e) => setQuery(e.target.value)} autoFocus />
+              <p className="hint">Ketik minimal 2 karakter. Peserta mockup hampir selalu sudah ada di Database Siswa.</p>
+            </div>
+            {results && results.length === 0 ? <p className="hint">Tidak ada siswa yang cocok. Pakai form manual di bawah kalau orangnya memang baru.</p> : null}
+            {results && results.length ? (
+              <ul className="sp-results">
+                {results.map((r) => (
+                  <li key={r.id}>
+                    <button type="button" className="sp-result" onClick={() => { setPicked(r); setAcceptMismatch(false); }}>
+                      <span className="sp-result__name">{r.name}</span>
+                      <span className="sp-result__meta">{r.whatsapp}{r.branch ? ` - ${branchLabel(r.branch)}` : ""}</span>
+                      <span className="sp-result__sub">{r.email || "tanpa email"}{r.lastTest ? ` - tes terakhir: ${TEST_META[r.lastTest.split(":")[0]]?.name || r.lastTest}` : ""}</span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            ) : null}
+            {picked ? (
+              <div className="sp-picked">
+                <p className="sp-picked__name">{picked.name}</p>
+                <p className="sp-picked__meta">{picked.whatsapp}{picked.email ? ` - ${picked.email}` : ""}</p>
+                {scheduled ? <>
+                  <div className="field">
+                    <label className="label" htmlFor="sp-date">Tanggal tes</label>
+                    <input className="input" id="sp-date" type="date" required />
+                  </div>
+                  <div className="field">
+                    <label className="label" htmlFor="sp-time">Jam tes</label>
+                    <input className="input" id="sp-time" type="time" required />
+                    <p className="hint">Waktu WIB. Peserta bisa masuk sampai {Math.round((s?.entryGraceSeconds ?? 7200) / 3600)} jam setelah jam ini.</p>
+                  </div>
+                </> : null}
+                <p className="error" id="sp-sched-err" role="alert" hidden></p>
+                <p className="error" id="sp-err" role="alert" hidden></p>
+              </div>
+            ) : null}
+            <p className="hint sp-switch">Tidak menemukannya? <button type="button" className="link-inline" onClick={() => { setMode("manual"); setAcceptMismatch(false); }}>Isi data peserta baru</button></p>
+          </>
+        ) : (
+          <form className="dialog__form" onSubmit={add} noValidate>
+            <p className="hint sp-switch"><button type="button" className="link-inline" onClick={() => { setMode("search"); setPicked(null); setAcceptMismatch(false); }}>&larr; Kembali ke pencarian siswa</button></p>
+            <div className="field">
+              <label className="label" htmlFor="sp-name">Nama</label>
+              <input className="input" id="sp-name" type="text" maxLength="80" autoComplete="off" required />
+              <p className="error" id="sp-name-err" role="alert" hidden></p>
             </div>
             <div className="field">
-              <label className="label" htmlFor="sp-time">Jam tes</label>
-              <input className="input" id="sp-time" type="time" required />
-              <p className="hint">Waktu WIB. Peserta bisa masuk sampai {Math.round((s?.entryGraceSeconds ?? 7200) / 3600)} jam setelah jam ini.</p>
+              <label className="label" htmlFor="sp-wa">Nomor WhatsApp</label>
+              <input className="input" id="sp-wa" type="tel" inputMode="tel" maxLength="20" placeholder="08xxxxxxxxxx" autoComplete="off" required />
+              <p className="hint">Menerima 08, 628, atau +62. Kalau nomor atau emailnya sudah terdaftar, data siswa itu dipakai ulang.</p>
+              <p className="error" id="sp-wa-err" role="alert" hidden></p>
             </div>
-            <p className="error" id="sp-sched-err" role="alert" hidden></p>
-          </> : null}
-          <p className="error" id="sp-err" role="alert" hidden></p>
-        </div>
+            <div className="field">
+              <label className="label" htmlFor="sp-email">Email (opsional)</label>
+              <input className="input" id="sp-email" type="email" maxLength="120" autoComplete="off" />
+            </div>
+            {scheduled ? <>
+              <div className="field">
+                <label className="label" htmlFor="sp-date">Tanggal tes</label>
+                <input className="input" id="sp-date" type="date" required />
+              </div>
+              <div className="field">
+                <label className="label" htmlFor="sp-time">Jam tes</label>
+                <input className="input" id="sp-time" type="time" required />
+                <p className="hint">Waktu WIB. Peserta bisa masuk sampai {Math.round((s?.entryGraceSeconds ?? 7200) / 3600)} jam setelah jam ini.</p>
+              </div>
+              <p className="error" id="sp-sched-err" role="alert" hidden></p>
+            </> : null}
+            {acceptMismatch ? <p className="notice notice--neutral" role="alert">{acceptMismatch}</p> : null}            <p className="error" id="sp-err" role="alert" hidden></p>
+            <div className="dialog__foot">
+              <FootEnd>
+                <button className="btn btn--quiet" type="button" onClick={closeDialog}>Batal</button>
+                <button className="btn btn--primary" type="submit" id="sp-add">{acceptMismatch ? "Ya, tetap tambahkan" : "Tambah peserta"}</button>
+              </FootEnd>
+            </div>
+          </form>
+        )}
+      </div>
+      {mode === "search" && picked ? (
         <div className="dialog__foot">
           <FootEnd>
             <button className="btn btn--quiet" type="button" onClick={closeDialog}>Batal</button>
-            <button className="btn btn--primary" type="submit" id="sp-add">Tambah peserta</button>
+            <button className="btn btn--primary" type="button" id="sp-add-picked" onClick={addPicked}>Tambahkan ke sesi</button>
           </FootEnd>
         </div>
-      </form>
+      ) : null}
     </Modal>
   );
 }

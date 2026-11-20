@@ -289,7 +289,20 @@ input[type="checkbox"] { width: 16px; height: 16px; margin: 0; accent-color: var
 a.cell-main:hover { text-decoration: underline; text-underline-offset: 3px; }
 a.cell-main:focus-visible { outline: none; border-radius: 4px; box-shadow: var(--ring); }
 .cell-sub { display: block; margin-top: 2px; font-size: 13px; font-weight: 400; color: var(--text-secondary); }
+.cell-sub--warn { color: var(--red-600); font-weight: 600; }
 .cell-ellipsis { max-width: 240px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* Participant search results in the Tambah peserta dialog: a compact pick list. */
+.sp-results { display: flex; flex-direction: column; gap: 6px; margin-top: 4px; max-height: 320px; overflow-y: auto; }
+.sp-result { display: grid; gap: 2px; width: 100%; text-align: left; padding: 10px 12px; border: 1px solid var(--gray-200); border-radius: var(--radius-md); background: var(--white); cursor: pointer; }
+.sp-result:hover { border-color: var(--navy-700); background: var(--surface-50); }
+.sp-result__name { font-weight: 700; color: var(--navy-900); }
+.sp-result__meta { font-size: 13px; color: var(--text-secondary); }
+.sp-result__sub { font-size: 12px; color: var(--text-secondary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sp-picked { margin-top: 12px; padding: 14px 16px; border: 1px solid var(--gray-200); border-radius: var(--radius-md); background: var(--surface-50); }
+.sp-picked__name { font-weight: 700; color: var(--navy-900); }
+.sp-picked__meta { font-size: 13px; color: var(--text-secondary); margin-top: 2px; }
+.sp-switch { margin-top: 12px; }
 .is-late { color: var(--red-600); font-weight: 600; }
 .is-wrong { color: var(--red-600); font-weight: 600; }
 .clamp-1 { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

@@ -45,7 +45,7 @@ export async function api(path, { method = "GET", body } = {}) {
   let data = null;
   try { data = await response.json(); } catch { data = null; }
   if (response.status === 401) { clearBootstrapCache(); window.location.assign(LOGIN); throw new Error("Sesi berakhir."); }
-  if (!response.ok) { const err = new Error(data?.error || "Permintaan gagal diproses. Coba lagi."); err.field = data?.field; err.status = response.status; throw err; }
+  if (!response.ok) { const err = new Error(data?.error || "Permintaan gagal diproses. Coba lagi."); err.field = data?.field; err.status = response.status; err.code = data?.code || null; err.extra = data || null; throw err; }
   return data;
 }
 

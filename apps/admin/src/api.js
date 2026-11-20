@@ -291,6 +291,7 @@ const ROUTES = [
   ["POST", /^\/api\/admin\/students\/([\w-]+)\/whatsapp$/, sendStudentWhatsApp],
   ["POST", /^\/api\/admin\/students\/([\w-]+)\/invite$/, createInvite],
   ["POST", /^\/api\/admin\/mockup\/sessions$/, saveMockupSession],
+  ["GET", /^\/api\/admin\/mockup\/students$/, searchMockupStudents],
   ["PUT", /^\/api\/admin\/mockup\/sessions\/([\w-]+)$/, saveMockupSession],
   ["POST", /^\/api\/admin\/mockup\/sessions\/([\w-]+)\/import$/, previewSessionImport],
   ["POST", /^\/api\/admin\/mockup\/sessions\/([\w-]+)\/import\/confirm$/, confirmSessionImport],
@@ -388,9 +389,18 @@ async function bootstrap(request, env, user, url) {
     stmt("SELECT * FROM question_packages ORDER BY test_key, position, id"),
     stmt("SELECT * FROM levels ORDER BY position"),
     stmt("SELECT * FROM students ORDER BY created_at DESC"),
+    stmt(`SELECT a.id, a.test_key, a.student_id, a.started_at, a.expires_at, a.submitted_at, a.status, a.score, a.total, a.level_key, a.name,
+                 a.violation_log, a.duration_seconds, a.limit_seconds, a.max_violations, a.email_status, a.pass_score, a.passed,
+                 a.voided_at, a.voided_by, a.void_reason, a.user_agent, a.country, a.bands, a.audio_played_at, a.package_id, a.writing_status, a.writing_error, a.speaking_status, a.speaking_error,
+                 i.session_id AS invite_session_id
+                 FROM attempts a LEFT JOIN invites i ON i.id = a.invite_id
+                 WHERE a.test_key = 'ielts-mockup' AND i.session_id IS NULL AND i.id IS NOT NULL
+                 ORDER BY a.started_at DESC LIMIT 5000`),
     stmt(`SELECT id, test_key, student_id, started_at, expires_at, submitted_at, status, score, total, level_key, name,
                  violation_log, duration_seconds, limit_seconds, max_violations, email_status, pass_score, passed,
-                 voided_at, voided_by, void_reason, user_agent, country, bands, audio_played_at, package_id, writing_status, writing_error, speaking_status, speaking_error FROM attempts ORDER BY started_at DESC LIMIT 5000`),
+                 voided_at, voided_by, void_reason, user_agent, country, bands, audio_played_at, package_id, writing_status, writing_error, speaking_status, speaking_error FROM attempts
+                 WHERE test_key != 'ielts-mockup' OR invite_id IS NULL
+                 ORDER BY started_at DESC LIMIT 5000`),
     stmt(`SELECT s.*,
                  (SELECT COUNT(*) FROM invites i WHERE i.session_id = s.id) AS roster,
                  (SELECT COUNT(*) FROM mockup_invite_queue q JOIN invites i ON i.id = q.invite_id WHERE i.session_id = s.id AND q.wa_status = 'sent') AS wa_sent,
@@ -415,7 +425,7 @@ async function bootstrap(request, env, user, url) {
     stmt("SELECT session_id, package_id FROM mockup_session_packages"),
     stmt("SELECT id, position, prompt, status FROM speaking_questions ORDER BY position, id"),
   ]), certificateData(env)]);
-  const [tests, questions, sections, packages, levels, students, attempts, sessions, emailUse, lastActs, enrolled, programs, durations, programTutors, tutors, periods, classes, s7, s30, speaking, pendaftaran, sessionPkgs, speakingBank] = res.map((r) => r.results);
+  const [tests, questions, sections, packages, levels, students, strayAttempts, attempts, sessions, emailUse, lastActs, enrolled, programs, durations, programTutors, tutors, periods, classes, s7, s30, speaking, pendaftaran, sessionPkgs, speakingBank] = res.map((r) => r.results);
   // One placement attempt now carries one row per speaking question, so the brief the submission
   // lists read is a merge: the working status wins, the review flag is any, and the scores are
   // the mean of what has been graded so far. The merge itself lives next to speakingBrief.
@@ -431,6 +441,9 @@ async function bootstrap(request, env, user, url) {
     list.push(row.package_id);
     packagesBySession.set(row.session_id, list);
   }
+  // Mockup invites without a session are the legacy back door: flagged so the Submission list can
+  // mark them and the team can decide to cancel or let them expire.
+  const straySet = new Set(strayAttempts.map((a) => a.id));
   const last = new Map(lastActs.map((r) => [r.student_id, r.last_at]));
   // Registrations per student, oldest to newest: they drive the registered filter and the count.
   const rowsByStudent = new Map();
@@ -491,7 +504,7 @@ async function bootstrap(request, env, user, url) {
       counts: { roster: s.roster, waSent: s.wa_sent, emailSent: s.email_sent, done: s.done },
     })),
     emailUsage: { sent: emailUse[0]?.sent ?? 0, limit: EMAIL_DAILY_LIMIT },
-    attempts: attempts.map((a) => mapAttempt(a, now, speakingByAttempt.get(a.id))),
+    attempts: attempts.map((a) => mapAttempt(a, now, speakingByAttempt.get(a.id), straySet.has(a.id))),
     speakingBank: speakingBank.map((q) => ({ id: q.id, position: q.position, prompt: q.prompt, status: q.status })),
     speaking: speakingSummary(env, speaking, now),
     enrolledAt: enrolled.map((r) => ms(r.at)),
@@ -556,7 +569,7 @@ function mergeSpeakingRows(rows) {
   };
 }
 
-function mapAttempt(a, now, speaking = null) {
+function mapAttempt(a, now, speaking = null, stray = false) {
   const status = attemptStatus(a, now);
   const strikes = focusStrikes(a.violation_log);
   const failed = status === "timeout" || status === "violation";
@@ -580,6 +593,7 @@ function mapAttempt(a, now, speaking = null) {
     writingStatus: a.writing_status || null, writingError: a.writing_error || "",
     speakingStatus: a.speaking_status || null, speakingError: a.speaking_error || "",
     speaking: speakingBrief(Array.isArray(speaking) ? mergeSpeakingRows(speaking) : speaking),
+    ...(stray ? { noSession: true } : {}),
   };
 }
 
@@ -981,6 +995,11 @@ async function createInvite(request, env, user, url, id) {
   const test = TEST_KEYS.includes(body.test) ? body.test : null;
   if (!test) throw new HttpError(400, "Jenis tes tidak dikenal.");
   if (test === "placement") return json({ ok: true, link: `${env.PUBLIC_WEB_URL}/`, expiresAt: null });
+  // IELTS Mockup is paid and runs in waves: every invite is born from a session with its quota,
+  // window, and queue. Sending one straight from a student profile would bypass all of that.
+  if (test === "ielts-mockup") {
+    throw new HttpError(400, "Undangan IELTS Mockup hanya bisa dibuat dari sesi. Buka tab Sesi dan tambahkan pesertanya di sana.");
+  }
   const token = randomToken(24);
   const now = nowSeconds();
   let code = null;
@@ -1043,6 +1062,31 @@ function mapSessionRow(s, packageIds = []) {
 async function sessionPackageIds(env, sessionId) {
   const rows = await env.DB.prepare("SELECT package_id FROM mockup_session_packages WHERE session_id = ?").bind(sessionId).all();
   return rows.results.map((r) => r.package_id);
+}
+
+/** Student search for the Tambah peserta dialog: partial name, WhatsApp number or suffix, or exact
+ *  email. Capped at 8 rows, needs at least 2 characters, and returns what the team needs to pick
+ *  the right person: identity, branch, and the last test. */
+async function searchMockupStudents(request, env, user, url) {
+  const q = String(new URL(request.url, env.PUBLIC_WEB_URL).searchParams.get("q") || "").trim();
+  if (q.length < 2) return json({ ok: true, results: [] });
+  const wa = normalizeWhatsapp(q);
+  const like = `%${q.replace(/[%_]/g, (m) => `\\${m}`)}%`;
+  const rows = await env.DB.prepare(
+    `SELECT s.id, s.name, s.whatsapp, s.email, s.branch,
+            (SELECT a.test_key || ':' || a.status FROM attempts a WHERE a.student_id = s.id ORDER BY a.started_at DESC LIMIT 1) AS last_test
+       FROM students s
+      WHERE s.name ILIKE ? OR (? <> '' AND s.whatsapp LIKE ?) OR (? <> '' AND s.email = ?)
+      ORDER BY s.created_at DESC LIMIT 8`,
+  ).bind(like, wa || "", wa ? `%${wa}` : "", q.toLowerCase(), q.toLowerCase()).all();
+  return json({
+    ok: true,
+    results: rows.results.map((r) => ({
+      id: r.id, name: r.name,
+      whatsapp: r.whatsapp || "", email: r.email || "", branch: r.branch || "",
+      lastTest: r.last_test || "",
+    })),
+  });
 }
 
 function sessionRow(env, id) {
@@ -1131,7 +1175,7 @@ async function matchRosterRows(env, session, csv) {
   if (parsed.fatal) throw new HttpError(400, parsed.fatal);
   const out = [];
   for (const row of parsed.rows) {
-    const item = { ...row, studentId: null, studentName: null, inviteExisting: false, registrationExisting: false, opensAt: null, expiresAt: null, windowError: null };
+    const item = { ...row, studentId: null, studentName: null, nameMismatch: null, inviteExisting: false, registrationExisting: false, opensAt: null, expiresAt: null, windowError: null };
     if (!row.errors.length && row.wa) {
       const byWa = await env.DB.prepare("SELECT id, name FROM students WHERE whatsapp = ?").bind(row.wa).first();
       const byEmail = row.email ? await env.DB.prepare("SELECT id, name FROM students WHERE email = ? AND id != ?").bind(row.email, byWa?.id || "").first() : null;
@@ -1139,6 +1183,14 @@ async function matchRosterRows(env, session, csv) {
       else if (byWa || byEmail) {
         item.studentId = (byWa || byEmail).id;
         item.studentName = (byWa || byEmail).name;
+        // The typed name is only a warning, never a match rule: the number already identifies the
+        // person. A completely different first name means the team should confirm before a second
+        // student row is created under this number.
+        const typedFirst = String(row.name || "").trim().split(/\s+/)[0].toLowerCase();
+        const knownFirst = String(item.studentName).trim().split(/\s+/)[0].toLowerCase();
+        if (typedFirst && knownFirst && typedFirst !== knownFirst) {
+          item.nameMismatch = `Nomor ini terdaftar atas nama ${item.studentName}, tetapi baris ini menulis ${row.name}.`;
+        }
       }
     }
     if (!row.errors.length) {
@@ -1188,6 +1240,16 @@ async function confirmSessionImport(request, env, user, url, id) {
   const rows = await matchRosterRows(env, session, String(body.csv || ""));
   const bad = rows.filter((r) => r.errors.length || r.windowError);
   if (bad.length) throw new HttpError(400, `${bad.length} baris bermasalah. Baris ${bad[0].line}: ${bad[0].errors[0] || bad[0].windowError}`, { rows: bad });
+  // A row whose number belongs to an existing student but whose typed name does not match needs an
+  // explicit acceptance, so the team consciously confirms against the registered name.
+  const accepted = new Set(Array.isArray(body.accept) ? body.accept : []);
+  const mismatched = rows.filter((r) => r.nameMismatch && !accepted.has(r.line));
+  if (mismatched.length) {
+    throw new HttpError(400, `Baris ${mismatched[0].line}: ${mismatched[0].nameMismatch} Periksa datanya, atau centang baris ini kalau memang benar.`, {
+      rows: mismatched.map((r) => ({ line: r.line, mismatch: r.nameMismatch, studentName: r.studentName })),
+      code: "name_mismatch",
+    });
+  }
   const fresh = rows.filter((r) => !r.inviteExisting);
   // The quota check and the inserts run inside one transaction under a session-row lock, so
   // two concurrent confirms serialize and the quota cannot be overshot by both passing the

@@ -85,6 +85,7 @@ export function AllSubmissions() {
               <tr key={a.id} className={f.selected.has(a.id) ? "is-selected" : ""} onClick={rowClick(href)}>
                 <td className="is-check"><input type="checkbox" checked={f.selected.has(a.id)} aria-label={`Pilih submission ${s ? s.name : a.contactName || a.short}`} onChange={(e) => toggleRow(a.id, e.target.checked)} /></td>
                 <td className="hide-md"><span className="cell-main">{TEST_META[a.test]?.name || a.test}</span>
+                  {a.noSession ? <span className="cell-sub cell-sub--warn">Tanpa sesi</span> : null}
                   {s?.branch ? <span className="cell-sub">Cabang {branchLabel(s.branch)}</span> : null}</td>
                 <td>{s
                   ? <><a className="cell-main" href={href}>{s.name}</a><span className="cell-sub cell-ellipsis">{s.email}</span></>
