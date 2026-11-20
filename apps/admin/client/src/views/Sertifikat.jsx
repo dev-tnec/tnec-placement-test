@@ -29,7 +29,8 @@ export function CertRow({ c, withRecipient }) {
         {s ? (sameName ? null : <span className="cell-sub">Data siswa: {s.name}</span>) : <span className="cell-sub">Data siswa sudah dihapus</span>}
       </td> : null}
       <td className={withRecipient ? "hide-sm" : ""}>{certTypeName(c)}</td>
-      <td className="hide-md nowrap">{fmtDate(c.issuedAt)}<span className="cell-sub">oleh {c.createdBy || "Sistem"}</span></td>
+      <td className="hide-md nowrap">{fmtDate(c.issuedAt)}<span className="cell-sub">oleh {c.createdBy || "Sistem"}</span>
+        {c.attemptId ? <span className="cell-sub cell-sub--ok"><a href={`#/tes/ielts-mockup/submission/${c.attemptId}`}>Otomatis dari mockup</a></span> : null}</td>
       <td className="hide-lg">
         {(c.emailSentAt || c.waSentAt) ? <>
           {c.emailSentAt ? <span className="cell-sub">Email {fmtDate(c.emailSentAt)}</span> : null}

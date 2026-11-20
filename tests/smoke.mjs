@@ -578,6 +578,20 @@ assert.ok(reportManifest.js, "the result report entry is in the manifest");
 assert.ok(existsSync(new URL(`../apps/web/public${reportManifest.js}`, import.meta.url)), "the result report entry bundle exists on disk");
 assert.ok(reportManifest.css && existsSync(new URL(`../apps/web/public${reportManifest.css}`, import.meta.url)), "the result report stylesheet exists on disk");
 
+// The mockup completion messages carry the certificate line only when the certificate issued.
+const { buildMockupDoneWhatsApp } = await import("@tnec/core/whatsapp");
+const doneFacts = { name: "Rani", overall: 6.5, skills: [], resultUrl: "https://x/hasil?attempt=1" };
+assert.equal(buildMockupDoneWhatsApp(doneFacts).includes("Sertifikat"), false, "no certificate line without a certificate");
+assert.equal(buildMockupDoneWhatsApp({ ...doneFacts, certificateNumber: "9/IEL/TNEC/XI/2026" }).includes("9/IEL/TNEC/XI/2026"), true, "certificate number in the WhatsApp copy");
+
+// The certificate number rules are shared by both apps: the admin re-export and the core module agree.
+const coreNumber = await import("@tnec/core/certificate-number");
+const adminNumber = await import("../apps/admin/src/certificates.js");
+assert.equal(coreNumber.formatCertificateNumber("{nomor}/MoM/MKT/TNEC/{bulan_romawi}/{tahun}", { seq: 146, code: "MoM", iso: "2026-11-15" }),
+  adminNumber.formatCertificateNumber("{nomor}/MoM/MKT/TNEC/{bulan_romawi}/{tahun}", { seq: 146, code: "MoM", iso: "2026-11-15" }),
+  "the number rules are one machine");
+assert.equal(coreNumber.periodKey("tahun", "2026-11-15"), "2026", "yearly period");
+
 // The app source and build output carry no HTML files. Only the certificate print templates keep
 // their HTML, as the owner allowed.
 function htmlFiles(dir) {

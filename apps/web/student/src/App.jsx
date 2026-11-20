@@ -566,7 +566,14 @@ export default function App() {
     if (speakingLocked.current) return;
     speakingLocked.current = true;
     setSpeakingLeft(0);
-    if (speakingCountRef.current === 0) { skipSpeaking(); return; }
+    // Time ran out with at least one recorded answer: the attempt finishes and Speechace grades
+    // whatever was recorded. With zero answers the test cannot be skipped (the server refuses), so
+    // the runner tells the student to contact the team instead of submitting an empty interview.
+    if (speakingCountRef.current === 0) {
+      releaseMic();
+      showToast("Waktu bagian speaking habis tanpa satu jawaban terekam. Bagian speaking wajib dikerjakan, jadi hubungi tim Titik Nol lewat WhatsApp untuk jadwal ulang.");
+      return;
+    }
     setMockup((current) => ({ ...current, done: true }));
     clearInterval(prepTimer.current);
     prepTimer.current = null;
@@ -870,8 +877,12 @@ export default function App() {
   }
 
   function speakUnavailable(message, retry = false) {
-    setSpeakError(message);
-    setShowSkip(true);
+    const isMockup = Boolean(mockupRef.current?.started && !mockupRef.current.done);
+    setSpeakError(isMockup
+      ? "Rekaman tidak bisa dimulai. Bagian speaking wajib dikerjakan pada IELTS Mockup, jadi perbaiki izin mikrofonnya dulu: ketuk ikon gembok atau ikon mikrofon di address bar, pilih Izinkan untuk situs ini, lalu tekan tombol rekam sekali lagi."
+      : message);
+    // The mockup speaking cannot be skipped: no skip button there. The placement keeps it.
+    setShowSkip(!isMockup);
     setCheckStartHidden(!retry);
     setRecording(null);
   }

@@ -176,26 +176,39 @@ export async function deliverMockupDone(env, attemptId) {
   const email = attempt.email || attempt.student_email;
   const whatsapp = attempt.whatsapp || attempt.student_whatsapp;
   const stored = attempt.bands ? JSON.parse(attempt.bands) : null;
+  // The auto-issued certificate of this attempt, with its PDF when composition succeeded. The
+  // notification mentions the number and carries the file: attachment on email, document on WhatsApp.
+  const cert = await env.DB.prepare(
+    "SELECT number, pdf, pdf_name, pdf_token FROM certificates WHERE attempt_id = ?",
+  ).bind(attemptId).first();
   const facts = {
     name: attempt.name,
     overall: stored?.overall ?? null,
     skills: stored?.skills || [],
     resultUrl: `${env.PUBLIC_WEB_URL}/hasil?attempt=${encodeURIComponent(attemptId)}`,
     speakingPending: false,
+    certificateNumber: cert?.number || null,
   };
+  const certFileUrl = cert?.pdf_token ? `${env.ADMIN_URL}/cert-file/${cert.pdf_token}` : null;
   const [mail, wa] = await Promise.all([
     email ? (async () => {
       if (!env.SEND_EMAIL) return { ok: false, status: EMAIL_SKIPPED };
       const { subject, html, text } = buildMockupDoneEmail(facts);
       try {
-        await env.SEND_EMAIL.send({ from: env.RESULT_FROM_EMAIL || DEFAULT_FROM, to: email, subject, html, text });
+        await env.SEND_EMAIL.send({
+          from: env.RESULT_FROM_EMAIL || DEFAULT_FROM, to: email, subject, html, text,
+          ...(cert?.pdf ? { attachments: [{ filename: cert.pdf_name || "sertifikat.pdf", content: Buffer.from(cert.pdf).toString("base64") }] } : {}),
+        });
         return { ok: true, status: "sent" };
       } catch (error) {
         console.error("mockup done email failed", error);
         return { ok: false, status: `failed: ${String(error).slice(0, 180)}` };
       }
     })() : null,
-    whatsapp ? sendWhatsApp(env, { to: whatsapp, text: buildMockupDoneWhatsApp(facts), timeoutMs: WHATSAPP_TIMEOUT_MS }) : null,
+    whatsapp ? sendWhatsApp(env, {
+      to: whatsapp, text: buildMockupDoneWhatsApp(facts), timeoutMs: WHATSAPP_TIMEOUT_MS,
+      ...(certFileUrl ? { media: { kind: "document", url: certFileUrl, filename: cert.pdf_name || "sertifikat.pdf" } } : {}),
+    }) : null,
   ]);
   const at = nowSeconds();
   const lines = [];

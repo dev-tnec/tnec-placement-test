@@ -17,8 +17,8 @@ export const CERT_DIR = resolve(dirname(fileURLToPath(import.meta.url)), "../cer
 
 const WIB_OFFSET = 7 * 3600;
 const MAX_NUMBER = 999999;
-const ROMAN = ["I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX", "X", "XI", "XII"];
 const EN_MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+export { periodKey, formatCertificateNumber } from "@tnec/core/certificate-number";
 const TOKEN = /\{([A-Za-z_]+)(?::(\d+))?\}/g;
 const TOKENS = ["nomor", "kode", "bulan", "bulan_romawi", "tahun"];
 export const RESETS = { tahun: "Setiap tahun", bulan: "Setiap bulan", tidak: "Tidak pernah" };
@@ -87,27 +87,8 @@ export function englishDate(iso) {
 }
 
 /* ===================== Numbers ===================== */
-/** The counter a certificate dated `iso` draws from: one per year, one per month, or one for all time. */
-export function periodKey(reset, iso) {
-  if (reset === "bulan") return iso.slice(0, 7);
-  if (reset === "tidak") return "semua";
-  return iso.slice(0, 4);
-}
-
-/** Fills a number format such as {nomor}/MoM/MKT/TNEC/{bulan_romawi}/{tahun}. */
-export function formatCertificateNumber(format, { seq, code, iso }) {
-  const month = Number(iso.slice(5, 7));
-  return String(format).replace(TOKEN, (all, rawName, width) => {
-    const name = rawName.toLowerCase();
-    const digits = Math.min(Number(width) || 0, 8);
-    if (name === "nomor") return String(seq).padStart(digits, "0");
-    if (name === "kode") return code;
-    if (name === "bulan") return String(month).padStart(digits, "0");
-    if (name === "bulan_romawi") return ROMAN[month - 1];
-    if (name === "tahun") return iso.slice(0, 4);
-    return all;
-  });
-}
+/* periodKey and formatCertificateNumber live in @tnec/core/certificate-number and are re-exported
+   above, so the web app's auto-issuing worker draws numbers from the same rules. */
 
 /** A format with its code filled in. Two types with the same pattern would hand out the same numbers. */
 export function numberPattern(format, code) {
@@ -152,7 +133,7 @@ export async function certificateData(env) {
     env.DB.prepare(`SELECT id, type_id, template, number, seq, period, student_id, recipient_name, issued_at, details,
             created_at, created_by, revoked_at, revoked_by, revoke_reason,
             (pdf IS NOT NULL) AS has_pdf, pdf_name, pdf_bytes, pdf_uploaded_at, pdf_uploaded_by,
-            email_sent_at, email_sent_by, wa_sent_at, wa_sent_by
+            email_sent_at, email_sent_by, wa_sent_at, wa_sent_by, attempt_id
        FROM certificates ORDER BY issued_at DESC, created_at DESC LIMIT 5000`),
   ])).map((r) => r.results);
   return {
@@ -170,6 +151,7 @@ export async function certificateData(env) {
       pdf: c.has_pdf ? { name: c.pdf_name || "sertifikat.pdf", bytes: c.pdf_bytes || 0, uploadedAt: c.pdf_uploaded_at ? c.pdf_uploaded_at * 1000 : null, uploadedBy: c.pdf_uploaded_by || "" } : null,
       emailSentAt: c.email_sent_at ? c.email_sent_at * 1000 : null, emailSentBy: c.email_sent_by || "",
       waSentAt: c.wa_sent_at ? c.wa_sent_at * 1000 : null, waSentBy: c.wa_sent_by || "",
+      attemptId: c.attempt_id || null,
     })),
   };
 }

@@ -75,8 +75,9 @@ const TRANSCRIPT_IN_WHATSAPP = 300;
 const NO_CERTIFICATE = "_Hasil ini dipakai untuk penempatan kelas dan bukan sertifikat resmi._";
 const NOT_OFFICIAL_BAND = "_Band ini estimasi dari simulasi internal, bukan skor resmi IELTS._";
 
-/** The mockup completion WhatsApp, sent right after the whole mockup is done. */
-export function buildMockupDoneWhatsApp({ name, overall, skills, resultUrl, speakingPending }) {
+/** The mockup completion WhatsApp, sent right after the whole mockup is done. The certificate PDF
+ *  travels as a document on the same send when it exists. */
+export function buildMockupDoneWhatsApp({ name, overall, skills, resultUrl, speakingPending, certificateNumber }) {
   const first = String(name || "").trim().split(/\s+/)[0];
   const band = (key) => {
     const found = skills?.find((s) => s.skill === key)?.band;
@@ -91,6 +92,7 @@ export function buildMockupDoneWhatsApp({ name, overall, skills, resultUrl, spea
     `Speaking: ${band("Speaking")}`,
     `Overall: ${overall ?? "-"}`,
     ...(speakingPending ? ["", "Band speaking masih diproses dan muncul di halaman hasil dalam beberapa menit."] : []),
+    ...(certificateNumber ? ["", `Sertifikat IELTS Prediction kamu sudah terbit dengan nomor ${certificateNumber}, filenya terlampir di pesan ini.`] : []),
     ...(resultUrl ? ["", `Hasil lengkap: ${resultUrl}`] : []),
     "",
     "Balas pesan ini kalau ingin membahas hasil kamu.",

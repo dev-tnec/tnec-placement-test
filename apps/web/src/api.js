@@ -11,6 +11,7 @@ import { gradeWritingTask, writingBand } from "@tnec/core/writing";
 import { CONSENT_VERSION, PRIVACY, TERMS, WHATSAPP, fillLegal } from "@tnec/core/legal";
 import { whatsappConfigured } from "@tnec/core/whatsapp";
 import { deliverInBackground, deliverMockupDone, runInBackground, EMAIL_SKIPPED } from "@tnec/core/delivery";
+import { autoIssueMockupCertificate } from "@tnec/core/certificate-auto";
 import { sha256Hex, randomToken } from "@tnec/core/crypto";
 import { SPEAKING_MAX_BYTES, speakingType, speechaceConfigured, gradeInBackground, purgeExpiredAttempts } from "@tnec/core/speaking";
 import { isFinalStatus, speakingFacts, aggregateSpeakingFacts } from "@tnec/core/speaking-result";
@@ -536,10 +537,14 @@ async function submitAttempt(request, env, attemptId) {
 
   await env.DB.batch(statements);
 
-  // The mockup completion notification goes out in the background once nothing is left to process.
-  // A pending speaking answer means the band is not final yet; the scoring worker re-triggers then.
+  // The auto-issued mockup certificate and the completion notification go out in the background
+  // once nothing is left to process. A pending speaking answer means the band is not final yet;
+  // the scoring worker re-triggers both then.
   if (testKey === "ielts-mockup" && attempt.invite_id && attempt.student_id && !speakingPending) {
-    runInBackground(() => deliverMockupDone(env, attemptId));
+    runInBackground(async () => {
+      await autoIssueMockupCertificate(env, attemptId).catch((error) => console.error("auto certificate failed", error));
+      await deliverMockupDone(env, attemptId).catch((error) => console.error("mockup done delivery failed", error));
+    });
   }
 
   // Placement scores stay hidden until the contact step. Invite attempts already
@@ -776,11 +781,9 @@ async function getAttemptResult(env, attemptId) {
 async function skipSpeaking(request, env, attemptId) {
   const attempt = await getAttempt(env, attemptId);
   if ((attempt.test_key || "placement") === "ielts-mockup") {
-    if (attempt.status !== "in_progress") throw new HttpError(409, "Percobaan ini sudah dikirim, jadi speaking tidak bisa dilewati.");
-    const count = await env.DB.prepare("SELECT COUNT(*) AS n FROM speaking_answers WHERE attempt_id = ?").bind(attemptId).first();
-    if (count?.n) throw new HttpError(409, "Jawaban speaking sudah direkam, jadi tidak bisa dilewati.");
-    await env.DB.prepare("UPDATE attempts SET speaking_status = 'skipped', speaking_error = NULL WHERE id = ?").bind(attemptId).run();
-    return json({ ok: true });
+    // The interview is a required part of the paid mockup: it cannot be skipped. A student whose
+    // microphone truly fails contacts the team, who re-issue or re-open the window.
+    throw new HttpError(409, "Bagian speaking wajib dikerjakan pada IELTS Mockup dan tidak bisa dilewati. Perbaiki izin mikrofon browser kamu, lalu lanjut mengerjakan.");
   }
   const body = await readJson(request, PUBLIC_BODY_LIMIT);
   const reason = SKIP_REASONS[body?.reason] ? body.reason : "mic";

@@ -318,7 +318,7 @@ export function buildCertificateEmail({ name, typeName, number }) {
 /** The mockup completion email: the bands a student can already see on the result page, sent
  *  right after the whole mockup including the speaking is done. overall may be null while the
  *  speaking is still being scored; the email then says the band follows on the result page. */
-export function buildMockupDoneEmail({ name, overall, skills, resultUrl, speakingPending }) {
+export function buildMockupDoneEmail({ name, overall, skills, resultUrl, speakingPending, certificateNumber }) {
   const safeName = escapeHtml(name);
   const band = overall !== null && overall !== undefined ? String(overall) : "-";
   const subject = "IELTS Mockup kamu sudah selesai";
@@ -351,6 +351,7 @@ export function buildMockupDoneEmail({ name, overall, skills, resultUrl, speakin
         <tr><td style="padding:12px;font-size:15px;font-weight:800;color:${NAVY};">Overall</td><td style="padding:12px;font-size:18px;font-weight:800;color:${NAVY};text-align:right;">${escapeHtml(band)}</td></tr>
       </table>
       ${speakingPending ? `<p style="margin:0 0 20px;font-size:14px;line-height:1.65;color:${GRAY};">Band speaking kamu masih diproses dan akan muncul di halaman hasil dalam beberapa menit.</p>` : ""}
+      ${certificateNumber ? `<p style="margin:0 0 20px;font-size:14px;line-height:1.65;color:${NAVY};font-weight:600;">Sertifikat IELTS Prediction kamu sudah terbit dengan nomor ${escapeHtml(certificateNumber)} dan terlampir di email ini.</p>` : ""}
       <a href="${escapeHtml(resultUrl)}" style="display:block;background:${NAVY};color:#FFFFFF;text-decoration:none;text-align:center;font-size:15px;font-weight:700;padding:15px 24px;border-radius:999px;">Lihat hasil lengkap</a>
       <p style="margin:12px 0 20px;font-size:12px;line-height:1.5;color:${GRAY};word-break:break-all;">${escapeHtml(resultUrl)}</p>
       <p style="margin:0 0 0;font-size:14px;line-height:1.65;color:${GRAY};">
@@ -376,6 +377,7 @@ export function buildMockupDoneEmail({ name, overall, skills, resultUrl, speakin
     `Writing: ${skills?.find((s) => s.skill === "Writing")?.band ?? "-"}`,
     `Speaking: ${skills?.find((s) => s.skill === "Speaking")?.band ?? "-"}`,
     `Overall: ${band}`,
+    ...(certificateNumber ? ["", `Sertifikat IELTS Prediction kamu sudah terbit dengan nomor ${certificateNumber} dan terlampir di email ini.`] : []),
     "",
     `Hasil lengkap: ${resultUrl}`,
     "",

@@ -290,6 +290,8 @@ a.cell-main:hover { text-decoration: underline; text-underline-offset: 3px; }
 a.cell-main:focus-visible { outline: none; border-radius: 4px; box-shadow: var(--ring); }
 .cell-sub { display: block; margin-top: 2px; font-size: 13px; font-weight: 400; color: var(--text-secondary); }
 .cell-sub--warn { color: var(--red-600); font-weight: 600; }
+.cell-sub--ok a { color: #1F7A4D; font-weight: 600; text-decoration: none; }
+.cell-sub--ok a:hover { text-decoration: underline; }
 .cell-ellipsis { max-width: 240px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 /* Participant search results in the Tambah peserta dialog: a compact pick list. */
