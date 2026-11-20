@@ -1311,8 +1311,12 @@ export default function App() {
             speakFlags={speakFlags}
             onSpeakPrev={() => mockupQuestionOffset(-1)}
             onSpeakNext={() => mockupQuestionOffset(1)}
-            onSpeakGoTo={goToMockupQuestion}
+            onSpeakGoTo={(pi, qi) => {
+              if (stage === "check") { showToast("Selesaikan cek mikrofon dulu."); return; }
+              goToMockupQuestion(pi, qi);
+            }}
             onSpeakFlag={toggleSpeakFlag}
+            onFullscreen={() => requestFullscreen()}
             checkStartRef={checkStartRef}
             answerStartRef={answerStartRef}
             onStartRecording={startRecording}

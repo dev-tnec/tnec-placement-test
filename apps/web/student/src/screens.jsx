@@ -912,7 +912,7 @@ export function TestScreen({ attempt, index, answers, flagged, perMode, timeLeft
   );
 }
 
-export function SpeakingScreen({ stage, mockup, speaking, recording, speakError, showSkip, checkUrl, recUrl, speakBusy, prepLeft, canRecord, sendLabel, checkStartHidden, noteOverride, videoPlaying, speakingLeft, speakSent, speakFlags, onSpeakPrev, onSpeakNext, onSpeakGoTo, onSpeakFlag, checkStartRef, answerStartRef, onStartRecording, onStop, onRetryCheck, onCheckOk, onRetake, onSend, onSkip, onPlayVideo, onVideoEnded, onVideoError, videoRef, waveContainerRef, onOpenPrivacy, titleRef }) {
+export function SpeakingScreen({ stage, mockup, speaking, recording, speakError, showSkip, checkUrl, recUrl, speakBusy, prepLeft, canRecord, sendLabel, checkStartHidden, noteOverride, videoPlaying, speakingLeft, speakSent, speakFlags, onSpeakPrev, onSpeakNext, onSpeakGoTo, onSpeakFlag, onFullscreen, checkStartRef, answerStartRef, onStartRecording, onStop, onRetryCheck, onCheckOk, onRetake, onSend, onSkip, onPlayVideo, onVideoEnded, onVideoError, videoRef, waveContainerRef, onOpenPrivacy, titleRef }) {
   const isMockup = Boolean(mockup?.started);
   const part = mockup?.plan?.parts[mockup.pi];
   const question = part?.questions[mockup.qi];
@@ -995,44 +995,54 @@ export function SpeakingScreen({ stage, mockup, speaking, recording, speakError,
 
   return (
     <section className="screen" id="screen-speaking" aria-labelledby="speaking-title">
+      <header className="speak-topbar">
+        <span className="speak-topbar__brand"><span className="speak-topbar__dot" aria-hidden="true" />TNEC</span>
+        <span className="speak-topbar__section"><span>{isMockup ? "IELTS Mockup" : "Placement Test"}</span><strong>Speaking</strong></span>
+        <span className="speak-topbar__spacer" />
+        {isMockup ? (
+          <span className="speak-progress" aria-hidden="true">
+            <span>{speakSent.size}/{MOCKUP_SPEAKING_TOTAL} terkirim</span>
+            <span className="speak-progress__bar"><span style={{ width: `${(speakSent.size / MOCKUP_SPEAKING_TOTAL) * 100}%` }} /></span>
+          </span>
+        ) : null}
+        {speakingTimer}
+        <button className="speak-fs-btn" type="button" onClick={onFullscreen}>Layar penuh</button>
+      </header>
       <div className="wrap wrap--details speak-wrap">
-        <div className="speaking-grid speak-grid--wide">
+        <div className={`speaking-grid${isMockup && stage === "answer" ? " speak-grid--wide" : ""}`}>
           {stage === "check" ? (
-            <div className="question-card" id="speak-check-card">
-              <div className="question-card__top">
-                <span className="badge">Bagian speaking</span>
-                <div className="speak-top__meta">
-                  <span className="question-card__meta">Langkah 1 dari 2</span>
-                  {speakingTimer}
-                </div>
+            <div className="speak-main-col">
+              <div className="speak-qhead">
+                <div className="speak-qhead__chips"><span className="badge">Sebelum mulai</span></div>
               </div>
-              <div className="question-card__body">
-                <p className="eyebrow">Sebelum mulai</p>
-                <h1 className="speaking-title" id="speaking-title" tabIndex={-1} ref={titleRef}>Cek dulu suara kamu</h1>
-                <p className="speaking-lead" id="speak-check-lead">{checkLead}</p>
-                <ol className="speak-steps">
-                  <li>Tekan <strong>Rekam percobaan</strong> dan izinkan mikrofonnya.</li>
-                  <li>Bicara apa saja selama 5 sampai 10 detik, misalnya kenalan singkat kamu.</li>
-                  <li>Dengarkan rekamannya. Jelas? Lanjut. Kurang jelas? Cek ulang.</li>
-                </ol>
-                {feedback}
-                <div className="speak-actions">
-                  {!checkStartHidden ? (
-                    <button className="btn btn--primary btn--lg" id="speak-check-start" ref={checkStartRef} type="button" onClick={() => onStartRecording("check")} disabled={Boolean(recording) || speakBusy}><Mic /> Rekam percobaan</button>
-                  ) : null}
-                  {recording ? (
-                    <button className="btn btn--navy btn--lg" id="speak-check-stop" type="button" onClick={onStop} disabled={recording.elapsed < CHECK_SECONDS.min}><Stop /> Selesai</button>
+              <div className="question-card" id="speak-check-card">
+                <div className="question-card__body">
+                  <h1 className="speaking-title" id="speaking-title" tabIndex={-1} ref={titleRef}>Cek dulu suara kamu</h1>
+                  <p className="speaking-lead" id="speak-check-lead">{checkLead}</p>
+                  <ol className="speak-steps">
+                    <li>Tekan <strong>Rekam percobaan</strong> dan izinkan mikrofonnya.</li>
+                    <li>Bicara apa saja selama 5 sampai 10 detik, misalnya kenalan singkat kamu.</li>
+                    <li>Dengarkan rekamannya. Jelas? Lanjut. Kurang jelas? Cek ulang.</li>
+                  </ol>
+                  {feedback}
+                  <div className="speak-actions">
+                    {!checkStartHidden ? (
+                      <button className="btn btn--primary btn--lg" id="speak-check-start" ref={checkStartRef} type="button" onClick={() => onStartRecording("check")} disabled={Boolean(recording) || speakBusy}><Mic /> Rekam percobaan</button>
+                    ) : null}
+                    {recording ? (
+                      <button className="btn btn--navy btn--lg" id="speak-check-stop" type="button" onClick={onStop} disabled={recording.elapsed < CHECK_SECONDS.min}><Stop /> Selesai</button>
+                    ) : null}
+                  </div>
+                  {checkUrl ? (
+                    <div className="speak-review" id="speak-check-review">
+                      <audio id="speak-check-audio" controls preload="metadata" src={checkUrl} />
+                      <div className="speak-review__actions">
+                        <button className="btn btn--secondary" id="speak-check-retry" type="button" onClick={onRetryCheck}>Cek ulang</button>
+                        <button className="btn btn--primary" id="speak-check-ok" type="button" onClick={onCheckOk}>Suaraku jelas, lanjut <Arrow /></button>
+                      </div>
+                    </div>
                   ) : null}
                 </div>
-                {checkUrl ? (
-                  <div className="speak-review" id="speak-check-review">
-                    <audio id="speak-check-audio" controls preload="metadata" src={checkUrl} />
-                    <div className="speak-review__actions">
-                      <button className="btn btn--secondary" id="speak-check-retry" type="button" onClick={onRetryCheck}>Cek ulang</button>
-                      <button className="btn btn--primary" id="speak-check-ok" type="button" onClick={onCheckOk}>Suaraku jelas, lanjut <Arrow /></button>
-                    </div>
-                  </div>
-                ) : null}
               </div>
             </div>
           ) : (
@@ -1050,13 +1060,6 @@ export function SpeakingScreen({ stage, mockup, speaking, recording, speakError,
                   ) : null}
                 </div>
                 <div className="question-card" id="speak-answer-card">
-                  <div className="question-card__top">
-                    <span className="badge">{isMockup ? "IELTS Mockup Speaking" : "Bagian speaking"}</span>
-                    <div className="speak-top__meta">
-                      <span className="question-card__meta" id="speaking-step">{stepMeta}</span>
-                      {speakingTimer}
-                    </div>
-                  </div>
                   <div className="question-card__body">
                     <h1 className="speaking-title" id="speaking-title" tabIndex={-1} ref={titleRef}>{part?.cue ? "Tugas panjang dari examiner" : "Jawab pertanyaannya"}</h1>
                     {isMockup ? (

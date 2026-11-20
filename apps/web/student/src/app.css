@@ -2122,12 +2122,112 @@ fieldset.field { border: 0; padding: 0; margin: 0; }
 
 /* The speaking screen starts with a bare card, so it needs more air at the top than the test
    screen, and it scales down on short viewports. */
-.speak-wrap { padding-block: clamp(var(--space-12), 9vh, 96px) var(--space-12); }
+.speak-wrap { padding-block: clamp(var(--space-6), 4vh, 40px) var(--space-12); }
+
+/* The exam top bar from the reference: brand, section, sent progress, section timer, and the
+   fullscreen control, in navy above everything. */
+.speak-topbar {
+  position: sticky;
+  top: 0;
+  z-index: 40;
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  padding: 12px clamp(16px, 3vw, 40px);
+  background: var(--navy-900);
+  color: var(--white);
+}
+
+.speak-topbar__brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 14px;
+  font-weight: 800;
+  letter-spacing: -.01em;
+}
+
+.speak-topbar__dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--red-500);
+}
+
+.speak-topbar__section {
+  padding-left: var(--space-4);
+  border-left: 1px solid rgba(255, 255, 255, .15);
+  font-size: 12px;
+  line-height: 1.25;
+  color: var(--text-on-dark-muted);
+}
+
+.speak-topbar__section strong {
+  display: block;
+  font-size: 14px;
+  color: var(--white);
+}
+
+.speak-topbar__spacer { flex: 1; }
+
+.speak-topbar .timer {
+  background: rgba(255, 255, 255, .08);
+  border-color: rgba(255, 255, 255, .14);
+  color: var(--white);
+}
+
+.speak-topbar .timer__label { color: var(--text-on-dark-muted); }
+
+.speak-topbar .timer.is-warning {
+  background: var(--red-500);
+  border-color: var(--red-500);
+}
+
+.speak-topbar .timer.is-warning .timer__label { color: var(--white); }
+
+.speak-progress {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 12px;
+  color: var(--text-on-dark-muted);
+}
+
+.speak-progress__bar {
+  width: 140px;
+  height: 6px;
+  border-radius: 3px;
+  background: rgba(255, 255, 255, .15);
+  overflow: hidden;
+}
+
+.speak-progress__bar span {
+  display: block;
+  height: 100%;
+  background: var(--yellow-400);
+  transition: width var(--duration-base) var(--ease-standard);
+}
+
+.speak-fs-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 10px;
+  border: 1px solid rgba(255, 255, 255, .2);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--white);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.speak-fs-btn:hover { background: rgba(255, 255, 255, .08); }
 
 .speaking-grid {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
-  max-width: 720px;
+  max-width: 780px;
   margin-inline: auto;
 }
 
@@ -2314,7 +2414,7 @@ fieldset.field { border: 0; padding: 0; margin: 0; }
   align-items: start;
 }
 
-.speak-main-col { min-width: 0; }
+.speak-main-col { min-width: 0; max-width: 780px; }
 
 .speak-qhead {
   display: flex;
@@ -2501,6 +2601,10 @@ fieldset.field { border: 0; padding: 0; margin: 0; }
   .rules-details__body { grid-template-columns: 1fr; }
   .card, .console { padding: 20px; }
   .otp-input { height: 44px; font-size: 16px; }
+  .speak-progress { display: none; }
+  .speak-topbar { gap: var(--space-3); padding: 10px 16px; }
+  .speak-topbar__section { padding-left: var(--space-3); }
+  .speak-fs-btn { padding: 6px 8px; }
   .hero-band { padding-top: 24px; padding-bottom: 112px; }
   .main-stage { margin-top: -76px; padding-bottom: 48px; }
   .status-card__top, .status-card__body { padding: 24px 20px; }
