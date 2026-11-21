@@ -17,7 +17,7 @@ import { hashPassword, verifyPassword, randomToken, sha256Hex } from "@tnec/core
 import { fillLegal, TERMS } from "@tnec/core/legal";
 import { attemptStatus, focusStrikes } from "@tnec/core/store";
 import { normalizeWhatsapp } from "@tnec/core/http";
-import { sendWhatsApp, whatsappConfigured, buildResultWhatsApp, PLACEMENT_LEAD_SOURCE } from "@tnec/core/whatsapp";
+import { sendWhatsApp, whatsappConfigured, resetChannelCache, buildResultWhatsApp, PLACEMENT_LEAD_SOURCE } from "@tnec/core/whatsapp";
 import { runInBackground, drainDeliveries, deliverResult } from "@tnec/core/delivery";
 import {
   mapSpeechaceResult, classifyFailure, afterFailure, speakingFacts, aggregateSpeakingFacts, aspectLine, isFinalStatus,
@@ -149,6 +149,20 @@ try {
   assert.deepEqual(JSON.parse(calls[0].init.body), { to: "6281234567890", channelId: env.ATTCOS_CHANNEL_ID, text: "Halo" }, "dashboard messages carry no lead source");
   await sendWhatsApp(env, { to: "+6281234567890", text: "Hasil", source: PLACEMENT_LEAD_SOURCE });
   assert.deepEqual(JSON.parse(calls.at(-1).init.body), { to: "6281234567890", channelId: env.ATTCOS_CHANNEL_ID, text: "Hasil", source: "Placement Test" }, "the result message names its lead source");
+
+  // Branch routing: Pare and Online share the Pare channel, Jogja and Medan never fall back to it.
+  const jogjaEmpty = await sendWhatsApp(env, { to: "6281234567890", text: "Jogja", branch: "jogja" });
+  assert.equal(jogjaEmpty.status, "failed", "Jogja without its own channel does not fall back to Pare");
+  assert.ok(jogjaEmpty.error.includes("Jogja"), "the error names the branch");
+  await sendWhatsApp(env, { to: "6281234567890", text: "Online", branch: "online" });
+  assert.equal(JSON.parse(calls.at(-1).init.body).channelId, env.ATTCOS_CHANNEL_ID, "Online uses the Pare channel");
+  resetChannelCache();
+  const branchEnv = { ...env, DB: { prepare: () => ({ all: async () => ({ results: [{ branch: "pare", channel_id: "pare-chan" }, { branch: "jogja", channel_id: "jogja-chan" }] }) }) } };
+  await sendWhatsApp(branchEnv, { to: "6281234567890", text: "Jogja", branch: "jogja" });
+  assert.equal(JSON.parse(calls.at(-1).init.body).channelId, "jogja-chan", "Jogja uses its own channel");
+  await sendWhatsApp(branchEnv, { to: "6281234567890", text: "Pare", branch: "pare" });
+  assert.equal(JSON.parse(calls.at(-1).init.body).channelId, "pare-chan", "Pare uses the Pare channel");
+  resetChannelCache();
 
   // A certificate goes out as a WhatsApp document with a fetchable link, per the AttCos API.
   globalThis.fetch = reply(200, { success: true, data: { messageId: "doc_1", conversationId: "conv_1", channelId: env.ATTCOS_CHANNEL_ID } });

@@ -204,14 +204,14 @@ a { color: inherit; }
         <header class="panel__head">
           <div>
             <h2 class="panel__title">Saluran WhatsApp per cabang</h2>
-            <p class="panel__desc">Hasil placement test dikirim dari saluran cabang yang dipilih siswa. Online memakai saluran Pare. Cabang yang salurannya kosong jatuh ke Pare, jadi pengiriman tidak pernah berhenti.</p>
+            <p class="panel__desc">Hasil placement test dikirim dari saluran cabang yang dipilih siswa. Pare dan Online memakai satu saluran yang sama. Jogja dan Medan memakai salurannya sendiri dan tidak memakai saluran Pare, jadi salurannya harus diisi sebelum hasil siswa cabang itu dikirim.</p>
           </div>
         </header>
         <div class="table-wrap"><table class="table">
           <thead><tr><th scope="col">Cabang</th><th scope="col">ID saluran AttCos</th><th scope="col" class="hide-sm">Terakhir diubah</th><th scope="col" class="is-action">Aksi</th></tr></thead>
           <tbody>
             <tr>
-              <td><span class="cell-main">Pare</span><span class="cell-sub">Saluran utama, cadangan semua cabang</span></td>
+              <td><span class="cell-main">Pare</span><span class="cell-sub">Dipakai juga oleh cabang Online</span></td>
               <td class="tnum"><code class="channel-code">6a94705f-8df3-47e7-9262-639637209fc5</code></td>
               <td class="hide-sm muted">oleh Aldo Pratama</td>
               <td class="is-action"><span class="row-actions">
@@ -220,7 +220,7 @@ a { color: inherit; }
               </span></td>
             </tr>
             <tr>
-              <td><span class="cell-main">Jogja</span><span class="cell-sub">Jatuh ke saluran Pare bila kosong.</span></td>
+              <td><span class="cell-main">Jogja</span><span class="cell-sub">Saluran cabang ini sendiri, tanpa cadangan</span></td>
               <td class="tnum"><span class="muted">Belum diisi</span></td>
               <td class="hide-sm muted"><span class="muted">Belum pernah</span></td>
               <td class="is-action"><span class="row-actions">
@@ -229,7 +229,7 @@ a { color: inherit; }
               </span></td>
             </tr>
             <tr>
-              <td><span class="cell-main">Medan</span><span class="cell-sub">Jatuh ke saluran Pare bila kosong.</span></td>
+              <td><span class="cell-main">Medan</span><span class="cell-sub">Saluran cabang ini sendiri, tanpa cadangan</span></td>
               <td class="tnum"><span class="muted">Belum diisi</span></td>
               <td class="hide-sm muted"><span class="muted">Belum pernah</span></td>
               <td class="is-action"><span class="row-actions">
@@ -238,13 +238,10 @@ a { color: inherit; }
               </span></td>
             </tr>
             <tr>
-              <td><span class="cell-main">Online</span><span class="cell-sub">Memakai saluran Pare bila kosong</span></td>
-              <td class="tnum"><span class="muted">Belum diisi</span></td>
-              <td class="hide-sm muted"><span class="muted">Belum pernah</span></td>
-              <td class="is-action"><span class="row-actions">
-                <button class="btn btn--quiet btn--sm" type="button">Ubah</button>
-                <button class="btn btn--quiet btn--sm" type="button">Uji kirim</button>
-              </span></td>
+              <td><span class="cell-main">Online</span><span class="cell-sub">Memakai saluran Pare yang sama</span></td>
+              <td class="tnum"><code class="channel-code">6a94705f-8df3-47e7-9262-639637209fc5</code></td>
+              <td class="hide-sm muted">Mengikuti Pare</td>
+              <td class="is-action"><span class="muted">-</span></td>
             </tr>
           </tbody>
         </table></div>

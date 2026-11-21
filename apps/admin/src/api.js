@@ -2254,8 +2254,8 @@ async function saveWhatsAppChannel(request, env, user, url, branch) {
   if (!["pare", "jogja", "medan", "online"].includes(branch)) throw new HttpError(400, "Cabang tidak dikenal.");
   const body = await readJson(request);
   const channelId = text(body.channelId, 100).trim();
-  // Pare is the default channel every other branch falls back to, so it cannot be emptied.
-  if (branch === "pare" && !channelId && !env.ATTCOS_CHANNEL_ID) throw new HttpError(400, "Saluran Pare wajib terisi karena menjadi cadangan semua cabang.", { field: "channelId" });
+  // Pare is also the Online channel, so it cannot be emptied.
+  if (branch === "pare" && !channelId && !env.ATTCOS_CHANNEL_ID) throw new HttpError(400, "Saluran Pare wajib terisi karena dipakai juga oleh cabang Online.", { field: "channelId" });
   await env.DB.prepare("UPDATE whatsapp_channels SET channel_id = ?, updated_at = ?, updated_by = ? WHERE branch = ?")
     .bind(channelId, nowSeconds(), user.name, branch).run();
   resetChannelCache();

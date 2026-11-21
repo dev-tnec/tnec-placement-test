@@ -55,11 +55,11 @@ export function resetChannelCache() {
 async function channelIdFor(env, branch) {
   const channels = await loadChannels(env);
   const pick = (key) => channels.get(key) || "";
-  // Online falls back to Pare, every unknown or unset branch falls back to Pare too, and the env
-  // var is the final fallback so sends never break across the migration.
-  return pick(branch)
-    || pick("pare")
-    || env.ATTCOS_CHANNEL_ID;
+  // Pare and Online share one WhatsApp number. Jogja and Medan have their own number and never
+  // fall back to Pare, so an empty row stops the send instead of sending from the wrong branch.
+  if (branch === "jogja") return pick("jogja");
+  if (branch === "medan") return pick("medan");
+  return pick("pare") || env.ATTCOS_CHANNEL_ID;
 }
 
 export async function sendWhatsApp(env, { to, text, source, media, branch, timeoutMs = TIMEOUT_MS }) {
@@ -68,7 +68,8 @@ export async function sendWhatsApp(env, { to, text, source, media, branch, timeo
   }
   const channelId = branch ? await channelIdFor(env, branch) : (await channelIdFor(env, "pare"));
   if (!channelId) {
-    return { ok: false, status: "skipped", error: "Channel WhatsApp belum diatur. Isi saluran Pare di menu Pengaturan." };
+    const label = branch === "jogja" ? "Jogja" : branch === "medan" ? "Medan" : "Pare";
+    return { ok: false, status: "failed", error: `Saluran WhatsApp cabang ${label} belum diisi. Isi dulu di Pengaturan, Saluran WhatsApp.` };
   }
   const base = (env.ATTCOS_API_BASE || DEFAULT_BASE).replace(/\/+$/, "");
   const controller = new AbortController();

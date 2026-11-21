@@ -228,6 +228,8 @@ Passwords use PBKDF2 SHA-256 at 600,000 iterations; each account stores its own 
 
 The TNEC channel in AttCos is a WhatsApp account linked through Baileys, not Meta's Cloud API. A message can go to any number at any time, with no 24 hour window and no template rule, so do not design around Cloud API limits.
 
+Each branch sends from its own row in `whatsapp_channels`. Pare and Online share the Pare channel. Jogja and Medan use their own channel and never fall back to Pare, so a missing branch channel fails that send with a message naming the branch, and the dashboard panel shows the Online row as read-only because it follows Pare.
+
 Two things send messages. The test app sends the placement result by itself in the background after the contact step, next to the email, and gives AttCos at most 20 seconds. That message carries `source: "Placement Test"`, which AttCos stores on the contact as the lead source and shows on its pipeline card (an optional string of 1 to 80 characters in the AttCos API). The dashboard sends when someone presses Kirim, waits at most 25 seconds, and sends no source. Every send is logged in `wa_messages` and in the student's activity (automatic sends show as Sistem), and AttCos errors come back in Indonesian. The 422 message and the "Buka di WhatsApp" fallback only matter if the channel ever moves to the Cloud API. The AttCos key was pasted in chat on 16 November 2026, so it should be rotated.
 
 ## Result delivery

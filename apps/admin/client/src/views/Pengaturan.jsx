@@ -9,7 +9,8 @@ import { openFormDialog } from "../dialogs.jsx";
 import { BRANCHES, branchLabel } from "@tnec/core/branches";
 import { MenuBtn } from "../menus.jsx";
 
-const FALLBACK = "Jatuh ke saluran Pare bila kosong.";
+const ONLINE_SHARES_PARE = "Memakai saluran Pare yang sama";
+const OWN_CHANNEL = "Saluran cabang ini sendiri, tanpa cadangan";
 
 export function Pengaturan({ tab }) {
   useVersion();
@@ -43,33 +44,38 @@ function ChannelPanel() {
 
   if (channels === null) return <section className="panel"><div className="panel__foot"><p className="panel__desc">Memuat saluran...</p></div></section>;
   const pare = channels.find((c) => c.branch === "pare");
+  const rowFor = (key) => channels.find((x) => x.branch === key) || { branch: key, channelId: "", updatedBy: "", updatedAt: null };
   return <>
     <section className="panel">
       <header className="panel__head"><div>
         <h2 className="panel__title">Saluran WhatsApp per cabang</h2>
-        <p className="panel__desc">Hasil placement test dikirim dari saluran cabang yang dipilih siswa. Online memakai saluran Pare. Cabang yang salurannya kosong jatuh ke Pare, jadi pengiriman tidak pernah berhenti.</p>
+        <p className="panel__desc">Hasil Placement Test dikirim dari saluran cabang yang dipilih siswa. Pare dan Online memakai satu saluran yang sama. Jogja dan Medan memakai salurannya sendiri dan tidak memakai saluran Pare, jadi salurannya harus diisi sebelum hasil siswa cabang itu dikirim.</p>
       </div></header>
       <div className="table-wrap"><table className="table">
         <thead><tr><th scope="col">Cabang</th><th scope="col">ID saluran AttCos</th><th scope="col" className="hide-sm">Terakhir diubah</th><th scope="col" className="is-action"><span className="sr-only">Aksi</span></th></tr></thead>
         <tbody>
           {BRANCHES.map(([key]) => {
-            const c = channels.find((x) => x.branch === key) || { branch: key, channelId: "", updatedBy: "", updatedAt: null };
+            const c = rowFor(key);
+            const shared = key === "online";
+            const shown = shared ? pare : c;
             return (
               <tr key={key}>
                 <td><span className="cell-main">{branchLabel(key)}</span>
-                  <span className="cell-sub">{key === "pare" ? "Saluran utama, cadangan semua cabang" : key === "online" ? "Memakai saluran Pare bila kosong" : FALLBACK}</span></td>
-                <td className="tnum">{c.channelId ? <code className="channel-code">{c.channelId}</code> : <span className="muted">Belum diisi</span>}</td>
-                <td className="hide-sm cell-sub">{c.updatedAt ? <>oleh {c.updatedBy}</> : <span className="muted">Belum pernah</span>}</td>
+                  <span className="cell-sub">{key === "pare" ? "Dipakai juga oleh cabang Online" : shared ? ONLINE_SHARES_PARE : OWN_CHANNEL}</span></td>
+                <td className="tnum">{shown?.channelId ? <code className="channel-code">{shown.channelId}</code> : <span className="muted">Belum diisi</span>}</td>
+                <td className="hide-sm cell-sub">{shared ? <span className="muted">Mengikuti Pare</span> : c.updatedAt ? <>oleh {c.updatedBy}</> : <span className="muted">Belum pernah</span>}</td>
                 <td className="is-action"><span className="row-actions">
-                  <button className="btn btn--quiet btn--sm" type="button" onClick={() => editChannel(key, branchLabel(key), c.channelId, load)}>Ubah</button>
-                  <button className="btn btn--quiet btn--sm" type="button" onClick={() => testChannel(key, branchLabel(key))}>Uji kirim</button>
+                  {shared ? <span className="muted">-</span> : <>
+                    <button className="btn btn--quiet btn--sm" type="button" onClick={() => editChannel(key, branchLabel(key), c.channelId, load)}>Ubah</button>
+                    <button className="btn btn--quiet btn--sm" type="button" onClick={() => testChannel(key, branchLabel(key))}>Uji kirim</button>
+                  </>}
                 </span></td>
               </tr>
             );
           })}
         </tbody>
       </table></div>
-      {pare && !pare.channelId ? <div className="panel__foot"><p className="error" role="alert">Saluran Pare belum terisi. Semua cabang jatuh ke Pare, jadi isi dulu baris Pare di atas.</p></div> : null}
+      {pare && !pare.channelId ? <div className="panel__foot"><p className="error" role="alert">Saluran Pare belum terisi. Pare dan Online memakai saluran ini, jadi isi dulu baris Pare di atas.</p></div> : null}
     </section>
   </>;
 }
@@ -78,10 +84,10 @@ function editChannel(branch, label, current, done) {
   openFormDialog({
     title: `Saluran ${label}`,
     sub: "Salin ID channel dari daftar channel di AttCos.",
-    fields: [{ id: "channelId", label: "ID saluran AttCos", type: "text", value: current, hint: "Kosong berarti memakai saluran Pare." }],
+    fields: [{ id: "channelId", label: "ID saluran AttCos", type: "text", value: current, hint: branch === "pare" ? "Saluran ini dipakai Pare dan Online." : "Cabang ini tidak memakai saluran Pare, jadi salurannya harus diisi." }],
     submitLabel: "Simpan saluran",
     onSubmit: async (values, fail) => {
-      if (branch === "pare" && !values.channelId.trim()) { fail("channelId", "Saluran Pare wajib terisi karena menjadi cadangan semua cabang."); return false; }
+      if (branch === "pare" && !values.channelId.trim()) { fail("channelId", "Saluran Pare wajib terisi karena dipakai juga oleh cabang Online."); return false; }
       await api(`/api/admin/whatsapp-channels/${branch}`, { method: "PUT", body: { channelId: values.channelId.trim() } });
       toast(`Saluran ${label} tersimpan.`);
       await done();
