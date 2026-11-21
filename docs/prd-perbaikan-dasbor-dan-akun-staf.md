@@ -14,11 +14,11 @@ Lencana pada menu "Database Siswa" di bilah sisi menunjukkan 5, padahal siswa te
 
 ### Keputusan
 
-Lencana berubah makna dan hitungannya: ia hanya menghitung lead baru yang perlu dihubungi, yaitu `stage === "baru"`, `daftarCount === 0`, dan tidak dingin, sama dengan antrean "Perlu dihubungi" di Ringkasan. Judul tooltip diperbarui menyebut makna itu. Siswa terdaftar tidak pernah masuk lencana; jumlah mereka sudah ada di halaman Database Siswa sendiri.
+1. Lencana pada menu "Database Siswa" menghitung siswa terdaftar: baris `students` dengan pendaftaran aktif, sama dengan baris yang halaman Database Siswa tampilkan. Lead tidak pernah masuk lencana ini; lead ada di menu Placement Test, tab Lead, dan antrean "Perlu dihubungi" di Ringkasan.
 
 ### Penerimaan
 
-Lencana sama persis dengan angka pada panel "Perlu dihubungi" Ringkasan. Lead dingin dan siswa terdaftar tidak terhitung.
+Lencana sama persis dengan jumlah baris di halaman Database Siswa. Lead, dingin maupun baru, tidak terhitung.
 
 ## 3. Poin 2: Baris tabel tidak boleh terbuka saat menyalin teks
 

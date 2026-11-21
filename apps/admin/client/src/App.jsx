@@ -4,7 +4,7 @@
 import { useEffect, useState } from "react";
 import { dataReady, db, notify, reload, route, ui, useRoute, useVersion, TEST_KEYS, LOGIN } from "./store.js";
 import { clearBootstrapCache } from "./bootstrap-cache.js";
-import { isColdLead, leads, exportStudents, exportAttempts, exportAllAttempts, TEST_META, questionNumber } from "./lib.js";
+import { exportStudents, exportAttempts, exportAllAttempts, TEST_META, questionNumber } from "./lib.js";
 import { Icon, PageHead, Empty } from "./ui.jsx";
 import { IconSprite } from "./icons.jsx";
 import { closeMenu } from "./menus.jsx"; // also registers the menu listeners
@@ -27,9 +27,9 @@ function Sidebar({ nav }) {
   useVersion();
   const [collapsed, setCollapsed] = useState(() => { try { return localStorage.getItem("tnec-nav-collapsed") === "1"; } catch { return false; } });
   useEffect(() => { document.body.classList.toggle("nav-collapsed", collapsed); }, [collapsed]);
-  // The badge counts exactly what the Ringkasan "Perlu dihubungi" queue counts: fresh leads only,
-  // never registered students and never cold leads. Students carry their own count on their page.
-  const fresh = leads().filter((s) => s.stage === "baru" && !isColdLead(s)).length;
+  // The badge counts what the Database Siswa page lists: students with at least one non-cancelled
+  // registration. Leads live under Placement Test, Lead, so they never carry this badge.
+  const registered = db.students.filter((s) => s.daftarCount > 0).length;
   const items = [
     ["ringkasan", "#/ringkasan", "dashboard", "Ringkasan"],
     ["siswa", "#/siswa", "users", "Database Siswa"],
@@ -59,7 +59,7 @@ function Sidebar({ nav }) {
         {items.map(([key, href, icon, label]) => (
           <a key={key} className="nav__link" href={href} data-nav={key} title={label} {...(nav === key ? { "aria-current": "page" } : {})}>
             <Icon name={icon} /><span className="nav__label">{label}</span>
-            {key === "siswa" ? <span className="nav__count" title="Lead baru yang belum dihubungi, lead dingin tidak dihitung" hidden={!fresh}>{fresh}</span> : null}
+            {key === "siswa" ? <span className="nav__count" title="Siswa terdaftar: punya satu pendaftaran aktif" hidden={!registered}>{registered}</span> : null}
           </a>
         ))}
         {/* A tutor sees only their students and results: the test group, program, and settings stay
