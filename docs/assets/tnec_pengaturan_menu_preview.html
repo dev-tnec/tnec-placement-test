@@ -1,0 +1,363 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TNEC - Pratinjau Menu Pengaturan</title>
+<!--
+  TNEC Dashboard Preview: Pengaturan (Saluran WhatsApp, Staf) + Program & Kelas
+  (Program, Periode, Kelas & Tutor) as one two-tab experience.
+  - Built on the dashboard tokens from apps/admin/client/src/admin.css.
+  - The sidebar stays short: Ringkasan, Database Siswa, Sertifikat, Submission, the four tests,
+    then ONE Pengaturan entry whose page carries the tab bar.
+  - Preview only: the mode switcher toggles the two pages; in the app these are real hash routes.
+-->
+<style>
+:root {
+  --navy-900: #0A1B38; --navy-800: #10264A; --navy-700: #16325C; --navy-600: #22456F; --navy-500: #2E5A85;
+  --red-500: #E3201F; --red-600: #C41615; --red-50: #FDECEC;
+  --yellow-400: #F7B500; --yellow-50: #FFF6DC;
+  --white: #FFFFFF; --gray-50: #F4F3F0; --gray-200: #E6E2D9; --gray-300: #EDEAE3;
+  --surface-50: #F7F8FA; --surface-100: #EEF2F7;
+  --text-primary: #0A1B38; --text-secondary: #5C6B7F;
+  --text-on-dark: #FFFFFF; --text-on-dark-muted: #C3CFE0;
+  --font-sans: "Inter", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --radius-sm: 8px; --radius-md: 12px; --radius-lg: 16px; --radius-pill: 999px;
+  --shadow-card: 0 1px 2px rgba(10,27,56,.06), 0 8px 24px rgba(10,27,56,.06);
+}
+*, *::before, *::after { box-sizing: border-box; }
+[hidden] { display: none !important; }
+body {
+  margin: 0; min-height: 100vh; display: flex;
+  background: var(--gray-50); color: var(--text-primary);
+  font-family: var(--font-sans); font-size: 14px; line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+}
+h1, h2, h3, p { margin: 0; }
+button, select, input { font: inherit; }
+a { color: inherit; }
+:focus-visible { outline: 3px solid rgba(22, 50, 92, .45); outline-offset: 2px; }
+
+/* ---------- Sidebar ---------- */
+.sidebar {
+  flex: 0 0 240px; display: flex; flex-direction: column;
+  background: var(--navy-900); color: var(--text-on-dark-muted);
+  position: sticky; top: 0; height: 100vh;
+}
+.brand { padding: 20px 20px 14px; border-bottom: 1px solid rgba(255,255,255,.08); }
+.brand__logo { display: block; width: 140px; height: auto; margin-bottom: 2px; }
+.brand__name { font-size: 11px; letter-spacing: .08em; text-transform: uppercase; }
+.nav { padding: 12px 12px 20px; overflow-y: auto; flex: 1; }
+.nav__group { margin: 14px 8px 6px; font-size: 11px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: rgba(195,207,224,.55); }
+.nav__link {
+  display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: var(--radius-sm);
+  color: var(--text-on-dark-muted); font-size: 13px; font-weight: 600; text-decoration: none;
+}
+.nav__link:hover { background: rgba(255,255,255,.07); color: var(--white); }
+.nav__link[aria-current="page"] { background: rgba(255,255,255,.12); color: var(--white); }
+.nav__link svg { flex: 0 0 auto; }
+.nav__count {
+  margin-left: auto; padding: 1px 8px; border-radius: var(--radius-pill);
+  background: var(--yellow-400); color: var(--navy-900); font-size: 11px; font-weight: 800;
+}
+.sidebar__foot { padding: 14px 20px; border-top: 1px solid rgba(255,255,255,.08); display: flex; align-items: center; gap: 10px; }
+.avatar { width: 34px; height: 34px; border-radius: 50%; background: var(--navy-600); color: var(--white); display: grid; place-items: center; font-size: 12px; font-weight: 700; }
+.account__name { display: block; font-size: 13px; color: var(--white); font-weight: 600; }
+.account__role { font-size: 11px; }
+
+/* ---------- Main ---------- */
+.main { flex: 1; min-width: 0; padding: 28px clamp(16px, 3vw, 32px) 72px; }
+.page-head { display: flex; align-items: flex-end; justify-content: space-between; flex-wrap: wrap; gap: 16px 24px; margin-bottom: 24px; }
+.page-title { font-size: 28px; font-weight: 700; line-height: 1.15; letter-spacing: -.02em; }
+.page-desc { margin-top: 6px; font-size: 14px; color: var(--text-secondary); }
+.page-actions { display: flex; gap: 10px; flex-wrap: wrap; }
+
+/* Tabs */
+.seg { display: inline-flex; gap: 2px; padding: 4px; border-radius: var(--radius-md); background: rgba(10,27,56,.06); max-width: 100%; overflow-x: auto; }
+.seg__item {
+  display: inline-flex; align-items: center; gap: 8px; height: 36px; padding: 0 16px;
+  border: 0; border-radius: var(--radius-sm); background: transparent; color: var(--text-secondary);
+  font-size: 14px; font-weight: 600; text-decoration: none; white-space: nowrap; cursor: pointer;
+}
+.seg__item:hover { color: var(--navy-900); }
+.seg__item[aria-current="page"] { background: var(--white); color: var(--navy-900); box-shadow: var(--shadow-card); }
+.seg__n { font-size: 12px; font-weight: 700; color: var(--text-secondary); font-variant-numeric: tabular-nums; }
+.tabs { margin: -4px 0 20px; }
+
+/* Panels */
+.stack { display: flex; flex-direction: column; gap: 20px; }
+.grid-2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px; align-items: start; }
+.panel { position: relative; background: var(--white); border: 1px solid var(--gray-200); border-radius: var(--radius-lg); box-shadow: var(--shadow-card); overflow: hidden; }
+.panel__head { display: flex; align-items: flex-start; justify-content: space-between; flex-wrap: wrap; gap: 12px 16px; padding: 18px 20px 16px; }
+.panel__title { display: flex; align-items: center; gap: 8px; font-size: 16px; font-weight: 700; }
+.panel__title .count-pill { font-size: 12px; }
+.count-pill { padding: 1px 8px; border-radius: var(--radius-pill); background: rgba(10,27,56,.06); font-size: 12px; font-weight: 700; color: var(--text-secondary); }
+.panel__desc { margin-top: 4px; max-width: 680px; font-size: 13px; color: var(--text-secondary); }
+.panel__foot { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; padding: 12px 20px; box-shadow: inset 0 1px 0 var(--gray-200); font-size: 13px; color: var(--text-secondary); }
+
+/* Table */
+.table-wrap { overflow-x: auto; }
+.table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.table th { padding: 10px 20px; text-align: left; font-size: 11px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--text-secondary); border-bottom: 1px solid var(--gray-200); white-space: nowrap; }
+.table td { padding: 12px 20px; border-bottom: 1px solid var(--gray-200); vertical-align: top; }
+.table tbody tr:last-child td { border-bottom: 0; }
+.cell-main { display: block; font-weight: 600; color: var(--text-primary); }
+.cell-sub { display: block; margin-top: 2px; font-size: 13px; font-weight: 400; color: var(--text-secondary); }
+.cell-sub--warn { color: var(--red-600); font-weight: 600; }
+.muted { color: var(--text-secondary); }
+.tnum { font-variant-numeric: tabular-nums; }
+.channel-code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; color: var(--navy-700); word-break: break-all; }
+
+/* Buttons */
+.btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  padding: 0 16px; height: 36px; border: 1px solid transparent; border-radius: var(--radius-sm);
+  font-size: 13px; font-weight: 700; text-decoration: none; cursor: pointer; white-space: nowrap;
+}
+.btn--primary { background: var(--navy-900); color: var(--white); }
+.btn--primary:hover { background: var(--navy-700); }
+.btn--quiet { background: var(--white); border-color: var(--gray-200); color: var(--navy-900); }
+.btn--quiet:hover { border-color: var(--navy-900); }
+.btn--sm { height: 30px; padding: 0 12px; font-size: 12px; }
+.row-actions { display: inline-flex; align-items: center; justify-content: flex-end; gap: 6px; }
+.is-action { width: 1%; white-space: nowrap; }
+.error { font-size: 12px; font-weight: 600; color: var(--red-600); }
+
+/* Status chips (Program page) */
+.status { display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px; border-radius: var(--radius-pill); font-size: 12px; font-weight: 600; background: var(--surface-100); color: var(--navy-700); }
+.status--ok { background: #E6F6EE; color: #1F7A4D; }
+.status--off { background: var(--gray-300); color: var(--text-secondary); }
+
+/* Preview switcher */
+.mode-bar { background: var(--navy-800); border-bottom: 1px solid rgba(255,255,255,.1); padding: 6px 20px; display: flex; justify-content: space-between; align-items: center; color: var(--text-on-dark-muted); font-size: 11px; }
+.mode-bar b { letter-spacing: .06em; text-transform: uppercase; }
+
+@media (max-width: 900px) {
+  .sidebar { position: static; height: auto; flex-basis: 100%; }
+  body { flex-direction: column; }
+  .grid-2 { grid-template-columns: 1fr; }
+  .hide-sm, .hide-md { display: none; }
+}
+</style>
+</head>
+<body>
+
+<div class="mode-bar">
+  <b>Pratinjau Menu Pengaturan</b>
+  <div class="seg" role="group" aria-label="Halaman">
+    <button class="seg__item" data-page="pengaturan" aria-current="page">Pengaturan</button>
+    <button class="seg__item" data-page="program">Program &amp; Kelas</button>
+  </div>
+</div>
+
+<aside class="sidebar">
+  <div class="brand">
+    <svg class="brand__logo" viewBox="0 0 501 84" role="img" aria-label="Titik Nol English Course"><text x="8" y="58" fontFamily="Inter, Segoe UI, Arial" fontSize="44" fontWeight="800" fill="#FFFFFF">Titik Nol English Course</text></svg>
+    <span class="brand__name">Dasbor internal</span>
+  </div>
+  <nav class="nav" aria-label="Menu utama">
+    <a class="nav__link" href="#"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect width="7" height="9" x="3" y="3" rx="1"/><rect width="7" height="5" x="14" y="3" rx="1"/><rect width="7" height="9" x="14" y="12" rx="1"/><rect width="7" height="5" x="3" y="16" rx="1"/></svg><span>Ringkasan</span></a>
+    <a class="nav__link" href="#"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg><span>Database Siswa</span><span class="nav__count">2</span></a>
+    <a class="nav__link" href="#"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="8" r="6"/><path d="M15.5 13 17 22l-5-3-5 3 1.5-9"/></svg><span>Sertifikat</span></a>
+    <p class="nav__group">Tes</p>
+    <a class="nav__link" href="#"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m22 2-7 20-4-9-9-4z"/><path d="M22 2 11 13"/></svg><span>Submission</span></a>
+    <a class="nav__link" href="#"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect width="8" height="4" x="8" y="2" rx="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/></svg><span>Placement Test</span></a>
+    <a class="nav__link" href="#"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 10v6M2 10l10-5 10 5-10 5z"/><path d="M6 12v5c3 3 9 3 12 0v-5"/></svg><span>Pre-test</span></a>
+    <a class="nav__link" href="#"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 10v6M2 10l10-5 10 5-10 5z"/><path d="M6 12v5c3 3 9 3 12 0v-5"/></svg><span>Post-test</span></a>
+    <a class="nav__link" href="#"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m12.83 2 8 13L12 22l-8.83-7 8-13z"/></svg><span>IELTS Mockup</span></a>
+    <p class="nav__group">Pengaturan</p>
+    <a class="nav__link" href="#"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12.83 2 3 9l9 13 9-13z"/></svg><span>Program &amp; Kelas</span></a>
+    <a class="nav__link" href="#" aria-current="page"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/></svg><span>Pengaturan</span></a>
+  </nav>
+  <div class="sidebar__foot">
+    <span class="avatar">AP</span>
+    <div><span class="account__name">Aldo Pratama</span><span class="account__role">Administrator</span></div>
+  </div>
+</aside>
+
+<main class="main">
+
+  <!-- ================= Page: Pengaturan ================= -->
+  <div id="page-pengaturan">
+    <header class="page-head">
+      <div>
+        <h1 class="page-title">Pengaturan</h1>
+        <p class="page-desc">Saluran WhatsApp per cabang dan akun staf.</p>
+      </div>
+    </header>
+    <nav class="seg tabs" aria-label="Bagian pengaturan">
+      <a class="seg__item" href="#" aria-current="page">Saluran WhatsApp</a>
+      <a class="seg__item" href="#">Staf</a>
+    </nav>
+    <div class="stack">
+
+      <section class="panel">
+        <header class="panel__head">
+          <div>
+            <h2 class="panel__title">Saluran WhatsApp per cabang</h2>
+            <p class="panel__desc">Hasil placement test dikirim dari saluran cabang yang dipilih siswa. Online memakai saluran Pare. Cabang yang salurannya kosong jatuh ke Pare, jadi pengiriman tidak pernah berhenti.</p>
+          </div>
+        </header>
+        <div class="table-wrap"><table class="table">
+          <thead><tr><th scope="col">Cabang</th><th scope="col">ID saluran AttCos</th><th scope="col" class="hide-sm">Terakhir diubah</th><th scope="col" class="is-action"><span class="sr-only">Aksi</span></th></tr></thead>
+          <tbody>
+            <tr>
+              <td><span class="cell-main">Pare</span><span class="cell-sub">Saluran utama, cadangan semua cabang</span></td>
+              <td class="tnum"><code class="channel-code">6a94705f-8df3-47e7-9262-639637209fc5</code></td>
+              <td class="hide-sm cell-sub">oleh Aldo Pratama</td>
+              <td class="is-action"><span class="row-actions">
+                <button class="btn btn--quiet btn--sm" type="button">Ubah</button>
+                <button class="btn btn--quiet btn--sm" type="button">Uji kirim</button>
+              </span></td>
+            </tr>
+            <tr>
+              <td><span class="cell-main">Jogja</span><span class="cell-sub">Jatuh ke saluran Pare bila kosong.</span></td>
+              <td class="tnum"><span class="muted">Belum diisi</span></td>
+              <td class="hide-sm cell-sub"><span class="muted">Belum pernah</span></td>
+              <td class="is-action"><span class="row-actions">
+                <button class="btn btn--quiet btn--sm" type="button">Ubah</button>
+                <button class="btn btn--quiet btn--sm" type="button">Uji kirim</button>
+              </span></td>
+            </tr>
+            <tr>
+              <td><span class="cell-main">Medan</span><span class="cell-sub">Jatuh ke saluran Pare bila kosong.</span></td>
+              <td class="tnum"><span class="muted">Belum diisi</span></td>
+              <td class="hide-sm cell-sub"><span class="muted">Belum pernah</span></td>
+              <td class="is-action"><span class="row-actions">
+                <button class="btn btn--quiet btn--sm" type="button">Ubah</button>
+                <button class="btn btn--quiet btn--sm" type="button">Uji kirim</button>
+              </span></td>
+            </tr>
+            <tr>
+              <td><span class="cell-main">Online</span><span class="cell-sub">Memakai saluran Pare bila kosong</span></td>
+              <td class="tnum"><span class="muted">Belum diisi</span></td>
+              <td class="hide-sm cell-sub"><span class="muted">Belum pernah</span></td>
+              <td class="is-action"><span class="row-actions">
+                <button class="btn btn--quiet btn--sm" type="button">Ubah</button>
+                <button class="btn btn--quiet btn--sm" type="button">Uji kirim</button>
+              </span></td>
+            </tr>
+          </tbody>
+        </table></div>
+      </section>
+
+      <section class="panel" hidden>
+        <header class="panel__head">
+          <div>
+            <h2 class="panel__title">Akun staf</h2>
+            <p class="panel__desc">Administrator mengelola semua; Admin mengerjakan operasional; Tutor hanya melihat siswa kelasnya. Akun dinonaktifkan, bukan dihapus, supaya riwayat aktivitasnya tetap bermakna.</p>
+          </div>
+          <button class="btn btn--primary" type="button">+ Tambah akun</button>
+        </header>
+        <div class="table-wrap"><table class="table">
+          <thead><tr><th scope="col">Nama</th><th scope="col">Email</th><th scope="col">Peran</th><th scope="col" class="hide-md">Masuk terakhir</th><th scope="col">Status</th><th scope="col" class="is-action"><span class="sr-only">Aksi</span></th></tr></thead>
+          <tbody>
+            <tr>
+              <td><span class="cell-main">Aldo Pratama</span><span class="cell-sub">Kamu</span></td>
+              <td class="cell-sub">aldo@titiknolenglish.com</td>
+              <td>Administrator</td>
+              <td class="hide-md cell-sub">21 Nov 2026</td>
+              <td><span class="cell-main">Aktif</span></td>
+              <td class="is-action"><span class="muted">-</span></td>
+            </tr>
+            <tr>
+              <td><span class="cell-main">Ufan Abdurrahman</span></td>
+              <td class="cell-sub">ufan@titiknolenglish.com</td>
+              <td>Admin</td>
+              <td class="hide-md cell-sub">20 Nov 2026</td>
+              <td><span class="cell-main">Aktif</span></td>
+              <td class="is-action"><span class="row-actions"><button class="btn btn--quiet btn--sm" type="button">Aksi</button></span></td>
+            </tr>
+            <tr>
+              <td><span class="cell-main">Rani Pertiwi</span></td>
+              <td class="cell-sub">rani@titiknolenglish.com</td>
+              <td>Tutor</td>
+              <td class="hide-md cell-sub"><span class="muted">Belum pernah</span></td>
+              <td><span class="cell-sub cell-sub--warn">Nonaktif</span></td>
+              <td class="is-action"><span class="row-actions"><button class="btn btn--quiet btn--sm" type="button">Aksi</button></span></td>
+            </tr>
+          </tbody>
+        </table></div>
+      </section>
+
+    </div>
+  </div>
+
+  <!-- ================= Page: Program & Kelas ================= -->
+  <div id="page-program" hidden>
+    <header class="page-head">
+      <div>
+        <h1 class="page-title">Program &amp; Kelas</h1>
+        <p class="page-desc">Katalog program, periode, kelas, dan tutor.</p>
+      </div>
+      <div class="page-actions">
+        <button class="btn btn--quiet" type="button">+ Tambah tutor</button>
+        <button class="btn btn--primary" type="button">+ Tambah program</button>
+      </div>
+    </header>
+    <nav class="seg tabs" aria-label="Bagian program dan kelas">
+      <a class="seg__item" href="#" aria-current="page">Program <span class="seg__n">4</span></a>
+      <a class="seg__item" href="#">Periode <span class="seg__n">2</span></a>
+      <a class="seg__item" href="#">Kelas &amp; Tutor <span class="seg__n">6</span></a>
+    </nav>
+    <div class="stack">
+
+      <section class="panel">
+        <div class="table-wrap"><table class="table">
+          <thead><tr><th scope="col">Program</th><th scope="col">Durasi</th><th scope="col" class="hide-sm">Harga</th><th scope="col" class="hide-md">Tutor</th><th scope="col">Status</th><th scope="col" class="is-action"><span class="sr-only">Aksi</span></th></tr></thead>
+          <tbody>
+            <tr>
+              <td><span class="cell-main">General English</span><span class="cell-sub">Offline, Pare</span></td>
+              <td class="cell-sub">1 bulan, 3 bulan, 6 bulan</td>
+              <td class="hide-sm tnum">Rp 1.500.000</td>
+              <td class="hide-md cell-sub">Ufan, Sinta</td>
+              <td><span class="status status--ok">Aktif</span></td>
+              <td class="is-action"><span class="row-actions"><button class="btn btn--quiet btn--sm" type="button">Aksi</button></span></td>
+            </tr>
+            <tr>
+              <td><span class="cell-main">IELTS Preparation</span><span class="cell-sub">Offline, Pare</span></td>
+              <td class="cell-sub">1 bulan, 2 bulan</td>
+              <td class="hide-sm tnum">Rp 2.000.000</td>
+              <td class="hide-md cell-sub">Yosua</td>
+              <td><span class="status status--ok">Aktif</span></td>
+              <td class="is-action"><span class="row-actions"><button class="btn btn--quiet btn--sm" type="button">Aksi</button></span></td>
+            </tr>
+            <tr>
+              <td><span class="cell-main">IELTS Mockup</span><span class="cell-sub">Online</span></td>
+              <td class="cell-sub">1 hari</td>
+              <td class="hide-sm tnum">Rp 150.000</td>
+              <td class="hide-md cell-sub">-</td>
+              <td><span class="status status--ok">Aktif</span></td>
+              <td class="is-action"><span class="row-actions"><button class="btn btn--quiet btn--sm" type="button">Aksi</button></span></td>
+            </tr>
+            <tr>
+              <td><span class="cell-main">TOEFL Prediction Class</span><span class="cell-sub">Offline, Pare</span></td>
+              <td class="cell-sub">1 bulan</td>
+              <td class="hide-sm tnum">Rp 1.750.000</td>
+              <td class="hide-md cell-sub">Ufan</td>
+              <td><span class="status status--off">Nonaktif</span></td>
+              <td class="is-action"><span class="row-actions"><button class="btn btn--quiet btn--sm" type="button">Aksi</button></span></td>
+            </tr>
+          </tbody>
+        </table></div>
+      </section>
+
+    </div>
+  </div>
+
+</main>
+
+<script>
+(() => {
+  const pages = { pengaturan: document.getElementById("page-pengaturan"), program: document.getElementById("page-program") };
+  document.querySelectorAll(".mode-bar .seg__item").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      document.querySelectorAll(".mode-bar .seg__item").forEach((b) => b.removeAttribute("aria-current"));
+      btn.setAttribute("aria-current", "page");
+      for (const [key, el] of Object.entries(pages)) el.hidden = key !== btn.dataset.page;
+    });
+  });
+})();
+</script>
+</body>
+</html>
