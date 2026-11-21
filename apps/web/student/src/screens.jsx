@@ -1,5 +1,8 @@
 import { useEffect, useMemo, useRef, useState, Fragment } from "react";
 import { CHECK_SECONDS, formatTime, spanText } from "./lib.js";
+
+/* The test key names, mirroring TEST_NAMES on the server for the topbar label. */
+const TEST_NAME = { placement: "Placement Test", pre: "Pre-test", post: "Post-test", "ielts-mockup": "IELTS Mockup" };
 import { VoiceNote } from "./voice-note.jsx";
 import { parseRichText } from "@tnec/core/rich";
 import { BRANCHES } from "@tnec/core/branches";
@@ -714,6 +717,10 @@ export function TestScreen({ attempt, index, answers, flagged, perMode, timeLeft
     <section className="screen" id="screen-test" aria-labelledby="question-prompt">
       <div className="test-status" id="testbar">
         <div className="test-status__inner">
+          <div className="testbar__brand">
+            <img className="testbar__logo" src="/assets/logo-titik-nol-white.png" alt="Titik Nol English Course" width="92" height="16" />
+            <span className="testbar__section"><span>{TEST_NAME[attempt.testKey] || "Placement Test"}</span><strong>{sectionMode ? sectionSkill : question.skill || "Grammar"}</strong></span>
+          </div>
           <div className="testbar__progress">
             <div className="testbar__labels">
               <span id="progress-label">Soal {displayPosition} dari {displayTotal}</span>
@@ -1140,11 +1147,11 @@ export function SpeakingScreen({ stage, mockup, speaking, recording, speakError,
                         ) : null}
                         {recording ? (
                           <div className="speak-zone speak-zone--rec">
-                            <div className="rec-row">
+                            <div className="rec-card rec-card--inzone" id="speak-meter-answer">
                               <span className="rec-dot" aria-hidden="true" />
-                              <span className="rec-label">Merekam</span>
+                              <p className="rec-label">Merekam suara kamu</p>
                               <div className="rec-wave" id="rec-wave" ref={waveContainerRef} aria-hidden="true" />
-                              <span className="rec-time" role="timer" aria-live="off">{formatTime(recording?.elapsed || 0)}</span>
+                              <p className="rec-timer" role="timer" aria-live="off">{formatTime(recording?.elapsed || 0)}</p>
                             </div>
                             <div className="speak-limitbar" aria-hidden="true">
                               <span style={{ width: `${Math.min(100, ((recording.elapsed || 0) / speakLimit) * 100)}%` }} />
