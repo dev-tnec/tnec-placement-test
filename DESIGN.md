@@ -390,9 +390,9 @@ The bar above a certificate has two rows and sticks to the top without covering 
 
 ## 19. Placement test theme (enterprise clean white)
 
-On 21 November 2026 the owner set the placement test (and the pre and post tests, which share its layout) to the enterprise clean white B2B standard of the reference `docs/assets/tnec_enterprise_placement_test_ui (4).html`. The IELTS mockup keeps the original navy editorial look and is deliberately untouched.
+On 21 November 2026 the owner set the inside of the placement test to the enterprise clean white B2B standard of the reference `docs/assets/tnec_enterprise_placement_test_ui (4).html`: only the running test screens (test, details, speaking) and the dialogs opened inside them. The front page keeps its navy hero and the original editorial look, and the IELTS mockup keeps the original look everywhere.
 
-The theme is scoped, not forked: the body carries `is-placement` (set in `App.jsx` from the invite test key, placement when there is no invite) and `app.css` restyles the existing markup under that class. No component tree changed, so the mockup and the placement share every screen component and only differ in skin.
+The theme is scoped, not forked: the body carries `is-placement` (set in `App.jsx` from the invite test key, placement when there is no invite), and the CSS selectors pair it with `data-screen`, so each rule applies only to the screen that should wear it: `[data-screen="test"]` for the exam chrome, `[data-screen="details"]` for the contact form, `[data-screen="speaking"]` for its quiet surfaces. Nothing on `#screen-intro` or `#screen-error` is touched, so the front page renders exactly as before. No component tree changed, so the mockup and the placement share every screen component and only differ in skin.
 
 Tokens, added beside the base set in `app.css` and only read under `is-placement`:
 
@@ -407,7 +407,7 @@ Tokens, added beside the base set in `app.css` and only read under `is-placement
 
 The measured geometry of the reference, verified on the dev box at 1440 and 390: a 60px white sticky topbar with the centered progress cluster and the timer box on the right, a full-width split workspace (canvas `1fr`, navigator `340px`), the question canvas with no card chrome (passage as the only white card), options as 8px bordered rows with a square key tile and a custom radio dot, the navigator docked with a left hairline holding the legend and the 5-column grid, and the keyboard bar as the bottom band. The 2px active marker rule from section 18 applies here too.
 
-The intro drops the navy hero for the same white standard: the black logo lockup on the app background, quiet gray cards, and rectangular buttons. The speaking screen keeps its navy exam topbar because it is exam chrome, not branding. The details screen, dialogs, and toast follow the same flat white treatment.
+The speaking screen keeps its navy exam topbar because it is exam chrome, not branding. The details screen follows the same flat white treatment. The front page, the link error screen, the footer on the front page, and every dialog opened from the front page keep the original navy look.
 
 ## 20. Do not
 
