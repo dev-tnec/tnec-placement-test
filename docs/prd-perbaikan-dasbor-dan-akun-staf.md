@@ -78,33 +78,52 @@ Rincian mekanis:
 3. Hanya Administrator yang mengelola akun.
 4. Akun nonaktif tidak bisa masuk dengan pesan yang jelas.
 
-## 6. Poin 5: Saluran WhatsApp per cabang
+## 6. Poin 5: Saluran WhatsApp per cabang, dikelola dari dasbor
 
 ### Masalah
 
-Hasil placement test dikirim dari satu nomor WhatsApp (`ATTCOS_CHANNEL_ID`) untuk semua cabang, padahal setiap cabang punya nomor sendiri. Siswa yang memilih Medan menerima pesan dari nomor Pare.
+Hasil placement test dikirim dari satu nomor WhatsApp untuk semua cabang, padahal setiap cabang punya nomor sendiri. Siswa yang memilih Medan menerima pesan dari nomor Pare.
 
 ### Keputusan
 
-1. Variabel lingkungan baru: `ATTCOS_CHANNEL_ID_JOGJA` dan `ATTCOS_CHANNEL_ID_MEDAN`. Yang sudah ada, `ATTCOS_CHANNEL_ID`, menjadi saluran Pare dan sekaligus Online, sesuai keputusan pemilik.
-2. `sendWhatsApp` menerima `branch` opsional dan memilih saluran: `jogja` memakai saluran Jogja, `medan` memakai saluran Medan, sisanya (termasuk `online`, `pare`, dan tanpa cabang) memakai saluran bawaan. Saluran cabang yang kosong jatuh ke saluran bawaan dengan catatan log, supaya pengiriman tidak pernah gagal hanya karena variabel belum diisi.
-3. Pengiriman hasil placement membaca `students.branch` pada baris attempt dan meneruskannya. Pengiriman manual dari dasbor membaca cabang siswa yang dituju.
-4. Pesan antrean mockup tetap memakai saluran bawaan; cabang peserta mockup tidak diketahui dari sesi dan pemilik tidak meminta perubahan di sana.
+Pemisahan kredensial dan konfigurasi, mengikuti pola yang sudah dipakai repo ini: kunci rahasia tetap di lingkungan server, nilai operasional dikelola tim dari dasbor dan tersimpan di basis data, sama seperti durasi tes, pengaturan speaking, dan tipe sertifikat.
+
+| Data | Sifat | Tempat |
+|---|---|---|
+| `ATTCOS_API_KEY` dan basis URL | Rahasia: siapa pun yang memegangnya bisa mengirim dari semua nomor | Variabel lingkungan, tidak pernah ke basis data, tidak pernah ke browser |
+| ID saluran per cabang | Pengenal operasional: tak berguna tanpa kuncinya, bukan rahasia | Baris basis data, diedit di panel Pengaturan |
+
+Rincian mekanis:
+
+1. Tabel kecil `whatsapp_channels` (migrasi baru): satu baris per cabang (pare, jogja, medan, online), kolom `branch`, `channel_id`, `updated_at`, `updated_by`. Baris Pare wajib terisi; Online kosong berarti memakai saluran Pare, sesuai keputusan pemilik.
+2. Panel "Saluran WhatsApp" di bawah menu Pengaturan: satu baris per cabang, kolom ID saluran, dan tombol "Uji kirim" per baris yang mengirim pesan uji ke nomor admin yang menekannya, supaya saluran dipercaya sebelum dipakai. Setiap perubahan tercatat di aktivitas: siapa, kapan, cabang apa.
+3. `sendWhatsApp` menerima `branch` opsional dan membaca ID saluran dari tabel, dengan cache singkat di memori supaya pengiriman tidak membuka kueri baru setiap pesan. `jogja` memakai saluran Jogja, `medan` memakai saluran Medan, `online` memakai saluran Online atau jatuh ke Pare, sisanya memakai Pare. Cabang yang ID salurannya kosong jatuh ke Pare dengan catatan log, jadi pengiriman tidak pernah gagal hanya karena panelnya belum diisi.
+4. Pengiriman hasil placement membaca `students.branch` pada baris attempt dan meneruskannya. Pengiriman manual dari dasbor membaca cabang siswa yang dituju.
+5. Pesan antrean mockup tetap memakai saluran Pare; cabang peserta mockup tidak diketahui dari sesi dan pemilik tidak meminta perubahan di sana.
+6. `ATTCOS_CHANNEL_ID` dari variabel lingkungan tetap dipakai sebagai nilai awal baris Pare saat migrasi berjalan dan sebagai cadangan bila tabel belum siap, supaya pengiriman tidak pernah terputus saat naik versi.
+
+### Mengapa dasbor, bukan variabel lingkungan
+
+1. Mengubah variabel lingkungan menuntut deploy ulang layanan; mengubah baris panel langsung berlaku pada permintaan berikutnya.
+2. Perubahan env tidak meninggalkan jejak; perubahan panel tercatat di aktivitas dengan pelaku dan waktunya.
+3. Panel bisa memvalidasi format dan menawarkan uji kirim sebelum saluran dipercaya; salah ketik di env terdiam sampai pengiriman gagal.
+4. Kunci rahasia tetap di env, jadi area yang terekspos browser dan basis data tidak bertambah.
 
 ### Penerimaan
 
-1. Siswa yang memilih Medan menerima WhatsApp dari nomor Medan; Jogja dari nomor Jogja; Pare dan Online dari nomor bawaan.
-2. Variabel cabang yang belum diisi tidak menghentikan pengiriman.
-3. Render menerima dua variabel baru tanpa restart ganda.
+1. Siswa yang memilih Medan menerima WhatsApp dari nomor Medan; Jogja dari nomor Jogja; Pare dan Online dari nomor Pare.
+2. Cabang yang salurannya belum diisi tidak menghentikan pengiriman.
+3. Mengubah ID saluran dari dasbor langsung berlaku tanpa deploy, dan tercatat di aktivitas.
+4. Uji kirim dari panel tiba di nomor admin yang menekannya, dari saluran cabang yang diuji.
 
 ## 7. Urutan pengerjaan
 
 1. Poin 1 sampai 3: perbaikan kecil, satu rilis.
-2. Poin 5: variabel lingkungan dan pemilihan saluran, satu rilis setelah nomor Medan dan Jogja tersedia di AttCos.
+2. Poin 5: tabel saluran, panel Pengaturan, dan pemilihan saluran, satu rilis setelah nomor Medan dan Jogja tersedia di AttCos.
 3. Poin 4: pengaturan staf dan pembatasan peran, rilis terakhir karena paling besar dan paling perlu uji.
 
 ## 8. Pertanyaan terbuka
 
 1. Tutor melihat "siswa kelasnya": apakah cukup siswa yang kelasnya ditandai tutor tersebut, ataukah juga siswa lead yang belum punya kelas? Usulan ini: hanya siswa dengan kelas milik tutor itu; lead tetap di tangan tim admin.
 2. Peran Admin boleh menghapus siswa dan submission seperti hari ini, atau hanya Administrator? Usulan ini: Admin boleh, karena itu pekerjaan operasional harian; Administrator hanya untuk akun dan pengaturan.
-3. Nomor WhatsApp Medan dan Jogja perlu didaftarkan di AttCos sebagai channel baru sebelum variabel lingkungan bisa diisi; pemilik menyiapkan nomornya.
+3. Nomor WhatsApp Medan dan Jogja perlu didaftarkan di AttCos sebagai channel baru sebelum ID salurannya bisa diisi di panel; pemilik menyiapkan nomornya.
