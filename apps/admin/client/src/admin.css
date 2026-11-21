@@ -178,7 +178,9 @@ button { cursor: pointer; }
 .chip:focus-visible { outline: none; box-shadow: var(--ring); }
 
 /* Underline tabs: the Linear / Stripe pattern, used by every tab row */
-.seg { display: flex; align-items: center; gap: 20px; border-bottom: 1px solid var(--gray-200); max-width: 100%; overflow-x: auto; }
+/* overflow-x auto makes the row a scroll container, so the 2px marker must sit inside it:
+   at bottom -1px it pokes 1px below and the browser draws a vertical scrollbar. */
+.seg { display: flex; align-items: center; gap: 20px; border-bottom: 1px solid var(--gray-200); max-width: 100%; overflow-x: auto; overflow-y: hidden; }
 .seg__item {
   position: relative; display: inline-flex; align-items: center; gap: 8px; padding: 10px 2px;
   border: 0; background: transparent; color: var(--text-secondary);
@@ -188,7 +190,7 @@ button { cursor: pointer; }
 .seg__item:hover { color: var(--text-primary); }
 .seg__item[aria-current="page"], .seg__item[aria-pressed="true"] { color: var(--text-primary); font-weight: 600; }
 .seg__item[aria-current="page"]::after, .seg__item[aria-pressed="true"]::after {
-  content: ""; position: absolute; left: 0; right: 0; bottom: -1px; height: 2px;
+  content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 2px;
   background: var(--text-primary); border-radius: 2px 2px 0 0;
 }
 .seg__item:focus-visible { outline: none; box-shadow: none; }

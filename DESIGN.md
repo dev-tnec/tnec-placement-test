@@ -362,6 +362,8 @@ The internal dashboard at `/admin` is React, bundled with Node and esbuild from 
 
 On 21 November 2026 the owner set the dashboard to the enterprise clean white B2B standard of the reference `docs/assets/tnec_enterprise_b2b_dashboard.html` (Stripe, Linear, Vercel): a white sidebar with a right hairline and a black logo lockup, a white sticky top utility bar carrying the section breadcrumb, content that spans the full width with no max-width, underline tabs with a 2px active marker, flat panels held by their border with a minimal shadow, rectangular 6px radius buttons, and table headers on the app background. Buttons and primary actions stay navy; red stays for errors and urgent state; focus rings stay navy; there are still no colored edge stripes. Status is a soft filled pill with a dot or check, never color alone.
 
+The tab row scrolls sideways when its labels do not fit. Its 2px active marker sits inside the row, not 1px below it, because a marker that pokes past the bottom edge turns the row into a vertical scroll container and the browser draws a scrollbar beside the tabs.
+
 Dashboard-only tokens that extend the shared set (the student app is untouched by these):
 
 | Token | Value | Use in the dashboard |
