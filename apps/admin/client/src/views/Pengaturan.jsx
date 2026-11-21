@@ -4,7 +4,8 @@
 import { useEffect, useState } from "react";
 import { api, db, mutate, useVersion } from "../store.js";
 import { Icon, Empty, PageHead } from "../ui.jsx";
-import { $, busy, clearErrors, fieldError, makeFieldFail, toast } from "../dom.js";
+import { toast } from "../dom.js";
+import { openFormDialog } from "../dialogs.jsx";
 import { BRANCHES, branchLabel } from "@tnec/core/branches";
 import { MenuBtn } from "../menus.jsx";
 
@@ -22,8 +23,10 @@ export function Pengaturan({ tab }) {
         <a key={key} className="seg__item" href={`#/pengaturan/${key}`} {...(key === tab ? { "aria-current": "page" } : {})}>{label}</a>
       ))}
     </nav>
-    {tab === "saluran" ? <ChannelPanel /> : null}
-    {tab === "staf" && db.me?.role === "admin" ? <StaffPanel /> : null}
+    <div className="stack">
+      {tab === "saluran" ? <ChannelPanel /> : null}
+      {tab === "staf" && db.me?.role === "admin" ? <StaffPanel /> : null}
+    </div>
   </>;
 }
 
@@ -38,7 +41,7 @@ function ChannelPanel() {
   };
   useEffect(() => { load().catch((e) => toast(e.message)); }, []);
 
-  if (channels === null) return <section className="panel"><p className="panel__desc">Memuat saluran...</p></section>;
+  if (channels === null) return <section className="panel"><div className="panel__foot"><p className="panel__desc">Memuat saluran...</p></div></section>;
   const pare = channels.find((c) => c.branch === "pare");
   return <>
     <section className="panel">
@@ -66,89 +69,40 @@ function ChannelPanel() {
           })}
         </tbody>
       </table></div>
-      {pare && !pare.channelId ? <p className="error" role="alert">Saluran Pare belum terisi. Semua cabang jatuh ke Pare, jadi isi dulu baris Pare di atas.</p> : null}
+      {pare && !pare.channelId ? <div className="panel__foot"><p className="error" role="alert">Saluran Pare belum terisi. Semua cabang jatuh ke Pare, jadi isi dulu baris Pare di atas.</p></div> : null}
     </section>
   </>;
 }
 
 function editChannel(branch, label, current, done) {
-  const existing = document.getElementById("dlg-channel");
-  if (existing) existing.remove();
-  const dlg = document.createElement("dialog");
-  dlg.id = "dlg-channel";
-  dlg.className = "dialog";
-  dlg.innerHTML = `
-    <form class="dialog__form" novalidate>
-      <div class="dialog__body">
-        <h3 class="dialog__title">Saluran ${label}</h3>
-        <div class="field">
-          <label class="label" for="ch-id">ID saluran AttCos</label>
-          <input class="input" id="ch-id" type="text" maxlength="100" autocomplete="off" value="${current.replace(/"/g, "&quot;")}" />
-          <p class="hint">Salin dari daftar channel di AttCos. Kosong berarti memakai saluran Pare.</p>
-          <p class="error" id="ch-err" role="alert" hidden></p>
-        </div>
-      </div>
-      <div class="dialog__foot dialog__foot--end">
-        <button class="btn btn--quiet" type="button" id="ch-cancel">Batal</button>
-        <button class="btn btn--primary" type="submit" id="ch-save">Simpan saluran</button>
-      </div>
-    </form>`;
-  dlg.addEventListener("close", () => dlg.remove());
-  dlg.querySelector("#ch-cancel").onclick = () => dlg.close();
-  dlg.querySelector("form").onsubmit = async (e) => {
-    e.preventDefault();
-    const value = dlg.querySelector("#ch-id").value.trim();
-    const b = busy(dlg.querySelector("#ch-save"), "Menyimpan...");
-    try {
-      await api(`/api/admin/whatsapp-channels/${branch}`, { method: "PUT", body: { channelId: value } });
-      dlg.close();
+  openFormDialog({
+    title: `Saluran ${label}`,
+    sub: "Salin ID channel dari daftar channel di AttCos.",
+    fields: [{ id: "channelId", label: "ID saluran AttCos", type: "text", value: current, hint: "Kosong berarti memakai saluran Pare." }],
+    submitLabel: "Simpan saluran",
+    onSubmit: async (values, fail) => {
+      if (branch === "pare" && !values.channelId.trim()) { fail("channelId", "Saluran Pare wajib terisi karena menjadi cadangan semua cabang."); return false; }
+      await api(`/api/admin/whatsapp-channels/${branch}`, { method: "PUT", body: { channelId: values.channelId.trim() } });
       toast(`Saluran ${label} tersimpan.`);
       await done();
-    } catch (error) {
-      fieldError(null, "ch-err", error.message);
-    } finally { b(); }
-  };
-  document.body.appendChild(dlg);
-  dlg.showModal();
+      return true;
+    },
+  });
 }
 
 function testChannel(branch, label) {
-  const existing = document.getElementById("dlg-channel-test");
-  if (existing) existing.remove();
-  const dlg = document.createElement("dialog");
-  dlg.id = "dlg-channel-test";
-  dlg.className = "dialog";
-  dlg.innerHTML = `
-    <form class="dialog__form" novalidate>
-      <div class="dialog__body">
-        <h3 class="dialog__title">Uji kirim saluran ${label}</h3>
-        <p class="dialog__text">Pesan uji dikirim dari saluran ${label} ke nomor yang kamu isi. Isi nomor WhatsApp kamu sendiri supaya hasilnya langsung terlihat.</p>
-        <div class="field">
-          <label class="label" for="ch-to">Nomor tujuan</label>
-          <input class="input" id="ch-to" type="tel" inputmode="tel" maxlength="20" placeholder="08xxxxxxxxxx" autocomplete="off" />
-          <p class="error" id="ch-test-err" role="alert" hidden></p>
-        </div>
-      </div>
-      <div class="dialog__foot dialog__foot--end">
-        <button class="btn btn--quiet" type="button" id="ch-test-cancel">Batal</button>
-        <button class="btn btn--primary" type="submit" id="ch-test-send">Kirim pesan uji</button>
-      </div>
-    </form>`;
-  dlg.addEventListener("close", () => dlg.remove());
-  dlg.querySelector("#ch-test-cancel").onclick = () => dlg.close();
-  dlg.querySelector("form").onsubmit = async (e) => {
-    e.preventDefault();
-    const b = busy(dlg.querySelector("#ch-test-send"), "Mengirim...");
-    try {
-      await api(`/api/admin/whatsapp-channels/${branch}/test`, { method: "POST", body: { to: dlg.querySelector("#ch-to").value } });
-      dlg.close();
+  openFormDialog({
+    title: `Uji kirim saluran ${label}`,
+    sub: "Pesan uji dikirim dari saluran ini ke nomor yang kamu isi. Isi nomor WhatsApp kamu sendiri supaya hasilnya langsung terlihat.",
+    fields: [{ id: "to", label: "Nomor tujuan", type: "tel", placeholder: "08xxxxxxxxxx" }],
+    submitLabel: "Kirim pesan uji",
+    onSubmit: async (values, fail) => {
+      if (!values.to.trim()) { fail("to", "Isi nomor tujuan pesan uji."); return false; }
+      await api(`/api/admin/whatsapp-channels/${branch}/test`, { method: "POST", body: { to: values.to.trim() } });
       toast(`Pesan uji saluran ${label} terkirim. Cek nomor tujuannya.`);
-    } catch (error) {
-      fieldError(null, "ch-test-err", error.message);
-    } finally { b(); }
-  };
-  document.body.appendChild(dlg);
-  dlg.showModal();
+      return true;
+    },
+  });
 }
 
 /* ===================== Staf ===================== */
@@ -163,7 +117,7 @@ function StaffPanel() {
         <h2 className="panel__title">Akun staf</h2>
         <p className="panel__desc">Administrator mengelola semua; Admin mengerjakan operasional; Tutor hanya melihat siswa kelasnya. Akun dinonaktifkan, bukan dihapus, supaya riwayat aktivitasnya tetap bermakna.</p>
       </div>
-      <button className="btn btn--primary" type="button" onClick={() => addStaff(rows.length + 1)}><Icon name="plus" cls="icon--sm" />Tambah akun</button></header>
+      <button className="btn btn--primary" type="button" onClick={() => addStaff()}><Icon name="plus" cls="icon--sm" />Tambah akun</button></header>
       {rows.length ? <div className="table-wrap"><table className="table">
         <thead><tr><th scope="col">Nama</th><th scope="col">Email</th><th scope="col">Peran</th><th scope="col" className="hide-md">Masuk terakhir</th><th scope="col">Status</th><th scope="col" className="is-action"><span className="sr-only">Aksi</span></th></tr></thead>
         <tbody>
@@ -191,67 +145,24 @@ function fmtLastLogin(ms) {
   return d.toLocaleDateString("id-ID", { day: "numeric", month: "short", year: "numeric" });
 }
 
-function addStaff(n) {
-  const existing = document.getElementById("dlg-staff");
-  if (existing) existing.remove();
-  const dlg = document.createElement("dialog");
-  dlg.id = "dlg-staff";
-  dlg.className = "dialog";
-  dlg.innerHTML = `
-    <form class="dialog__form" novalidate>
-      <div class="dialog__body">
-        <h3 class="dialog__title">Tambah akun staf</h3>
-        <div class="field">
-          <label class="label" for="sf-name">Nama</label>
-          <input class="input" id="sf-name" type="text" maxlength="80" autocomplete="off" />
-          <p class="error" id="sf-name-err" role="alert" hidden></p>
-        </div>
-        <div class="field">
-          <label class="label" for="sf-email">Email</label>
-          <input class="input" id="sf-email" type="email" maxlength="160" autocomplete="off" />
-          <p class="error" id="sf-email-err" role="alert" hidden></p>
-        </div>
-        <div class="field">
-          <label class="label" for="sf-role">Peran</label>
-          <select class="select" id="sf-role">
-            <option value="staf">Admin: semua pekerjaan operasional</option>
-            <option value="tutor">Tutor: hanya siswa kelasnya</option>
-          </select>
-          <p class="hint">Administrator hanya dibuat lewat halaman ini bila dibuat oleh Administrator.</p>
-        </div>
-        <div class="field">
-          <label class="label" for="sf-pass">Kata sandi awal</label>
-          <input class="input" id="sf-pass" type="text" maxlength="40" autocomplete="new-password" />
-          <p class="hint">Serahkan ke staf untuk masuk pertama kali; staf tidak bisa menggantinya sendiri, jadi buat yang unik.</p>
-          <p class="error" id="sf-pass-err" role="alert" hidden></p>
-        </div>
-      </div>
-      <div class="dialog__foot dialog__foot--end">
-        <button class="btn btn--quiet" type="button" id="sf-cancel">Batal</button>
-        <button class="btn btn--primary" type="submit" id="sf-save">Buat akun</button>
-      </div>
-    </form>`;
-  dlg.addEventListener("close", () => dlg.remove());
-  dlg.querySelector("#sf-cancel").onclick = () => dlg.close();
-  dlg.querySelector("form").onsubmit = async (e) => {
-    e.preventDefault();
-    const fail = makeFieldFail();
-    const name = dlg.querySelector("#sf-name");
-    const email = dlg.querySelector("#sf-email");
-    const pass = dlg.querySelector("#sf-pass");
-    if (name.value.trim().length < 2) fail(name, "sf-name-err", "Nama minimal 2 karakter.");
-    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email.value.trim())) fail(email, "sf-email-err", "Format email belum benar.");
-    if (pass.value.length < 8) fail(pass, "sf-pass-err", "Kata sandi minimal 8 karakter.");
-    if (fail.first()) { fail.first().focus(); return; }
-    const b = busy(dlg.querySelector("#sf-save"), "Membuat...");
-    try {
-      await api("/api/admin/staff", { method: "POST", body: { name: name.value.trim(), email: email.value.trim().toLowerCase(), role: dlg.querySelector("#sf-role").value, password: pass.value } });
-      dlg.close();
-      await mutate(async () => {}, `Akun ${name.value.trim()} dibuat.`);
-    } catch (error) {
-      fail(email, "sf-email-err", error.message);
-    } finally { b(); }
-  };
-  document.body.appendChild(dlg);
-  dlg.showModal();
+function addStaff() {
+  openFormDialog({
+    title: "Tambah akun staf",
+    sub: "Kata sandi minimal 8 karakter. Serahkan langsung ke staf yang bersangkutan.",
+    fields: [
+      { id: "name", label: "Nama", type: "text" },
+      { id: "email", label: "Email", type: "email" },
+      { id: "role", label: "Peran", type: "select", value: "staf", options: [["staf", "Admin: semua pekerjaan operasional"], ["tutor", "Tutor: hanya siswa kelasnya"]] },
+      { id: "password", label: "Kata sandi awal", type: "text", hint: "Buat yang unik; staf tidak bisa menggantinya sendiri." },
+    ],
+    submitLabel: "Buat akun",
+    onSubmit: async (values, fail) => {
+      if (values.name.trim().length < 2) { fail("name", "Nama minimal 2 karakter."); return false; }
+      if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(values.email.trim())) { fail("email", "Format email belum benar."); return false; }
+      if (String(values.password || "").length < 8) { fail("password", "Kata sandi minimal 8 karakter."); return false; }
+      await api("/api/admin/staff", { method: "POST", body: { name: values.name.trim(), email: values.email.trim().toLowerCase(), role: values.role, password: values.password } });
+      await mutate(async () => {});
+      return true;
+    },
+  });
 }
