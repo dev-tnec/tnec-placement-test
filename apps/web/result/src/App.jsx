@@ -302,16 +302,18 @@ function Plan({ report }) {
 function Footer({ report }) {
   return (
     <footer className="footer">
-      <div className="footer__brand">
-        <img className="footer__logo" src="/assets/logo-titik-nol.png" alt="" width="502" height="85" />
-        <span>Kampung Inggris Pare, Kediri, Jawa Timur</span>
-      </div>
-      <div className="footer__meta">
-        <span>{report.name}</span>
-        <span aria-hidden="true">·</span>
-        <span>{report.code ? `#${report.code}` : report.testName}</span>
-        <span aria-hidden="true">·</span>
-        <span>{report.date}</span>
+      <div className="footer__inner">
+        <div className="footer__brand">
+          <img className="footer__logo" src="/assets/logo-titik-nol.png" alt="" width="502" height="85" />
+          <span>Kampung Inggris Pare, Kediri, Jawa Timur</span>
+        </div>
+        <div className="footer__meta">
+          <span>{report.name}</span>
+          <span aria-hidden="true">·</span>
+          <span>{report.code ? `#${report.code}` : report.testName}</span>
+          <span aria-hidden="true">·</span>
+          <span>{report.date}</span>
+        </div>
       </div>
     </footer>
   );
@@ -402,8 +404,8 @@ export default function App() {
         <Gap report={report} />
         <Details report={report} />
         <Plan report={report} />
-        <Footer report={report} />
       </main>
+      <Footer report={report} />
     </div>
   );
 }
