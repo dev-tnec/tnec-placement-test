@@ -3,7 +3,7 @@
 
 import { useEffect, useState } from "react";
 import { api, db, mutate, useVersion } from "../store.js";
-import { Icon, Empty, OptList, PageHead } from "../ui.jsx";
+import { Icon, Empty, PageHead } from "../ui.jsx";
 import { $, busy, clearErrors, fieldError, makeFieldFail, toast } from "../dom.js";
 import { BRANCHES, branchLabel } from "@tnec/core/branches";
 import { MenuBtn } from "../menus.jsx";
@@ -12,11 +12,18 @@ const FALLBACK = "Jatuh ke saluran Pare bila kosong.";
 
 export function Pengaturan({ tab }) {
   useVersion();
+  const tabs = [["saluran", "Saluran WhatsApp"], ["staf", "Staf"]];
+  if (db.me?.role !== "admin") tabs.length = 1; // the staff tab is owner-only
+  if (!tabs.some(([key]) => key === tab)) tab = "saluran";
   return <>
     <PageHead title="Pengaturan" desc="Saluran WhatsApp per cabang dan akun staf." />
-    <OptList list={[["saluran", "#/pengaturan/saluran", "Saluran WhatsApp"], ["staf", "#/pengaturan/staf", "Staf"]]} current={tab} />
+    <nav className="seg tabs" aria-label="Bagian pengaturan">
+      {tabs.map(([key, label]) => (
+        <a key={key} className="seg__item" href={`#/pengaturan/${key}`} {...(key === tab ? { "aria-current": "page" } : {})}>{label}</a>
+      ))}
+    </nav>
     {tab === "saluran" ? <ChannelPanel /> : null}
-    {tab === "staf" ? <StaffPanel /> : null}
+    {tab === "staf" && db.me?.role === "admin" ? <StaffPanel /> : null}
   </>;
 }
 
