@@ -28,11 +28,12 @@
 *, *::before, *::after { box-sizing: border-box; }
 [hidden] { display: none !important; }
 body {
-  margin: 0; min-height: 100vh; display: flex;
+  margin: 0; min-height: 100vh; display: flex; flex-direction: column;
   background: var(--gray-50); color: var(--text-primary);
   font-family: var(--font-sans); font-size: 14px; line-height: 1.6;
   -webkit-font-smoothing: antialiased;
 }
+.shell { display: flex; flex: 1; min-width: 0; }
 h1, h2, h3, p { margin: 0; }
 button, select, input { font: inherit; }
 a { color: inherit; }
@@ -42,7 +43,7 @@ a { color: inherit; }
 .sidebar {
   flex: 0 0 240px; display: flex; flex-direction: column;
   background: var(--navy-900); color: var(--text-on-dark-muted);
-  position: sticky; top: 0; height: 100vh;
+  position: sticky; top: 0; height: calc(100vh - 57px); /* 57px: preview bar, 44px tabs + 12px padding + 1px border */
 }
 .brand { padding: 20px 20px 14px; border-bottom: 1px solid rgba(255,255,255,.08); }
 .brand__logo { display: block; width: 140px; height: auto; margin-bottom: 2px; }
@@ -106,7 +107,7 @@ a { color: inherit; }
 .cell-sub--warn { color: var(--red-600); font-weight: 600; }
 .muted { color: var(--text-secondary); }
 .tnum { font-variant-numeric: tabular-nums; }
-.channel-code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; color: var(--navy-700); word-break: break-all; }
+.channel-code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; color: var(--navy-700); white-space: nowrap; }
 
 /* Buttons */
 .btn {
@@ -129,15 +130,19 @@ a { color: inherit; }
 .status--off { background: var(--gray-300); color: var(--text-secondary); }
 
 /* Preview switcher */
-.mode-bar { background: var(--navy-800); border-bottom: 1px solid rgba(255,255,255,.1); padding: 6px 20px; display: flex; justify-content: space-between; align-items: center; color: var(--text-on-dark-muted); font-size: 11px; }
+.mode-bar { background: var(--navy-800); border-bottom: 1px solid rgba(255,255,255,.1); padding: 6px 20px; display: flex; justify-content: space-between; align-items: center; gap: 16px; color: var(--text-on-dark-muted); font-size: 11px; }
 .mode-bar b { letter-spacing: .06em; text-transform: uppercase; }
+.mode-bar .seg { background: rgba(255,255,255,.1); }
+.mode-bar .seg__item { color: var(--text-on-dark-muted); }
+.mode-bar .seg__item:hover { color: var(--white); }
+.mode-bar .seg__item[aria-current="page"] { background: var(--white); color: var(--navy-900); }
 
 @media (max-width: 1200px) {
+  .shell { flex-direction: column; }
   .sidebar { position: static; height: auto; flex-basis: 100%; }
   .sidebar .nav { display: flex; flex-wrap: wrap; gap: 4px; }
   .sidebar .nav__group { width: 100%; }
   .sidebar .brand, .sidebar .sidebar__foot { display: none; }
-  body { flex-direction: column; }
   .grid-2 { grid-template-columns: 1fr; }
   .hide-sm, .hide-md { display: none; }
 }
@@ -153,9 +158,10 @@ a { color: inherit; }
   </div>
 </div>
 
+<div class="shell">
 <aside class="sidebar">
   <div class="brand">
-    <svg class="brand__logo" viewBox="0 0 501 84" role="img" aria-label="Titik Nol English Course"><text x="8" y="58" fontFamily="Inter, Segoe UI, Arial" fontSize="44" fontWeight="800" fill="#FFFFFF">Titik Nol English Course</text></svg>
+    <img class="brand__logo" src="../../apps/web/public/assets/logo-titik-nol-white.png" alt="Titik Nol English Course">
     <span class="brand__name">Dasbor internal</span>
   </div>
   <nav class="nav" aria-label="Menu utama">
@@ -169,8 +175,8 @@ a { color: inherit; }
     <a class="nav__link" href="#"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 10v6M2 10l10-5 10 5-10 5z"/><path d="M6 12v5c3 3 9 3 12 0v-5"/></svg><span>Post-test</span></a>
     <a class="nav__link" href="#"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m12.83 2 8 13L12 22l-8.83-7 8-13z"/></svg><span>IELTS Mockup</span></a>
     <p class="nav__group">Pengaturan</p>
-    <a class="nav__link" href="#"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12.83 2 3 9l9 13 9-13z"/></svg><span>Program &amp; Kelas</span></a>
-    <a class="nav__link" href="#" aria-current="page"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/></svg><span>Pengaturan</span></a>
+    <a class="nav__link" href="#" data-nav="program"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12.83 2 3 9l9 13 9-13z"/></svg><span>Program &amp; Kelas</span></a>
+    <a class="nav__link" href="#" data-nav="pengaturan" aria-current="page"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/></svg><span>Pengaturan</span></a>
   </nav>
   <div class="sidebar__foot">
     <span class="avatar">AP</span>
@@ -202,12 +208,12 @@ a { color: inherit; }
           </div>
         </header>
         <div class="table-wrap"><table class="table">
-          <thead><tr><th scope="col">Cabang</th><th scope="col">ID saluran AttCos</th><th scope="col" class="hide-sm">Terakhir diubah</th><th scope="col" class="is-action"><span class="sr-only">Aksi</span></th></tr></thead>
+          <thead><tr><th scope="col">Cabang</th><th scope="col">ID saluran AttCos</th><th scope="col" class="hide-sm">Terakhir diubah</th><th scope="col" class="is-action">Aksi</th></tr></thead>
           <tbody>
             <tr>
               <td><span class="cell-main">Pare</span><span class="cell-sub">Saluran utama, cadangan semua cabang</span></td>
               <td class="tnum"><code class="channel-code">6a94705f-8df3-47e7-9262-639637209fc5</code></td>
-              <td class="hide-sm cell-sub">oleh Aldo Pratama</td>
+              <td class="hide-sm muted">oleh Aldo Pratama</td>
               <td class="is-action"><span class="row-actions">
                 <button class="btn btn--quiet btn--sm" type="button">Ubah</button>
                 <button class="btn btn--quiet btn--sm" type="button">Uji kirim</button>
@@ -216,7 +222,7 @@ a { color: inherit; }
             <tr>
               <td><span class="cell-main">Jogja</span><span class="cell-sub">Jatuh ke saluran Pare bila kosong.</span></td>
               <td class="tnum"><span class="muted">Belum diisi</span></td>
-              <td class="hide-sm cell-sub"><span class="muted">Belum pernah</span></td>
+              <td class="hide-sm muted"><span class="muted">Belum pernah</span></td>
               <td class="is-action"><span class="row-actions">
                 <button class="btn btn--quiet btn--sm" type="button">Ubah</button>
                 <button class="btn btn--quiet btn--sm" type="button">Uji kirim</button>
@@ -225,7 +231,7 @@ a { color: inherit; }
             <tr>
               <td><span class="cell-main">Medan</span><span class="cell-sub">Jatuh ke saluran Pare bila kosong.</span></td>
               <td class="tnum"><span class="muted">Belum diisi</span></td>
-              <td class="hide-sm cell-sub"><span class="muted">Belum pernah</span></td>
+              <td class="hide-sm muted"><span class="muted">Belum pernah</span></td>
               <td class="is-action"><span class="row-actions">
                 <button class="btn btn--quiet btn--sm" type="button">Ubah</button>
                 <button class="btn btn--quiet btn--sm" type="button">Uji kirim</button>
@@ -234,7 +240,7 @@ a { color: inherit; }
             <tr>
               <td><span class="cell-main">Online</span><span class="cell-sub">Memakai saluran Pare bila kosong</span></td>
               <td class="tnum"><span class="muted">Belum diisi</span></td>
-              <td class="hide-sm cell-sub"><span class="muted">Belum pernah</span></td>
+              <td class="hide-sm muted"><span class="muted">Belum pernah</span></td>
               <td class="is-action"><span class="row-actions">
                 <button class="btn btn--quiet btn--sm" type="button">Ubah</button>
                 <button class="btn btn--quiet btn--sm" type="button">Uji kirim</button>
@@ -253,29 +259,29 @@ a { color: inherit; }
           <button class="btn btn--primary" type="button">+ Tambah akun</button>
         </header>
         <div class="table-wrap"><table class="table">
-          <thead><tr><th scope="col">Nama</th><th scope="col">Email</th><th scope="col">Peran</th><th scope="col" class="hide-md">Masuk terakhir</th><th scope="col">Status</th><th scope="col" class="is-action"><span class="sr-only">Aksi</span></th></tr></thead>
+          <thead><tr><th scope="col">Nama</th><th scope="col">Email</th><th scope="col">Peran</th><th scope="col" class="hide-md">Masuk terakhir</th><th scope="col">Status</th><th scope="col" class="is-action">Aksi</th></tr></thead>
           <tbody>
             <tr>
               <td><span class="cell-main">Aldo Pratama</span><span class="cell-sub">Kamu</span></td>
-              <td class="cell-sub">aldo@titiknolenglish.com</td>
+              <td class="muted">aldo@titiknolenglish.com</td>
               <td>Administrator</td>
-              <td class="hide-md cell-sub">21 Nov 2026</td>
+              <td class="hide-md muted">21 Nov 2026</td>
               <td><span class="cell-main">Aktif</span></td>
               <td class="is-action"><span class="muted">-</span></td>
             </tr>
             <tr>
               <td><span class="cell-main">Ufan Abdurrahman</span></td>
-              <td class="cell-sub">ufan@titiknolenglish.com</td>
+              <td class="muted">ufan@titiknolenglish.com</td>
               <td>Admin</td>
-              <td class="hide-md cell-sub">20 Nov 2026</td>
+              <td class="hide-md muted">20 Nov 2026</td>
               <td><span class="cell-main">Aktif</span></td>
               <td class="is-action"><span class="row-actions"><button class="btn btn--quiet btn--sm" type="button">Aksi</button></span></td>
             </tr>
             <tr>
               <td><span class="cell-main">Rani Pertiwi</span></td>
-              <td class="cell-sub">rani@titiknolenglish.com</td>
+              <td class="muted">rani@titiknolenglish.com</td>
               <td>Tutor</td>
-              <td class="hide-md cell-sub"><span class="muted">Belum pernah</span></td>
+              <td class="hide-md muted"><span class="muted">Belum pernah</span></td>
               <td><span class="cell-sub cell-sub--warn">Nonaktif</span></td>
               <td class="is-action"><span class="row-actions"><button class="btn btn--quiet btn--sm" type="button">Aksi</button></span></td>
             </tr>
@@ -307,37 +313,37 @@ a { color: inherit; }
 
       <section class="panel">
         <div class="table-wrap"><table class="table">
-          <thead><tr><th scope="col">Program</th><th scope="col">Durasi</th><th scope="col" class="hide-sm">Harga</th><th scope="col" class="hide-md">Tutor</th><th scope="col">Status</th><th scope="col" class="is-action"><span class="sr-only">Aksi</span></th></tr></thead>
+          <thead><tr><th scope="col">Program</th><th scope="col">Durasi</th><th scope="col" class="hide-sm">Harga</th><th scope="col" class="hide-md">Tutor</th><th scope="col">Status</th><th scope="col" class="is-action">Aksi</th></tr></thead>
           <tbody>
             <tr>
               <td><span class="cell-main">General English</span><span class="cell-sub">Offline, Pare</span></td>
-              <td class="cell-sub">1 bulan, 3 bulan, 6 bulan</td>
+              <td class="muted">1 bulan, 3 bulan, 6 bulan</td>
               <td class="hide-sm tnum">Rp 1.500.000</td>
-              <td class="hide-md cell-sub">Ufan, Sinta</td>
+              <td class="hide-md muted">Ufan, Sinta</td>
               <td><span class="status status--ok">Aktif</span></td>
               <td class="is-action"><span class="row-actions"><button class="btn btn--quiet btn--sm" type="button">Aksi</button></span></td>
             </tr>
             <tr>
               <td><span class="cell-main">IELTS Preparation</span><span class="cell-sub">Offline, Pare</span></td>
-              <td class="cell-sub">1 bulan, 2 bulan</td>
+              <td class="muted">1 bulan, 2 bulan</td>
               <td class="hide-sm tnum">Rp 2.000.000</td>
-              <td class="hide-md cell-sub">Yosua</td>
+              <td class="hide-md muted">Yosua</td>
               <td><span class="status status--ok">Aktif</span></td>
               <td class="is-action"><span class="row-actions"><button class="btn btn--quiet btn--sm" type="button">Aksi</button></span></td>
             </tr>
             <tr>
               <td><span class="cell-main">IELTS Mockup</span><span class="cell-sub">Online</span></td>
-              <td class="cell-sub">1 hari</td>
+              <td class="muted">1 hari</td>
               <td class="hide-sm tnum">Rp 150.000</td>
-              <td class="hide-md cell-sub">-</td>
+              <td class="hide-md muted">-</td>
               <td><span class="status status--ok">Aktif</span></td>
               <td class="is-action"><span class="row-actions"><button class="btn btn--quiet btn--sm" type="button">Aksi</button></span></td>
             </tr>
             <tr>
               <td><span class="cell-main">TOEFL Prediction Class</span><span class="cell-sub">Offline, Pare</span></td>
-              <td class="cell-sub">1 bulan</td>
+              <td class="muted">1 bulan</td>
               <td class="hide-sm tnum">Rp 1.750.000</td>
-              <td class="hide-md cell-sub">Ufan</td>
+              <td class="hide-md muted">Ufan</td>
               <td><span class="status status--off">Nonaktif</span></td>
               <td class="is-action"><span class="row-actions"><button class="btn btn--quiet btn--sm" type="button">Aksi</button></span></td>
             </tr>
@@ -349,17 +355,20 @@ a { color: inherit; }
   </div>
 
 </main>
+</div>
 
 <script>
 (() => {
   const pages = { pengaturan: document.getElementById("page-pengaturan"), program: document.getElementById("page-program") };
-  document.querySelectorAll(".mode-bar .seg__item").forEach((btn) => {
-    btn.addEventListener("click", () => {
-      document.querySelectorAll(".mode-bar .seg__item").forEach((b) => b.removeAttribute("aria-current"));
-      btn.setAttribute("aria-current", "page");
-      for (const [key, el] of Object.entries(pages)) el.hidden = key !== btn.dataset.page;
-    });
-  });
+  const tabs = document.querySelectorAll(".mode-bar .seg__item");
+  const navs = document.querySelectorAll(".nav__link[data-nav]");
+  const show = (page) => {
+    tabs.forEach((b) => (b.dataset.page === page ? b.setAttribute("aria-current", "page") : b.removeAttribute("aria-current")));
+    navs.forEach((a) => (a.dataset.nav === page ? a.setAttribute("aria-current", "page") : a.removeAttribute("aria-current")));
+    for (const [key, el] of Object.entries(pages)) el.hidden = key !== page;
+  };
+  tabs.forEach((b) => b.addEventListener("click", () => show(b.dataset.page)));
+  navs.forEach((a) => a.addEventListener("click", (e) => { e.preventDefault(); show(a.dataset.nav); }));
 })();
 </script>
 </body>
