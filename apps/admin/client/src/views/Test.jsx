@@ -15,7 +15,7 @@ import {
 import { BRANCHES } from "@tnec/core/branches";
 import {
   AttemptStatus, Chip, ClassCell, Empty, Icon, LevelCell, Notice, OptList, PageHead, Pager, PassStatus,
-  Person, ProgramCell, ResultCell, OutcomeCell, SpeakingRowLabel, SpeakingStatus, StageStatus, Status,
+  Person, ProgramCell, ResultCell, OutcomeCell, RowOpen, SpeakingRowLabel, SpeakingStatus, StageStatus, Status,
   periodOptions, programOptions, rowClick, rowRun,
 } from "../ui.jsx";
 import { MenuBtn } from "../menus.jsx";
@@ -389,7 +389,7 @@ function AttemptRow({ a, sel, onToggle }) {
   const person = s
     ? <><a className="cell-main" href={href}>{s.name}</a><span className="cell-sub cell-ellipsis">{s.email}</span></>
     : <><a className="cell-main" href={href}>{a.contactName || "Tanpa nama"}</a><span className="cell-sub">ID {a.short}</span></>;
-  const tail = <><td className="hide-lg nowrap">{fmtDateTime(a.startedAt)}</td><td><AttemptStatus a={a} /></td><td className="is-action chev hide-xl"><Icon name="chevron-right" /></td></>;
+  const tail = <><td className="hide-lg nowrap">{fmtDateTime(a.startedAt)}</td><td><AttemptStatus a={a} /></td><td className="is-action hide-xl"><RowOpen href={href} label={s ? s.name : a.contactName || a.short} /></td></>;
   if (a.test === "ielts-mockup") {
     const bands = a.bands || { skills: [], overall: 0 };
     const listen = bands.skills.find((x) => x.skill === "Listening");

@@ -12,7 +12,7 @@ import {
 } from "../lib.js";
 import {
   AttemptStatus, ClassCell, Chip, Empty, Icon, LevelCell, OptList, PageHead, PendaftaranStatus,
-  Pager, PeriodCell, ProgramCell, ResultCell, OutcomeCell, SiswaStatus, SortHeader, SpeakingRowLabel,
+  Pager, PeriodCell, ProgramCell, ResultCell, OutcomeCell, RowOpen, SiswaStatus, SortHeader, SpeakingRowLabel,
   periodOptions, programOptions, rowClick,
 } from "../ui.jsx";
 import { fieldError } from "../dom.js";
@@ -141,7 +141,7 @@ export function SiswaList() {
                   <td className="hide-lg"><LevelCell s={s} /></td>
                   <td><SiswaStatus s={s} /></td>
                   <td className="hide-tab">{fmtRelative(last.get(s.id))}</td>
-                  <td className="is-action chev hide-xl"><Icon name="chevron-right" /></td>
+                  <td className="is-action hide-xl"><RowOpen href={`#/siswa/${s.id}`} label={s.name} /></td>
                 </tr>
               ))}
             </tbody>
@@ -166,6 +166,7 @@ export function SiswaList() {
               <td className="nowrap">{periodLabel(p.periodId)}</td>
               <td className="hide-sm"><PendaftaranStatus p={p} /></td>
               <td className="hide-md cell-sub">{fmtDate(p.registeredAt)}<span>oleh {p.registeredBy || "-"}</span></td>
+              <td className="is-action"><RowOpen href={`#/siswa/${p.studentId}`} label={s ? s.name : "siswa"} /></td>
             </tr>;
           })}</tbody>
         </table></div>
@@ -338,7 +339,7 @@ export function SiswaDetail({ id }) {
               <td className="hide-md tnum">{fmtClock(a.durationSec)}</td>
               <td className={`hide-md tnum${a.violations >= (a.maxViolations || 3) ? " is-wrong" : ""}`}>{a.violations}</td>
               <td><AttemptStatus a={a} /></td>
-              <td className="is-action chev"><Icon name="chevron-right" /></td>
+              <td className="is-action"><RowOpen href={`#/tes/${a.test}/submission/${a.id}`} label={TEST_NAMES[a.test]} /></td>
             </tr>
           ))}</tbody>
         </table></div>

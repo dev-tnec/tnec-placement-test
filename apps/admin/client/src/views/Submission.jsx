@@ -4,7 +4,7 @@
 
 import { db, notify, ui, useVersion, PAGE_SIZE, TEST_KEYS } from "../store.js";
 import { ATTEMPT_STATUS, TEST_META, exportAllAttempts, fmtDateTime, studentById, classById, classLabel } from "../lib.js";
-import { AttemptStatus, Chip, Empty, Icon, OptList, PageHead, Pager, ResultCell, OutcomeCell, rowClick } from "../ui.jsx";
+import { AttemptStatus, Chip, Empty, Icon, OptList, PageHead, Pager, ResultCell, OutcomeCell, RowOpen, rowClick } from "../ui.jsx";
 import { BRANCHES, branchLabel } from "@tnec/core/branches";
 
 let searchTimer = null;
@@ -96,7 +96,7 @@ export function AllSubmissions() {
                 <td className="hide-sm">{a.test === "ielts-mockup" ? <span className="muted">Perkiraan band</span> : <OutcomeCell a={a} />}</td>
                 <td className="hide-lg nowrap">{fmtDateTime(a.startedAt)}</td>
                 <td><AttemptStatus a={a} /></td>
-                <td className="is-action chev hide-xl"><Icon name="chevron-right" /></td>
+                <td className="is-action hide-xl"><RowOpen href={href} label={s ? s.name : a.contactName || a.short} /></td>
               </tr>
             );
           })}</tbody>

@@ -404,7 +404,7 @@ export async function certificatePdfByToken(env, token) {
 
 async function studentOfCertificate(env, c) {
   if (!c.student_id) throw new HttpError(409, "Sertifikat ini tidak terhubung ke siswa mana pun, jadi tidak ada tujuan pengiriman.");
-  const s = await env.DB.prepare("SELECT id, name, email, whatsapp FROM students WHERE id = ?").bind(c.student_id).first();
+  const s = await env.DB.prepare("SELECT id, name, email, whatsapp, branch FROM students WHERE id = ?").bind(c.student_id).first();
   if (!s) throw new HttpError(409, "Data siswa penerima sudah dihapus, jadi sertifikat ini tidak bisa dikirim.");
   return s;
 }
@@ -458,6 +458,7 @@ export async function sendCertificateWhatsApp(request, env, user, url, id) {
     to: s.whatsapp,
     text: message,
     media: { kind: "document", url: fileUrl, filename: withPdf.pdf_name || "sertifikat.pdf" },
+    branch: s.branch || null,
   });
   const now = nowSeconds();
   const statements = [

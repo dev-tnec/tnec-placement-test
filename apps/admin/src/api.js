@@ -13,7 +13,7 @@ import {
   latestPendaftaran, daftarCount, normalizeBirthDate, normalizeOption,
   JENJANG_PENDIDIKAN, TAHU_DARI, PENDAFTARAN_STATUS,
 } from "@tnec/core/pendaftaran";
-import { sendWhatsApp, whatsappConfigured } from "@tnec/core/whatsapp";
+import { sendWhatsApp, whatsappConfigured, resetChannelCache } from "@tnec/core/whatsapp";
 import { buildResultEmail, buildInviteEmail } from "@tnec/core/email";
 import { parseRosterCsv, inviteWindow, formatWib, EMAIL_DAILY_LIMIT, mockupCode, pickPackage } from "@tnec/core/mockup-bulk";
 import { staticResponse, textResponse } from "@tnec/core/node-server";
@@ -340,6 +340,12 @@ const ROUTES = [
   ["POST", /^\/api\/admin\/certificate-types$/, saveCertificateType],
   ["PUT", /^\/api\/admin\/certificate-types\/([\w-]+)$/, saveCertificateType],
   ["DELETE", /^\/api\/admin\/certificate-types\/([\w-]+)$/, deleteCertificateType],
+  ["GET", /^\/api\/admin\/whatsapp-channels$/, listWhatsAppChannels],
+  ["PUT", /^\/api\/admin\/whatsapp-channels\/(\w+)$/, saveWhatsAppChannel],
+  ["POST", /^\/api\/admin\/whatsapp-channels\/(\w+)\/test$/, testWhatsAppChannel],
+  ["GET", /^\/api\/admin\/staff$/, listStaff],
+  ["POST", /^\/api\/admin\/staff$/, createStaff],
+  ["PUT", /^\/api\/admin\/staff\/([\w-]+)\/(active|password|role)$/, updateStaff],
   ["POST", /^\/api\/admin\/certificates$/, issueCertificate],
   ["PUT", /^\/api\/admin\/certificates\/([\w-]+)$/, updateCertificate],
   ["POST", /^\/api\/admin\/certificates\/([\w-]+)\/pdf$/, uploadCertificatePdf],
@@ -366,6 +372,14 @@ async function handleAdminApi(request, env, url, ctx) {
   if (url.pathname === "/api/admin/setup" && request.method === "POST") return setupFirstAdmin(request, env, ctx);
   const user = await currentUser(request, env);
   if (!user) throw new HttpError(401, "Sesi kamu sudah berakhir. Masuk lagi untuk melanjutkan.", { code: "auth" });
+  // Tutor is a read-only role on the server: every write route is refused with 403, whatever the
+  // client shows. Staff management routes also stay owner-only.
+  if (user.role === "tutor" && request.method !== "GET" && request.method !== "HEAD") {
+    throw new HttpError(403, "Akun Tutor hanya bisa melihat data, tidak mengubahnya.");
+  }
+  if (user.role !== "admin" && /^\/api\/admin\/(staff|whatsapp-channels)/.test(url.pathname)) {
+    throw new HttpError(403, "Hanya Administrator yang boleh membuka pengaturan ini.");
+  }
   for (const [method, pattern, handler] of ROUTES) {
     if (method !== request.method) continue;
     const m = url.pathname.match(pattern);
@@ -379,6 +393,19 @@ async function bootstrap(request, env, user, url) {
   const now = nowSeconds();
   const db = env.DB;
   const stmt = (sql, ...args) => db.prepare(sql).bind(...args);
+  // A tutor's bootstrap never carries other students: the class tutor link is the boundary, applied
+  // on the server so the full student list never reaches the tutor's browser.
+  let tutorStudentIds = null;
+  if (user.role === "tutor") {
+    const { results: tutorStudents } = await db.prepare(
+      `SELECT DISTINCT s.id FROM students s
+         JOIN pendaftaran pd ON pd.student_id = s.id AND pd.status != 'batal'
+         JOIN classes c ON c.id = pd.class_id
+        WHERE c.tutor_id = (SELECT t.id FROM tutors t WHERE t.name = ?)`,
+    ).bind(user.name).all();
+    tutorStudentIds = new Set(tutorStudents.map((r) => r.id));
+    if (!tutorStudentIds.size) tutorStudentIds = new Set(["__tidak-ada__"]);
+  }
   const statSql = `SELECT a.test_key, an.question_id, COUNT(*) AS n, SUM(an.is_correct) AS correct
     FROM answers an JOIN attempts a ON a.id = an.attempt_id
     WHERE a.status = 'submitted' AND a.voided_at IS NULL AND a.started_at >= ? GROUP BY a.test_key, an.question_id`;
@@ -388,19 +415,33 @@ async function bootstrap(request, env, user, url) {
     stmt("SELECT * FROM question_sections ORDER BY test_key, position, id"),
     stmt("SELECT * FROM question_packages ORDER BY test_key, position, id"),
     stmt("SELECT * FROM levels ORDER BY position"),
-    stmt("SELECT * FROM students ORDER BY created_at DESC"),
-    stmt(`SELECT a.id, a.test_key, a.student_id, a.started_at, a.expires_at, a.submitted_at, a.status, a.score, a.total, a.level_key, a.name,
+    tutorStudentIds
+      ? stmt(`SELECT s.* FROM students s WHERE s.id IN (${[...tutorStudentIds].map(() => "?").join(",")}) ORDER BY s.created_at DESC`, ...tutorStudentIds)
+      : stmt("SELECT * FROM students ORDER BY created_at DESC"),
+    stmt(tutorStudentIds
+      ? `SELECT a.id, a.test_key, a.student_id, 0 AS started_at, 0 AS expires_at, 0 AS submitted_at, a.status, a.score, a.total, a.level_key, a.name,
+                 a.violation_log, a.duration_seconds, a.limit_seconds, a.max_violations, a.email_status, a.pass_score, a.passed,
+                 a.voided_at, a.voided_by, a.void_reason, a.user_agent, a.country, a.bands, a.audio_played_at, a.package_id, a.writing_status, a.writing_error, a.speaking_status, a.speaking_error,
+                 i.session_id AS invite_session_id
+         FROM attempts a LEFT JOIN invites i ON i.id = a.invite_id
+         WHERE 1 = 0`
+      : `SELECT a.id, a.test_key, a.student_id, a.started_at, a.expires_at, a.submitted_at, a.status, a.score, a.total, a.level_key, a.name,
                  a.violation_log, a.duration_seconds, a.limit_seconds, a.max_violations, a.email_status, a.pass_score, a.passed,
                  a.voided_at, a.voided_by, a.void_reason, a.user_agent, a.country, a.bands, a.audio_played_at, a.package_id, a.writing_status, a.writing_error, a.speaking_status, a.speaking_error,
                  i.session_id AS invite_session_id
                  FROM attempts a LEFT JOIN invites i ON i.id = a.invite_id
                  WHERE a.test_key = 'ielts-mockup' AND i.session_id IS NULL AND i.id IS NOT NULL
                  ORDER BY a.started_at DESC LIMIT 5000`),
-    stmt(`SELECT id, test_key, student_id, started_at, expires_at, submitted_at, status, score, total, level_key, name,
-                 violation_log, duration_seconds, limit_seconds, max_violations, email_status, pass_score, passed,
-                 voided_at, voided_by, void_reason, user_agent, country, bands, audio_played_at, package_id, writing_status, writing_error, speaking_status, speaking_error FROM attempts
-                 WHERE test_key != 'ielts-mockup' OR invite_id IS NULL
-                 ORDER BY started_at DESC LIMIT 5000`),
+    stmt(tutorStudentIds
+      ? `SELECT a.id, a.test_key, a.student_id, a.started_at, a.expires_at, a.submitted_at, a.status, a.score, a.total, a.level_key, a.name,
+                  a.violation_log, a.duration_seconds, a.limit_seconds, a.max_violations, a.email_status, a.pass_score, a.passed,
+                  a.voided_at, a.voided_by, a.void_reason, a.user_agent, a.country, a.bands, a.audio_played_at, a.package_id, a.writing_status, a.writing_error, a.speaking_status, a.speaking_error
+           FROM attempts a WHERE a.student_id IN (${[...tutorStudentIds].map(() => "?").join(",")}) ORDER BY a.started_at DESC LIMIT 5000`
+      : `SELECT id, test_key, student_id, started_at, expires_at, submitted_at, status, score, total, level_key, name,
+                  violation_log, duration_seconds, limit_seconds, max_violations, email_status, pass_score, passed,
+                  voided_at, voided_by, void_reason, user_agent, country, bands, audio_played_at, package_id, writing_status, writing_error, speaking_status, speaking_error FROM attempts
+         WHERE test_key != 'ielts-mockup' OR invite_id IS NULL ORDER BY started_at DESC LIMIT 5000`,
+      ...(tutorStudentIds ? [...tutorStudentIds] : [])),
     stmt(`SELECT s.*,
                  (SELECT COUNT(*) FROM invites i WHERE i.session_id = s.id) AS roster,
                  (SELECT COUNT(*) FROM mockup_invite_queue q JOIN invites i ON i.id = q.invite_id WHERE i.session_id = s.id AND q.wa_status = 'sent') AS wa_sent,
@@ -421,7 +462,10 @@ async function bootstrap(request, env, user, url) {
     stmt(statSql, now - 30 * 86400),
     stmt(`SELECT id, attempt_id, status, needs_review, cefr_overall, ielts_overall, graded_at, created_at
             FROM speaking_submissions ORDER BY created_at DESC LIMIT 5000`),
-    stmt("SELECT * FROM pendaftaran ORDER BY registered_at, id"),
+    stmt(tutorStudentIds
+      ? `SELECT * FROM pendaftaran WHERE student_id IN (${[...tutorStudentIds].map(() => "?").join(",")}) ORDER BY registered_at, id`
+      : "SELECT * FROM pendaftaran ORDER BY registered_at, id",
+      ...(tutorStudentIds ? [...tutorStudentIds] : [])),
     stmt("SELECT session_id, package_id FROM mockup_session_packages"),
     stmt("SELECT id, position, prompt, status FROM speaking_questions ORDER BY position, id"),
   ]), certificateData(env)]);
@@ -467,6 +511,9 @@ async function bootstrap(request, env, user, url) {
   }
   return json({
     me: { name: user.name, email: user.email, role: user.role },
+    // Only the owner sees the staff roster in the bootstrap; other roles get nothing to render.
+    ...(user.role === "admin" ? { staff: (await env.DB.prepare("SELECT id, name, email, role, active, last_login_at FROM admin_users ORDER BY created_at").all())
+      .results.map((r) => ({ id: r.id, name: r.name, email: r.email, role: r.role, active: Boolean(r.active), lastLoginAt: r.last_login_at ? ms(r.last_login_at) : null })) } : {}),
     now: Date.now(),
     publicUrl: env.PUBLIC_WEB_URL,
     whatsapp: { configured: whatsappConfigured(env) },
@@ -981,7 +1028,7 @@ async function sendStudentWhatsApp(request, env, user, url, id) {
   const body = await readJson(request);
   const message = multiline(body.text, 4000);
   if (!message) throw new HttpError(400, "Tulis pesan dulu sebelum mengirim.");
-  const result = await sendWhatsApp(env, { to: s.whatsapp, text: message });
+  const result = await sendWhatsApp(env, { to: s.whatsapp, text: message, branch: s.branch || null });
   await logWhatsApp(env, user, s, message, result, body.label ? text(body.label, 80) : "Mengirim pesan");
   if (!result.ok) throw new HttpError(result.status === "skipped" ? 503 : 502, result.error);
   return json({ ok: true, messageId: result.messageId });
@@ -2194,6 +2241,103 @@ async function bulkDeleteAttempts(request, env) {
     env.DB.prepare("DELETE FROM attempts WHERE id = ?").bind(id),
   ]));
   return json({ ok: true, count: ids.length });
+}
+
+/* ===================== WhatsApp channels per branch ===================== */
+
+async function listWhatsAppChannels(request, env) {
+  const { results } = await env.DB.prepare("SELECT branch, channel_id, updated_at, updated_by FROM whatsapp_channels ORDER BY branch").all();
+  return json({ ok: true, channels: results.map((r) => ({ branch: r.branch, channelId: r.channel_id || "", updatedAt: r.updated_at ? ms(r.updated_at) : null, updatedBy: r.updated_by || "" })) });
+}
+
+async function saveWhatsAppChannel(request, env, user, url, branch) {
+  if (!["pare", "jogja", "medan", "online"].includes(branch)) throw new HttpError(400, "Cabang tidak dikenal.");
+  const body = await readJson(request);
+  const channelId = text(body.channelId, 100).trim();
+  // Pare is the default channel every other branch falls back to, so it cannot be emptied.
+  if (branch === "pare" && !channelId && !env.ATTCOS_CHANNEL_ID) throw new HttpError(400, "Saluran Pare wajib terisi karena menjadi cadangan semua cabang.", { field: "channelId" });
+  await env.DB.prepare("UPDATE whatsapp_channels SET channel_id = ?, updated_at = ?, updated_by = ? WHERE branch = ?")
+    .bind(channelId, nowSeconds(), user.name, branch).run();
+  resetChannelCache();
+  return json({ ok: true });
+}
+
+async function testWhatsAppChannel(request, env, user, url, branch) {
+  if (!["pare", "jogja", "medan", "online"].includes(branch)) throw new HttpError(400, "Cabang tidak dikenal.");
+  const body = await readJson(request);
+  const to = normalizeWhatsapp(String(body?.to || ""));
+  if (!to) throw new HttpError(400, "Isi nomor WhatsApp tujuan pesan uji, misalnya nomor kamu sendiri.", { field: "to" });
+  const result = await sendWhatsApp(env, { to, text: `Pesan uji saluran WhatsApp ${branch} dari dasbor Titik Nol. Kalau pesan ini tiba, salurannya siap dipakai.`, branch });
+  if (!result.ok) throw new HttpError(result.status === "skipped" ? 503 : 502, result.error);
+  return json({ ok: true });
+}
+
+/* ===================== Staff accounts ===================== */
+
+function requireAdmin(user) {
+  if (user.role !== "admin") throw new HttpError(403, "Hanya Administrator yang boleh mengelola akun staf.");
+}
+
+async function listStaff(request, env, user) {
+  requireAdmin(user);
+  const { results } = await env.DB.prepare("SELECT id, name, email, role, active, last_login_at, created_at FROM admin_users ORDER BY created_at").all();
+  return json({ ok: true, staff: results.map((r) => ({ id: r.id, name: r.name, email: r.email, role: r.role, active: Boolean(r.active), lastLoginAt: r.last_login_at ? ms(r.last_login_at) : null })) });
+}
+
+async function createStaff(request, env, user) {
+  requireAdmin(user);
+  const body = await readJson(request);
+  const name = text(body.name, 80).trim();
+  const email = text(body.email, 160).toLowerCase();
+  const role = ["staf", "tutor", "admin"].includes(body.role) ? body.role : "staf";
+  const password = String(body.password || "");
+  if (name.length < 2) throw new HttpError(400, "Nama minimal 2 karakter.", { field: "name" });
+  if (!isEmail(email)) throw new HttpError(400, "Format email belum benar.", { field: "email" });
+  if (password.length < 8) throw new HttpError(400, "Kata sandi minimal 8 karakter.", { field: "password" });
+  const taken = await env.DB.prepare("SELECT 1 FROM admin_users WHERE email = ?").bind(email).first();
+  if (taken) throw new HttpError(400, "Email ini sudah dipakai akun lain.", { field: "email" });
+  const { hash, salt, iterations } = await hashPassword(password);
+  const id = newId("adm");
+  await env.DB.prepare(`INSERT INTO admin_users (id, email, name, role, password_hash, password_salt, password_iter, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?::integer, ?)`)
+    .bind(id, email, name, role, hash, salt, iterations, nowSeconds()).run();
+  return json({ ok: true, id });
+}
+
+async function updateStaff(request, env, user, url, id, action) {
+  requireAdmin(user);
+  const row = await env.DB.prepare("SELECT id, email, role FROM admin_users WHERE id = ?").bind(id).first();
+  if (!row) throw new HttpError(404, "Akun tidak ditemukan.");
+  if (row.id === user.id && action !== "password") throw new HttpError(400, "Kamu tidak bisa mengubah status atau peran akunmu sendiri. Minta Administrator lain.");
+  const body = await readJson(request);
+  const now = nowSeconds();
+  if (action === "active") {
+    const active = body.active ? 1 : 0;
+    // The last active owner account cannot be deactivated, or nobody could manage staff again.
+    if (!active && row.role === "admin") {
+      const others = await env.DB.prepare("SELECT COUNT(*) AS n FROM admin_users WHERE role = 'admin' AND active = 1 AND id != ?").bind(id).first();
+      if (!others?.n) throw new HttpError(400, "Ini satu-satunya akun Administrator aktif, jadi tidak bisa dinonaktifkan.");
+    }
+    await env.DB.prepare("UPDATE admin_users SET active = ? WHERE id = ?").bind(active, id).run();
+    return json({ ok: true });
+  }
+  if (action === "password") {
+    const password = String(body.password || "");
+    if (password.length < 8) throw new HttpError(400, "Kata sandi minimal 8 karakter.", { field: "password" });
+    const { hash, salt, iterations } = await hashPassword(password);
+    await env.DB.prepare("UPDATE admin_users SET password_hash = ?, password_salt = ?, password_iter = ?, failed_logins = 0, locked_until = NULL WHERE id = ?")
+      .bind(hash, salt, iterations, id).run();
+    return json({ ok: true });
+  }
+  // action === "role"
+  const role = ["staf", "tutor", "admin"].includes(body.role) ? body.role : null;
+  if (!role) throw new HttpError(400, "Peran tidak dikenal.");
+  if (row.role === "admin" && role !== "admin") {
+    const others = await env.DB.prepare("SELECT COUNT(*) AS n FROM admin_users WHERE role = 'admin' AND active = 1 AND id != ?").bind(id).first();
+    if (!others?.n) throw new HttpError(400, "Ini satu-satunya akun Administrator, jadi perannya tidak bisa diturunkan.");
+  }
+  await env.DB.prepare("UPDATE admin_users SET role = ? WHERE id = ?").bind(role, id).run();
+  return json({ ok: true });
 }
 
 /* ===================== Catalog ===================== */

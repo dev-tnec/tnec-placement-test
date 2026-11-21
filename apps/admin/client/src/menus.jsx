@@ -2,14 +2,46 @@
 // simpler outside React. The menu host <div id="menu"> lives in the page shell, not in the React
 // root, and one document-level listener drives triggers, items, outside clicks, and the keyboard.
 
-import { api, db, mutate, notify, route, ui } from "./store.js";
+import { api, db, mutate, notify, reload, route, ui } from "./store.js";
 import { $, $$, iconHtml, toast } from "./dom.js";
 import { fmtDate, openCertPage } from "./lib.js";
-import { confirmThen, openCertDialog, openQuestionEditor, questionAction, deleteQuestion } from "./dialogs.jsx";
+import { confirmThen, openCertDialog, openFormDialog, openQuestionEditor, questionAction, deleteQuestion } from "./dialogs.jsx";
 import { bulkStudents, deleteAttempts, deleteStudents, revokeCert, sendTestLink, toggleCertType, voidAttempt } from "./actions.js";
 import { Icon } from "./ui.jsx";
 
 let menuState = null;
+
+/* The staff role and password dialogs, used from the staff row menu. */
+function staffRoleDialog(u) {
+  const labels = { admin: "Administrator, semua akses termasuk akun staf", staf: "Admin, semua pekerjaan operasional", tutor: "Tutor, hanya siswa kelasnya" };
+  openFormDialog({
+    title: `Ganti peran ${u.name}`,
+    sub: "Peran menentukan menu dan data yang bisa diakses akun ini.",
+    fields: [{ id: "role", label: "Peran baru", type: "select", value: u.role, options: [["staf", labels.staf], ["tutor", labels.tutor], ["admin", labels.admin]] }],
+    submitLabel: "Simpan peran",
+    onSubmit: async (values) => {
+      await api(`/api/admin/staff/${u.id}/role`, { method: "PUT", body: { role: values.role } });
+      toast(`Peran ${u.name} menjadi ${values.role === "admin" ? "Administrator" : values.role === "tutor" ? "Tutor" : "Admin"}.`);
+      await reload();
+      return true;
+    },
+  });
+}
+
+function staffPasswordDialog(u) {
+  openFormDialog({
+    title: `Ganti kata sandi ${u.name}`,
+    sub: "Kata sandi minimal 8 karakter. Serahkan langsung ke staf yang bersangkutan.",
+    fields: [{ id: "password", label: "Kata sandi baru", type: "text", placeholder: "Minimal 8 karakter" }],
+    submitLabel: "Simpan kata sandi",
+    onSubmit: async (values, fail) => {
+      if (String(values.password || "").length < 8) { fail("password", "Kata sandi minimal 8 karakter."); return false; }
+      await api(`/api/admin/staff/${u.id}/password`, { method: "PUT", body: { password: values.password } });
+      toast(`Kata sandi ${u.name} diganti.`);
+      return true;
+    },
+  });
+}
 
 /* The certificate sends attach the PDF the team saved from the print dialog. Picking it here
    saves the trip to the print page; the upload replaces an earlier file and keeps its link. */
@@ -142,6 +174,15 @@ export function contextMenu(kind, id) {
       { label: "Lihat siswa kelas ini", icon: "users", run: () => { Object.assign(ui.students, { q: c.code, stage: "all", program: c.programId, period: c.periodId, tutor: c.tutor, level: "", page: 1 }); location.hash = "#/siswa"; notify(); } },
       { sep: true },
       { label: n ? "Hapus kelas, masih ada siswa" : "Hapus kelas", icon: "trash", danger: true, disabled: Boolean(n), run: () => confirmThen(`Hapus kelas ${c.code}?`, "Kelas ini belum berisi siswa, jadi aman dihapus.", "Hapus kelas", () => api(`/api/admin/classes/${c.id}`, { method: "DELETE" }), `Kelas ${c.code} dihapus.`) },
+    ];
+  }
+  if (kind === "staff") {
+    const u = (db.staff || []).find((x) => x.id === id);
+    if (!u) return [];
+    return [
+      { label: u.active ? "Nonaktifkan akun" : "Aktifkan kembali", icon: u.active ? "eye-off" : "eye", run: () => confirmThen(u.active ? `Nonaktifkan akun ${u.name}?` : `Aktifkan kembali akun ${u.name}?`, u.active ? "Akun tidak bisa masuk sampai diaktifkan kembali. Riwayat aktivitasnya tetap." : "Akun bisa masuk kembali seperti semula.", u.active ? "Nonaktifkan" : "Aktifkan", () => api(`/api/admin/staff/${u.id}/active`, { method: "PUT", body: { active: !u.active } }), u.active ? `Akun ${u.name} dinonaktifkan.` : `Akun ${u.name} aktif kembali.`) },
+      { label: "Ganti peran", icon: "award", run: () => staffRoleDialog(u) },
+      { label: "Ganti kata sandi", icon: "lock", run: () => staffPasswordDialog(u) },
     ];
   }
   if (kind === "cert") {

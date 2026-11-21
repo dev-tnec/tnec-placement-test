@@ -1203,8 +1203,7 @@ function WaDialog({ studentId, opts }) {
     let sent = false;
     try {
       await api(`/api/admin/students/${s.id}/whatsapp`, { method: "POST", body: { text: trimmed, label: opts.label } });
-      sent = true;
-      closeDialog("wa");
+      sent = true;      closeDialog("wa");
       toast(`Pesan WhatsApp terkirim ke ${firstName(s.name)}.`);
     } catch (error) {
       if (sessionEnded(error)) return;

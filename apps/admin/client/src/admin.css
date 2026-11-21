@@ -216,6 +216,10 @@ button { cursor: pointer; }
 .icon-btn--dark:hover { background: rgba(255,255,255,.1); color: var(--white); }
 .row-actions { display: inline-flex; align-items: center; justify-content: flex-end; gap: 6px; }
 
+/* The explicit row open button: same quiet look as the other row actions. */
+.row-open { white-space: nowrap; }
+.channel-code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; color: var(--navy-700); word-break: break-all; }
+
 /* Form controls */
 .field { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
 .label { font-size: 13px; font-weight: 600; color: var(--navy-900); }

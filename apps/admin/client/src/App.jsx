@@ -19,6 +19,7 @@ import { SpeakingQuestionEditor } from "./views/SpeakingBank.jsx";
 import { TestPage, AttemptDetail } from "./views/Test.jsx";
 import { AllSubmissions } from "./views/Submission.jsx";
 import { ProgramKelas } from "./views/Program.jsx";
+import { Pengaturan } from "./views/Pengaturan.jsx";
 import { DialogHost, ConfirmHost } from "./dialogs.jsx";
 
 /* ===================== Sidebar ===================== */
@@ -26,6 +27,8 @@ function Sidebar({ nav }) {
   useVersion();
   const [collapsed, setCollapsed] = useState(() => { try { return localStorage.getItem("tnec-nav-collapsed") === "1"; } catch { return false; } });
   useEffect(() => { document.body.classList.toggle("nav-collapsed", collapsed); }, [collapsed]);
+  // The badge counts exactly what the Ringkasan "Perlu dihubungi" queue counts: fresh leads only,
+  // never registered students and never cold leads. Students carry their own count on their page.
   const fresh = leads().filter((s) => s.stage === "baru" && !isColdLead(s)).length;
   const items = [
     ["ringkasan", "#/ringkasan", "dashboard", "Ringkasan"],
@@ -57,24 +60,38 @@ function Sidebar({ nav }) {
         {items.map(([key, href, icon, label]) => (
           <a key={key} className="nav__link" href={href} data-nav={key} title={label} {...(nav === key ? { "aria-current": "page" } : {})}>
             <Icon name={icon} /><span className="nav__label">{label}</span>
-            {key === "siswa" ? <span className="nav__count" title="Calon siswa baru yang belum dihubungi" hidden={!fresh}>{fresh}</span> : null}
+            {key === "siswa" ? <span className="nav__count" title="Lead baru yang belum dihubungi, lead dingin tidak dihitung" hidden={!fresh}>{fresh}</span> : null}
           </a>
         ))}
-        <p className="nav__group">Tes</p><span className="nav__sep" aria-hidden="true"></span>
-        {tests.map(([key, href, icon, label]) => (
-          <a key={key} className="nav__link" href={href} data-nav={key} title={label} {...(nav === key ? { "aria-current": "page" } : {})}>
-            <Icon name={icon} /><span className="nav__label">{label}</span>
+        {/* A tutor sees only their students and results: the test group, program, and settings stay
+            with the operational roles. The server enforces the same line on every route. */}
+        {db.me?.role !== "tutor" ? <>
+          <p className="nav__group">Tes</p><span className="nav__sep" aria-hidden="true"></span>
+          {tests.map(([key, href, icon, label]) => (
+            <a key={key} className="nav__link" href={href} data-nav={key} title={label} {...(nav === key ? { "aria-current": "page" } : {})}>
+              <Icon name={icon} /><span className="nav__label">{label}</span>
+            </a>
+          ))}
+          <p className="nav__group">Pengaturan</p><span className="nav__sep" aria-hidden="true"></span>
+          <a className="nav__link" href="#/program/program" data-nav="program" title="Program & Kelas" {...(nav === "program" ? { "aria-current": "page" } : {})}>
+            <Icon name="layers" /><span className="nav__label">Program &amp; Kelas</span>
           </a>
-        ))}
-        <p className="nav__group">Pengaturan</p><span className="nav__sep" aria-hidden="true"></span>
-        <a className="nav__link" href="#/program/program" data-nav="program" title="Program & Kelas" {...(nav === "program" ? { "aria-current": "page" } : {})}>
-          <Icon name="layers" /><span className="nav__label">Program &amp; Kelas</span>
-        </a>
+        </> : null}
+        {db.me?.role === "admin" ? (
+          <>
+            <a className="nav__link" href="#/pengaturan/saluran" data-nav="pengaturan-saluran" title="Saluran WhatsApp" {...(nav === "pengaturan-saluran" ? { "aria-current": "page" } : {})}>
+              <Icon name="message" /><span className="nav__label">Saluran WhatsApp</span>
+            </a>
+            <a className="nav__link" href="#/pengaturan/staf" data-nav="pengaturan-staf" title="Staf" {...(nav === "pengaturan-staf" ? { "aria-current": "page" } : {})}>
+              <Icon name="users" /><span className="nav__label">Staf</span>
+            </a>
+          </>
+        ) : null}
       </nav>
       <div className="sidebar__foot">
         <div className="account">
           <span className="avatar" aria-hidden="true">{db.me ? db.me.name.split(/\s+/).slice(0, 2).map((w) => w[0].toUpperCase()).join("") : ""}</span>
-          <span className="account__text"><span className="account__name">{db.me?.name || "Memuat..."}</span><span className="account__role">{db.me?.role === "pendidikan" ? "Tim pendidikan" : "Admin"}</span></span>
+          <span className="account__text"><span className="account__name">{db.me?.name || "Memuat..."}</span><span className="account__role">{db.me?.role === "admin" ? "Administrator" : db.me?.role === "tutor" ? "Tutor" : "Admin"}</span></span>
           <button className="icon-btn icon-btn--dark account__out" type="button" aria-label="Keluar dari dasbor" title="Keluar"
             onClick={async (e) => {
               const b = e.currentTarget; b.disabled = true;
@@ -160,6 +177,10 @@ function currentView(parts, params) {
   if (parts[0] === "sertifikat") {
     const tab = parts[1] === "pengaturan" ? "pengaturan" : "daftar";
     return { view: <Sertifikat tab={tab} />, nav: "sertifikat", title: tab === "daftar" ? "Sertifikat" : "Sertifikat, Pengaturan" };
+  }
+  if (parts[0] === "pengaturan") {
+    const tab = ["saluran", "staf"].includes(parts[1]) ? parts[1] : "saluran";
+    return { view: <Pengaturan tab={tab} />, nav: `pengaturan-${tab}`, title: tab === "saluran" ? "Pengaturan, Saluran WhatsApp" : "Pengaturan, Staf" };
   }
   return { view: <Ringkasan />, nav: "ringkasan", title: "Ringkasan" };
 }

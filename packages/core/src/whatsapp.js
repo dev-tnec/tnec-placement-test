@@ -21,16 +21,54 @@ const ERROR_TEXT = {
 };
 
 export function whatsappConfigured(env) {
-  return Boolean(env.ATTCOS_API_KEY && env.ATTCOS_CHANNEL_ID);
+  return Boolean(env.ATTCOS_API_KEY && (env.ATTCOS_CHANNEL_ID || channelCache.has("pare")));
 }
 
 // AttCos stores `source` on the contact as where the lead came from and shows it on the pipeline
 // card. Only the automatic placement result sends it; dashboard messages leave it out.
 export const PLACEMENT_LEAD_SOURCE = "Placement Test";
 
-export async function sendWhatsApp(env, { to, text, source, media, timeoutMs = TIMEOUT_MS }) {
-  if (!whatsappConfigured(env)) {
-    return { ok: false, status: "skipped", error: "Integrasi WhatsApp belum diatur. Isi ATTCOS_API_KEY dan ATTCOS_CHANNEL_ID di pengaturan server." };
+/* The per-branch channel ids, read from whatsapp_channels with a short in-memory cache so a send
+   does not open a query per message. The cache is invalidated by the dashboard on every save. */
+const channelCache = new Map();
+const CHANNEL_CACHE_MS = 30_000;
+let channelCacheAt = 0;
+
+async function loadChannels(env) {
+  if (channelCache.size && Date.now() - channelCacheAt < CHANNEL_CACHE_MS) return channelCache;
+  try {
+    const { results } = await env.DB.prepare("SELECT branch, channel_id FROM whatsapp_channels").all();
+    const map = new Map(results.map((r) => [r.branch, r.channel_id || ""]));
+    channelCache.clear();
+    for (const [k, v] of map) channelCache.set(k, v);
+    channelCacheAt = Date.now();
+  } catch { /* table not migrated yet: fall back to the env channel below */ }
+  return channelCache;
+}
+
+/** The dashboard calls this after a channel edit so the next send picks the new value at once. */
+export function resetChannelCache() {
+  channelCache.clear();
+  channelCacheAt = 0;
+}
+
+async function channelIdFor(env, branch) {
+  const channels = await loadChannels(env);
+  const pick = (key) => channels.get(key) || "";
+  // Online falls back to Pare, every unknown or unset branch falls back to Pare too, and the env
+  // var is the final fallback so sends never break across the migration.
+  return pick(branch)
+    || pick("pare")
+    || env.ATTCOS_CHANNEL_ID;
+}
+
+export async function sendWhatsApp(env, { to, text, source, media, branch, timeoutMs = TIMEOUT_MS }) {
+  if (!env.ATTCOS_API_KEY) {
+    return { ok: false, status: "skipped", error: "Integrasi WhatsApp belum diatur. Isi ATTCOS_API_KEY di pengaturan server." };
+  }
+  const channelId = branch ? await channelIdFor(env, branch) : (await channelIdFor(env, "pare"));
+  if (!channelId) {
+    return { ok: false, status: "skipped", error: "Channel WhatsApp belum diatur. Isi saluran Pare di menu Pengaturan." };
   }
   const base = (env.ATTCOS_API_BASE || DEFAULT_BASE).replace(/\/+$/, "");
   const controller = new AbortController();
@@ -45,7 +83,7 @@ export async function sendWhatsApp(env, { to, text, source, media, timeoutMs = T
       },
       body: JSON.stringify({
         to: String(to).replace(/^\+/, ""),
-        channelId: env.ATTCOS_CHANNEL_ID,
+        channelId,
         text,
         ...(media ? { media: { url: media.url, kind: media.kind || "document", filename: media.filename || null } } : {}),
         ...(source ? { source: String(source).slice(0, 80) } : {}),

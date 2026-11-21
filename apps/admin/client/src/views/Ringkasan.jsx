@@ -2,7 +2,7 @@
 
 import { db, notify, ui, useVersion, NOW } from "../store.js";
 import { DAY, classLabel, fmtDate, fmtDateTime, fmtNum, fmtWa, isColdLead, leads, periodById, periodLabel, programById, studentById, studentsInClass } from "../lib.js";
-import { Icon, LevelCell, Notice, OptList, PageHead, PendaftaranStatus, Person, Empty, Stat, periodOptions, rowClick } from "../ui.jsx";
+import { Icon, LevelCell, Notice, OptList, PageHead, PendaftaranStatus, Person, Empty, Stat, periodOptions, rowClick, RowOpen } from "../ui.jsx";
 import { markContacted } from "../actions.js";
 import { openWhatsApp } from "../dialogs.jsx";
 
@@ -26,7 +26,7 @@ export function Ringkasan() {
     const days = Math.floor((NOW - s.createdAt) / DAY);
     const p = programById(s.programId);
     return <tr key={s.id} onClick={rowClick(`#/siswa/${s.id}`)}>
-      <td><a className="cell-main" href={`#/siswa/${s.id}`}>{s.name}</a><span className="cell-sub">{s.city}, {fmtWa(s.wa)}</span></td>
+      <td><a className="cell-main" href={`#/siswa/${s.id}`}>{s.name}</a><span className="cell-sub">Kota asal: {s.city || "-"}, {fmtWa(s.wa)}</span></td>
       <td><LevelCell s={s} /></td>
       <td className="hide-md">{p ? p.name : <span className="muted">Belum dipilih</span>}{p ? <span className="cell-sub">{p.mode}</span> : null}</td>
       <td><span className={days >= 2 ? "is-late" : ""}>{days < 1 ? "Hari ini" : `${days} hari`}</span><span className="cell-sub">sejak {fmtDateTime(s.createdAt)}</span></td>
@@ -34,6 +34,7 @@ export function Ringkasan() {
       <td className="is-action"><span className="row-actions">
         <button className="icon-btn" type="button" onClick={() => openWhatsApp(s)} aria-label={`Chat WhatsApp ${s.name}`} title="Chat WhatsApp"><Icon name="message" /></button>
         <button className="btn btn--quiet btn--sm" type="button" onClick={() => markContacted(s)}>Tandai dihubungi</button>
+        <RowOpen href={`#/siswa/${s.id}`} label={s.name} />
       </span></td>
     </tr>;
   });
@@ -47,6 +48,7 @@ export function Ringkasan() {
       <td className="hide-sm">{c ? <Person name={c.tutor} text={classLabel(c)} /> : <span className="muted">Belum ada</span>}</td>
       <td><PendaftaranStatus p={p} /></td>
       <td className="hide-md cell-sub">{fmtDate(p.registeredAt)}<span>oleh {p.registeredBy || "-"}</span></td>
+      <td className="is-action"><RowOpen href={`#/siswa/${p.studentId}`} label={s ? s.name : "siswa"} /></td>
     </tr>;
   });
 
@@ -56,6 +58,7 @@ export function Ringkasan() {
       <td><Person name={c.tutor} text={c.tutor} /></td>
       <td className="hide-sm">{periodLabel(c.periodId)}</td>
       <td className="tnum">{studentsInClass(c).length}<small> / {c.capacity}</small></td>
+      <td className="is-action"><RowOpen href="#/program/kelas" label={c.code} /></td>
     </tr>
   ));
 

@@ -70,7 +70,8 @@ export async function deliverResult(env, attemptId) {
     `UPDATE attempts SET delivery_lease_until = ?
       WHERE id = ? AND (email_status = 'pending' OR wa_status = 'pending')
         AND (delivery_lease_until IS NULL OR delivery_lease_until < ?) AND ${SPEAKING_DONE}
-      RETURNING id, student_id, name, email, whatsapp, score, total, level_key, email_status, wa_status, result_token`,
+      RETURNING id, student_id, name, email, whatsapp, score, total, level_key, email_status, wa_status, result_token,
+        (SELECT s.branch FROM students s WHERE s.id = attempts.student_id) AS branch`,
   ).bind(now + LEASE_SECONDS, attemptId, now).first();
   if (!attempt) return null; // nothing waiting, or another server is sending it
 
@@ -83,7 +84,7 @@ export async function deliverResult(env, attemptId) {
   const [mail, wa] = await Promise.all([
     attempt.email_status === "pending" ? sendResultEmail(env, facts) : null,
     attempt.wa_status === "pending"
-      ? sendWhatsApp(env, { to: attempt.whatsapp, text: waText, source: PLACEMENT_LEAD_SOURCE, timeoutMs: WHATSAPP_TIMEOUT_MS })
+      ? sendWhatsApp(env, { to: attempt.whatsapp, text: waText, source: PLACEMENT_LEAD_SOURCE, branch: attempt.branch || null, timeoutMs: WHATSAPP_TIMEOUT_MS })
       : null,
   ]);
 

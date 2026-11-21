@@ -240,5 +240,27 @@ export function RichToolbar({ target }) {
 }
 
 /* A whole table row navigates, unless the click landed on a control inside it. */
-export const rowClick = (href) => (e) => { if (!e.target.closest("a, button, input, select, textarea, label")) location.hash = href; };
-export const rowRun = (fn) => (e) => { if (!e.target.closest("a, button, input, select, textarea, label")) fn(); };
+// The row navigates only on a clean click. A non-empty text selection means the user was
+// selecting to copy, not clicking to open, so that click is ignored. Every table row that
+// navigates through here gets a matching "Buka" button in its action column (RowOpen).
+export const rowClick = (href) => (e) => {
+  if (e.target.closest("a, button, input, select, textarea, label")) return;
+  const selection = window.getSelection ? window.getSelection() : null;
+  if (selection && String(selection).length) return;
+  location.hash = href;
+};
+export const rowRun = (fn) => (e) => {
+  if (e.target.closest("a, button, input, select, textarea, label")) return;
+  const selection = window.getSelection ? window.getSelection() : null;
+  if (selection && String(selection).length) return;
+  fn();
+};
+
+/* The explicit open button for a navigating row: always present, one click, keyboard reachable. */
+export function RowOpen({ href, label = "Buka" }) {
+  return (
+    <a className="btn btn--quiet btn--sm row-open" href={href} aria-label={`Buka ${label}`} title={`Buka ${label}`}>
+      <Icon name="chevron-right" cls="icon--sm" />Buka
+    </a>
+  );
+}
