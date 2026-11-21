@@ -255,6 +255,7 @@ async function createAttempt(request, env) {
 
   return json({
     attemptId: id,
+    testKey,
     secondsLeft: durationSeconds,
     total: questions.length,
     timeMode: test.timeMode,

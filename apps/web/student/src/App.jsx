@@ -234,6 +234,9 @@ export default function App() {
     api(url).then((data) => {
       setConfig(data);
       setInviteInfo(data.invite || null);
+      // Only the placement test gets the enterprise theme; the IELTS mockup keeps its own look.
+      const key = data.invite?.test || "placement";
+      document.body.classList.toggle("is-placement", key === "placement" || key === "pre" || key === "post");
       setMaxStrikes(data.maxViolations || 3);
       if (!data.open) {
         setNotice(data.invite
@@ -292,7 +295,7 @@ export default function App() {
     const plan = Array.isArray(data.sectionPlan) && data.sectionPlan.length ? data.sectionPlan : null;
     const first = plan?.[0] || null;
     const firstIndex = first ? data.questions.findIndex((q) => q.skill === first.skill) : 0;
-    setAttempt({ id: data.attemptId, questions: data.questions, total: data.total, sections: data.sections || [] });
+    setAttempt({ id: data.attemptId, testKey: data.testKey || "placement", questions: data.questions, total: data.total, sections: data.sections || [] });
     setPerMode(isPer);
     setAutoSubmit(Boolean(data.autoSubmit));
     setMaxStrikes(data.maxViolations || 3);

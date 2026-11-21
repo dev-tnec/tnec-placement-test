@@ -388,7 +388,28 @@ The Sertifikat menu is one sidebar item with two tabs, Sertifikat terbit and Pen
 
 The bar above a certificate has two rows and sticks to the top without covering the sheet: back, title, and print on the first, the send row on the second. The send row appears only for a valid certificate with a student: a state line, the two send buttons with the student's address and number, and an Unggah PDF sendiri label-button as the optional override, all in the bar's pill style. The state line says the PDF is made automatically when a send starts, or names the stored file; it turns white on success and carries the outcome or the error in place, never as a floating box, and it wraps instead of truncating. Both sends disable while running and rename to their success text. The certificate row menu carries the same sends without a trip to the print page, available before any PDF exists because the server makes it on demand, plus Unggah PDF sendiri or Ganti PDF sertifikat; a send is disabled only when the student lacks that address, and its label says which one is missing.
 
-## 19. Do not
+## 19. Placement test theme (enterprise clean white)
+
+On 21 November 2026 the owner set the placement test (and the pre and post tests, which share its layout) to the enterprise clean white B2B standard of the reference `docs/assets/tnec_enterprise_placement_test_ui (4).html`. The IELTS mockup keeps the original navy editorial look and is deliberately untouched.
+
+The theme is scoped, not forked: the body carries `is-placement` (set in `App.jsx` from the invite test key, placement when there is no invite) and `app.css` restyles the existing markup under that class. No component tree changed, so the mockup and the placement share every screen component and only differ in skin.
+
+Tokens, added beside the base set in `app.css` and only read under `is-placement`:
+
+| Token | Value | Use |
+|---|---|---|
+| `--ent-bg` | `#FAFAFA` | App background |
+| `--ent-surface` | `#FFFFFF` | Cards, topbar, navigator |
+| `--ent-subtle` | `#F4F4F5` | Option keys, fills, tracks |
+| `--ent-border` / `--ent-border-strong` | `#E4E4E7` / `#D4D4D8` | Hairlines |
+| `--ent-text` / `--ent-text-2` / `--ent-text-3` | `#09090B` / `#52525B` / `#71717A` | Text tiers |
+| `--radius-sm/md/lg` rescoped | 6px / 8px / 10px | Under `body.is-placement` only |
+
+The measured geometry of the reference, verified on the dev box at 1440 and 390: a 60px white sticky topbar with the centered progress cluster and the timer box on the right, a full-width split workspace (canvas `1fr`, navigator `340px`), the question canvas with no card chrome (passage as the only white card), options as 8px bordered rows with a square key tile and a custom radio dot, the navigator docked with a left hairline holding the legend and the 5-column grid, and the keyboard bar as the bottom band. The 2px active marker rule from section 18 applies here too.
+
+The intro drops the navy hero for the same white standard: the black logo lockup on the app background, quiet gray cards, and rectangular buttons. The speaking screen keeps its navy exam topbar because it is exam chrome, not branding. The details screen, dialogs, and toast follow the same flat white treatment.
+
+## 20. Do not
 
 1. Do not add a gradient, glassmorphism, or a shadow outside the listed set.
 2. Do not use red for buttons, decoration, headings, or backgrounds behind long text.
