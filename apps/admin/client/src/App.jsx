@@ -78,14 +78,9 @@ function Sidebar({ nav }) {
           </a>
         </> : null}
         {db.me?.role === "admin" ? (
-          <>
-            <a className="nav__link" href="#/pengaturan/saluran" data-nav="pengaturan-saluran" title="Saluran WhatsApp" {...(nav === "pengaturan-saluran" ? { "aria-current": "page" } : {})}>
-              <Icon name="message" /><span className="nav__label">Saluran WhatsApp</span>
-            </a>
-            <a className="nav__link" href="#/pengaturan/staf" data-nav="pengaturan-staf" title="Staf" {...(nav === "pengaturan-staf" ? { "aria-current": "page" } : {})}>
-              <Icon name="users" /><span className="nav__label">Staf</span>
-            </a>
-          </>
+          <a className="nav__link" href="#/pengaturan/saluran" data-nav="pengaturan" title="Pengaturan" {...(nav === "pengaturan" ? { "aria-current": "page" } : {})}>
+            <Icon name="settings" /><span className="nav__label">Pengaturan</span>
+          </a>
         ) : null}
       </nav>
       <div className="sidebar__foot">
@@ -180,7 +175,7 @@ function currentView(parts, params) {
   }
   if (parts[0] === "pengaturan") {
     const tab = ["saluran", "staf"].includes(parts[1]) ? parts[1] : "saluran";
-    return { view: <Pengaturan tab={tab} />, nav: `pengaturan-${tab}`, title: tab === "saluran" ? "Pengaturan, Saluran WhatsApp" : "Pengaturan, Staf" };
+    return { view: <Pengaturan tab={tab} />, nav: "pengaturan", title: "Pengaturan" };
   }
   return { view: <Ringkasan />, nav: "ringkasan", title: "Ringkasan" };
 }
