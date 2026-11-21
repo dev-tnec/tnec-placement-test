@@ -132,8 +132,11 @@ a { color: inherit; }
 .mode-bar { background: var(--navy-800); border-bottom: 1px solid rgba(255,255,255,.1); padding: 6px 20px; display: flex; justify-content: space-between; align-items: center; color: var(--text-on-dark-muted); font-size: 11px; }
 .mode-bar b { letter-spacing: .06em; text-transform: uppercase; }
 
-@media (max-width: 900px) {
+@media (max-width: 1200px) {
   .sidebar { position: static; height: auto; flex-basis: 100%; }
+  .sidebar .nav { display: flex; flex-wrap: wrap; gap: 4px; }
+  .sidebar .nav__group { width: 100%; }
+  .sidebar .brand, .sidebar .sidebar__foot { display: none; }
   body { flex-direction: column; }
   .grid-2 { grid-template-columns: 1fr; }
   .hide-sm, .hide-md { display: none; }
