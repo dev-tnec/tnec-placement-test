@@ -358,7 +358,23 @@ A pre-test or post-test opens from a personal link, `/?undangan=<token>`, that t
 
 ## 18. Dashboard
 
-The internal dashboard at `/admin` is React, bundled with Node and esbuild from `apps/admin/client`, and its CSS is `apps/admin/client/src/admin.css`; the build output is committed to `apps/admin/public/admin` so the server only serves files. The dashboard server generates the shell from `admin-manifest.json`, so there is no HTML file. It uses the same tokens with the same color rule: primary and destructive buttons are navy, red is only for status dots, error text, and low accuracy bars, and focus rings are navy. Status is a dot plus a text label. There are no colored edge stripes.
+The internal dashboard at `/admin` is React, bundled with Node and esbuild from `apps/admin/client`, and its CSS is `apps/admin/client/src/admin.css`; the build output is committed to `apps/admin/public/admin` so the server only serves files. The dashboard server generates the shell from `admin-manifest.json`, so there is no HTML file.
+
+On 21 November 2026 the owner set the dashboard to the enterprise clean white B2B standard of the reference `docs/assets/tnec_enterprise_b2b_dashboard.html` (Stripe, Linear, Vercel): a white sidebar with a right hairline and a black logo lockup, a white sticky top utility bar carrying the section breadcrumb, content that spans the full width with no max-width, underline tabs with a 2px active marker, flat panels held by their border with a minimal shadow, rectangular 6px radius buttons, and table headers on the app background. Buttons and primary actions stay navy; red stays for errors and urgent state; focus rings stay navy; there are still no colored edge stripes. Status is a soft filled pill with a dot or check, never color alone.
+
+Dashboard-only tokens that extend the shared set (the student app is untouched by these):
+
+| Token | Value | Use in the dashboard |
+|---|---|---|
+| `--gray-50` | `#F4F4F5` | App background, table header fill, hover fills, neutral pill |
+| `--gray-200` | `#E4E4E7` | All hairlines: sidebar edge, topbar, panel borders, table rules |
+| `--gray-300` | `#E9E9EB` | Disabled fills, bar tracks |
+| `--ok-bg` / `--ok-text` | `#ECFDF5` / `#059669` | Active, done, connected status pills |
+| `--amber-700` | `#B45309` | Warning pill text on `--yellow-50` |
+| `--radius-sm` / `--radius-md` / `--radius-lg` | 6px / 8px / 10px | Buttons and inputs / notices and menus / panels and dialogs |
+| `--shadow-card` | `0 1px 2px rgba(10,27,56,.05)` | Panels, one step above flat |
+
+Dashboard typography also narrows from the test app: body 13.5px, page title 22px at weight 600, panel title 15px at weight 600, table 13px. Dashboard buttons are rectangular at `--radius-sm`, 34px tall, not pills; the pill radius stays for chips, status pills, and the bulk bar.
 
 The IELTS Mockup Sesi tab follows the same panel and table pattern: the session list is one table, and a session row never navigates on click, because the Peserta button in the action cell opens the session page and the Ubah button opens the session dialog. The session page is a header with actions, one toolbar with the roster and email quota facts, and one roster table. The import dialog is the native dialog at the 760px width, and every block in it sits on the same 24px body inset: one row with the Unduh template action on the left and the CSV header note right aligned, the file field as a dashed drop area with the picker button styled inside it, the counts line with bold navy numbers, and the preview table in a bordered, rounded frame. The footer is the quiet Batal button with the primary Impor button, like every other dialog.
 

@@ -46,15 +46,14 @@ function Sidebar({ nav }) {
     <aside className="sidebar" aria-label="Navigasi dasbor">
       <div className="brand">
         <div className="brand__row">
-          <img className="brand__logo" src="/assets/logo-titik-nol-white.png" alt="Titik Nol English Course" width="501" height="84" />
-          <svg className="brand__mark" viewBox="0 0 36 36" role="img" aria-label="Titik Nol English Course"><rect width="36" height="36" rx="10" fill="#16325C" /><text x="18" y="23" textAnchor="middle" fontFamily="Inter, 'Segoe UI', Arial, sans-serif" fontSize="13" fontWeight="700" fill="#FFFFFF">TN</text></svg>
-          <button className="icon-btn icon-btn--dark nav-toggle" type="button" aria-controls="main-nav" aria-expanded={!collapsed}
+          <img className="brand__logo" src="/assets/logo-titik-nol.png" alt="Titik Nol English Course" width="502" height="85" />
+          <svg className="brand__mark" viewBox="0 0 36 36" role="img" aria-label="Titik Nol English Course"><rect width="36" height="36" rx="8" fill="#0A1B38" /><text x="18" y="23" textAnchor="middle" fontFamily="Inter, 'Segoe UI', Arial, sans-serif" fontSize="13" fontWeight="700" fill="#FFFFFF">TN</text></svg>
+          <button className="icon-btn nav-toggle" type="button" aria-controls="main-nav" aria-expanded={!collapsed}
             aria-label={collapsed ? "Lebarkan menu" : "Ciutkan menu"} title={collapsed ? "Lebarkan menu" : "Ciutkan menu"}
             onClick={() => { const next = !collapsed; setCollapsed(next); try { localStorage.setItem("tnec-nav-collapsed", next ? "1" : "0"); } catch { /* storage can be off */ } }}>
             <Icon name={collapsed ? "panel-open" : "panel-close"} />
           </button>
         </div>
-        <span className="brand__name">Dasbor internal</span>
       </div>
       <nav className="nav" id="main-nav" aria-label="Menu utama">
         {items.map(([key, href, icon, label]) => (
@@ -87,7 +86,7 @@ function Sidebar({ nav }) {
         <div className="account">
           <span className="avatar" aria-hidden="true">{db.me ? db.me.name.split(/\s+/).slice(0, 2).map((w) => w[0].toUpperCase()).join("") : ""}</span>
           <span className="account__text"><span className="account__name">{db.me?.name || "Memuat..."}</span><span className="account__role">{db.me?.role === "admin" ? "Administrator" : db.me?.role === "tutor" ? "Tutor" : "Admin"}</span></span>
-          <button className="icon-btn icon-btn--dark account__out" type="button" aria-label="Keluar dari dasbor" title="Keluar"
+          <button className="icon-btn account__out" type="button" aria-label="Keluar dari dasbor" title="Keluar"
             onClick={async (e) => {
               const b = e.currentTarget; b.disabled = true;
               try { await fetch("/api/admin/logout", { method: "POST", credentials: "same-origin" }); } catch { /* the login page still opens */ }
@@ -243,7 +242,13 @@ export default function App() {
     <a className="skip" href="#main">Langsung ke konten</a>
     <div className="app">
       <Sidebar nav={nav} />
-      <main className="main" id="main" tabIndex="-1">{view}</main>
+      <div className="content-col">
+        <header className="topbar">
+          <span className="topbar__title" aria-hidden="true"><b>{title}</b></span>
+          <span className="topbar__side"></span>
+        </header>
+        <main className="main" id="main" tabIndex="-1">{view}</main>
+      </div>
     </div>
     <BulkBar />
     <DialogHost />
